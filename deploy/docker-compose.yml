@@ -1,0 +1,54 @@
+# BROC — application container.
+#
+# This file runs BROC against a Supabase you already have: Supabase Cloud, an
+# existing self-hosted stack, or one stood up by deploy/selfhost.sh. It
+# deliberately does not embed the Supabase stack itself — that is a dozen
+# services which Supabase versions and maintains, and vendoring a copy here
+# means shipping a snapshot that silently rots. See docs/DEPLOY.md.
+#
+#   cd deploy
+#   cp .env.example .env      # then edit it
+#   docker compose up -d --build
+#
+name: broc
+
+services:
+  broc:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        # Repeated from the environment on purpose — see the note in the
+        # Dockerfile about NEXT_PUBLIC_* being a build-time concern.
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?set NEXT_PUBLIC_SUPABASE_URL in .env}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:?set NEXT_PUBLIC_SUPABASE_ANON_KEY in .env}
+        # Optional. Blank or absent means "use the built-in default"; the
+        # Dockerfile only applies the ones that are set. Changing any of these
+        # needs a rebuild (docker compose up -d --build), not just a restart.
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:-}
+        NEXT_PUBLIC_PRODUCT_NAME: ${NEXT_PUBLIC_PRODUCT_NAME:-}
+        NEXT_PUBLIC_PRODUCT_SHORT_NAME: ${NEXT_PUBLIC_PRODUCT_SHORT_NAME:-}
+        NEXT_PUBLIC_PRODUCT_TAGLINE: ${NEXT_PUBLIC_PRODUCT_TAGLINE:-}
+        NEXT_PUBLIC_PRODUCT_MARK: ${NEXT_PUBLIC_PRODUCT_MARK:-}
+        NEXT_PUBLIC_PRODUCT_MARK_SRC: ${NEXT_PUBLIC_PRODUCT_MARK_SRC:-}
+        NEXT_PUBLIC_PRODUCT_WORDMARK_SRC: ${NEXT_PUBLIC_PRODUCT_WORDMARK_SRC:-}
+        NEXT_PUBLIC_SSO_PROVIDERS: ${NEXT_PUBLIC_SSO_PROVIDERS:-}
+        NEXT_PUBLIC_SSO_SAML: ${NEXT_PUBLIC_SSO_SAML:-}
+    image: broc:local
+    container_name: broc
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "${BROC_PORT:-3000}:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/login').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 40s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

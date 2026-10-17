@@ -1,0 +1,29 @@
+<!--
+  BROC wordmark.
+
+  Drawn as geometry rather than set in a typeface, so it renders identically
+  everywhere and carries no font licence. Construction: 100-unit cap height,
+  14-unit monoline stroke. O and C share one radius — the C is the O with an
+  aperture cut — and B and R share one stem-and-bowl skeleton. That pairing is
+  the whole idea; if you redraw this, keep the two rhymes exact.
+
+  Stroke is currentColor, so colour comes from the element that renders it.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 392 140" role="img" aria-label="BROC">
+  <title>BROC</title>
+  <g fill="none" stroke="currentColor" stroke-width="14"
+     stroke-linecap="round" stroke-linejoin="round">
+    <!-- B -->
+    <path d="M7,20 L7,120"/>
+    <path d="M7,20 A52,25 0 0,1 7,70"/>
+    <path d="M7,70 A52,25 0 0,1 7,120"/>
+    <!-- R -->
+    <path d="M86,20 L86,120"/>
+    <path d="M86,20 A52,25 0 0,1 86,70"/>
+    <path d="M86,70 L141,120"/>
+    <!-- O -->
+    <path d="M179,70 a43,43 0 1,0 86,0 a43,43 0 1,0 -86,0"/>
+    <!-- C: the same circle, opened -->
+    <path d="M373.6,37.1 A43,43 0 1,0 373.6,102.9"/>
+  </g>
+</svg>

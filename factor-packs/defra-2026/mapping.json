@@ -1,0 +1,23 @@
+{
+  "_comment": "TEMPLATE. Run `../build.py inspect <downloaded file>` first and correct every sheet and column name below — DEFRA rearranges this workbook annually and the names here are a starting guess, not a fact.",
+  "source_file": "ghg-conversion-factors-2026.xlsx",
+  "source_url": "https://www.gov.uk/government/collections/government-conversion-factors-for-company-reporting",
+  "retrieved": "TODO",
+  "factor_source": "DEFRA 2026 GHG Conversion Factors for Company Reporting",
+  "data_year": 2026,
+  "effective_from": "2026-01-01",
+  "effective_to": null,
+  "groups": [
+    {
+      "category": "scope1",
+      "sheet": "TODO — from inspect",
+      "header_row": 1,
+      "key_column": "TODO",
+      "label_column": "TODO",
+      "value_column": "TODO",
+      "source_unit": "kwh",
+      "factor_source": "DEFRA 2026 GHG Conversion Factors, fuels table (gross CV)",
+      "note": "Gross CV (HHV) basis, to match the EPA factors already loaded"
+    }
+  ]
+}

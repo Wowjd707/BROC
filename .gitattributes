@@ -1,0 +1,9 @@
+# Normalise line endings. OneDrive/Windows was flipping every file to CRLF,
+# which made the whole tree read as rewritten in every diff.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff binary
+*.woff2 binary

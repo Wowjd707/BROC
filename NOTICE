@@ -1,0 +1,36 @@
+BROC
+Copyright 2026 The BROC contributors
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+these files except in compliance with the License. You may obtain a copy of the
+License in the LICENSE file in this repository, or at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed
+under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+CONDITIONS OF ANY KIND, either express or implied. See the License for the
+specific language governing permissions and limitations under the License.
+
+─────────────────────────────────────────────────────────────────────────────
+
+Regulatory reference content
+
+The regulatory tracker (supabase/migrations/024_regulatory_tracker.sql and
+related) summarises public law and official guidance and cites primary sources
+for each entry. Those summaries are BROC's own text and carry the licence
+above. They are not legal advice and are not a substitute for reading the
+instrument itself or taking advice on it. Confidence ratings and verification
+dates are recorded per entry; treat anything unverified as unverified.
+
+Emission factors
+
+BROC ships no proprietary emission factor sets. Factors are loaded by the
+deploying organization from sources it is licensed to use. Some public factor
+sets (DEFRA, EPA, IEA and others) carry their own terms, and those terms travel
+with the data, not with this software.
+
+Typeface
+
+The Geist and Geist Mono typefaces are bundled through the `geist` npm package
+and are licensed under the SIL Open Font License 1.1, not the licence above.

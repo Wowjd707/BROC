@@ -1,0 +1,23 @@
+{
+  "_comment": "TEMPLATE. Run `../build.py inspect <downloaded file>` first. Take the SUBREGION output emission rates sheet — not state, not national, and the output rate rather than the input rate.",
+  "source_file": "egrid2023_data.xlsx",
+  "source_url": "https://www.epa.gov/egrid",
+  "retrieved": "TODO",
+  "factor_source": "eGRID2023, subregion output emission rates",
+  "data_year": 2023,
+  "effective_from": "2025-01-01",
+  "effective_to": null,
+  "groups": [
+    {
+      "category": "scope2_location",
+      "sheet": "TODO — the subregion sheet, e.g. SRL23",
+      "header_row": 2,
+      "key_column": "TODO — subregion acronym column",
+      "label_column": "TODO — subregion name column",
+      "value_column": "TODO — CO2e output rate column",
+      "source_unit": "lb",
+      "factor_source": "eGRID2023 subregion output emission rates (CO2e)",
+      "note": "Location-based Scope 2. Subregion, not state — subregions cross state lines."
+    }
+  ]
+}

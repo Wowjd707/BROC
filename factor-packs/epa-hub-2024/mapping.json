@@ -1,0 +1,34 @@
+{
+  "_comment": "TEMPLATE. Run `../build.py inspect <downloaded file>` first. Record the Hub EDITION, not just the year — it is reissued mid-year and two files both called 2024 can differ.",
+  "source_file": "ghg-emission-factors-hub-2024.xlsx",
+  "source_url": "https://www.epa.gov/climateleadership/ghg-emission-factors-hub",
+  "retrieved": "TODO",
+  "factor_source": "EPA GHG Emission Factors Hub 2024",
+  "data_year": 2024,
+  "effective_from": "2024-01-01",
+  "effective_to": null,
+  "groups": [
+    {
+      "category": "scope1",
+      "sheet": "TODO — stationary combustion sheet",
+      "header_row": 1,
+      "key_column": "TODO — fuel type column",
+      "label_column": "TODO",
+      "value_column": "TODO — kg CO2e per mmBtu column",
+      "source_unit": "mmbtu",
+      "factor_source": "EPA GHG Emission Factors Hub 2024, stationary combustion table",
+      "note": "HHV basis"
+    },
+    {
+      "category": "refrigerant",
+      "sheet": "TODO — GWP sheet",
+      "header_row": 1,
+      "key_column": "TODO — refrigerant code column",
+      "label_column": "TODO",
+      "value_column": "TODO — 100-year GWP column",
+      "source_unit": "kg",
+      "factor_source": "EPA GHG Emission Factors Hub 2024, GWP table (state which IPCC assessment report)",
+      "note": "State AR4/AR5/AR6 explicitly — frameworks differ on which is required"
+    }
+  ]
+}
