@@ -36,18 +36,22 @@
  */
 export function normaliseForComparison(raw: string): string {
   return raw
-    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-    .replace(/<!--[\s\S]*?-->/g, ' ')
+    // Closing tags are matched loosely (`</script >`, `</script foo>`) because
+    // browsers accept them. This output is compared and stored as text, never
+    // rendered as HTML, so this is not a sanitiser and must not be used as one.
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script\b[^>]*>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style\b[^>]*>/gi, ' ')
+    .replace(/<!--[\s\S]*?--!?>/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     // Entities that survive tag-stripping and would otherwise show up as diff
-    // churn when a CMS changes how it escapes text.
+    // churn when a CMS changes how it escapes text. `&amp;` is decoded LAST,
+    // so `&amp;lt;` becomes the literal text `&lt;` rather than `<`.
     .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
     .replace(/&quot;/gi, '"')
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&lt;/gi, '<')
     .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&')
     .replace(/\s+/g, ' ')
     .trim();
 }

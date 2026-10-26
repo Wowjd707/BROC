@@ -36,6 +36,16 @@ describe('normaliseForComparison', () => {
     expect(normaliseForComparison('<p>A&nbsp;&amp;&nbsp;B</p>')).toBe('A & B');
   });
 
+  it('decodes each entity once, so escaped entity text stays literal', () => {
+    // `&amp;lt;` is the page saying "&lt;", not "<".
+    expect(normaliseForComparison('<p>Use &amp;lt;b&amp;gt; for bold</p>')).toBe('Use &lt;b&gt; for bold');
+  });
+
+  it('removes script and style bodies even with loosely written closing tags', () => {
+    const html = '<script>var a=1;</script ><style>.a{}</style foo><!-- note --!><p>Real text</p>';
+    expect(normaliseForComparison(html)).toBe('Real text');
+  });
+
   it('makes two cosmetically different renderings of the same text identical', () => {
     const a = '<div><p>The  deadline is 30 December 2026.</p></div>';
     const b = '<section>\n  <span>The deadline is 30 December 2026.</span>\n</section>';
