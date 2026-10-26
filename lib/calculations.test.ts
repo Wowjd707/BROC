@@ -189,8 +189,9 @@ describe('calculateAbsoluteTarget', () => {
 describe('formatting', () => {
   it('formats CO2e with smart unit selection', () => {
     expect(formatCO2e(500)).toBe('500 kg CO₂e');
-    expect(formatCO2e(1500)).toBe('1.5 tCO₂e');
-    expect(formatCO2e(2_500_000)).toBe('2.50 tCO₂e');
+    expect(formatCO2e(1500)).toBe('1.5 t CO₂e');
+    // 2,500,000 kg is 2,500 t (this used to render as "2.50 tCO₂e").
+    expect(formatCO2e(2_500_000)).toBe('2,500 t CO₂e');
   });
   it('formats numbers with fixed decimals', () => {
     expect(formatNumber(1234.5, 2)).toBe('1,234.50');

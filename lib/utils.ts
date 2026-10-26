@@ -25,12 +25,21 @@ export function fmt(n: number | null | undefined, decimals = 0): string {
   });
 }
 
-/** Format kg CO2e to a human-readable string */
+/**
+ * Format kg CO2e to a human-readable string.
+ *
+ * Mt means megatonnes: 1 Mt = 1,000,000 t = 1,000,000,000 kg. It is easy to
+ * get this a factor of a thousand wrong (1,000,000 kg is 1,000 t, not 1 Mt),
+ * and a figure that is off by 1,000× is the kind of error a reader of a
+ * sustainability report notices first. Below a megatonne, tonnes are shown
+ * with thousands separators, matching the dashboard.
+ */
 export function fmtCO2e(kg: number | null | undefined): string {
   if (kg == null) return '—';
-  if (kg >= 1_000_000) return `${(kg / 1_000_000).toFixed(2)} Mt CO₂e`;
-  if (kg >= 1_000)     return `${(kg / 1_000).toFixed(1)} t CO₂e`;
-  return `${Math.round(kg).toLocaleString()} kg CO₂e`;
+  if (kg >= 1_000_000_000) return `${(kg / 1_000_000_000).toFixed(2)} Mt CO₂e`;
+  if (kg >= 100_000)       return `${Math.round(kg / 1_000).toLocaleString('en-US')} t CO₂e`;
+  if (kg >= 1_000)         return `${(kg / 1_000).toFixed(1)} t CO₂e`;
+  return `${Math.round(kg).toLocaleString('en-US')} kg CO₂e`;
 }
 
 /** Format gallons */

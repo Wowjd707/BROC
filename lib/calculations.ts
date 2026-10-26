@@ -4,6 +4,7 @@
  */
 
 import { normalizeEmissionInput, normalizeEhsInput, toMMBtu } from './conversions';
+import { fmtCO2e } from './utils';
 
 export interface EmissionCalculationInput {
   scope: 'scope1' | 'scope2';
@@ -294,15 +295,15 @@ export function calculateAbsoluteTarget(
 
 // ─── Formatting helpers ─────────────────────────────────────────────────────
 
-/** Format kg CO2e for display — smart unit selection */
+/**
+ * Format kg CO2e for display.
+ *
+ * Kept as an alias so there is exactly one CO₂e formatter. This used to carry
+ * its own copy, which divided by a million and labelled the result tonnes —
+ * 2,500,000 kg rendered as "2.50 tCO₂e", a thousand times too small.
+ */
 export function formatCO2e(kg: number): string {
-  if (kg >= 1_000_000) {
-    return `${(kg / 1_000_000).toFixed(2)} tCO₂e`;
-  }
-  if (kg >= 1_000) {
-    return `${(kg / 1_000).toFixed(1)} tCO₂e`;
-  }
-  return `${Math.round(kg).toLocaleString()} kg CO₂e`;
+  return fmtCO2e(kg);
 }
 
 export function formatNumber(n: number, decimals = 0): string {

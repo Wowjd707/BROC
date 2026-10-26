@@ -58,6 +58,14 @@ describe('fmtCO2e / fmt', () => {
   it('scales CO2e units', () => {
     expect(fmtCO2e(500)).toBe('500 kg CO₂e');
     expect(fmtCO2e(1500)).toBe('1.5 t CO₂e');
-    expect(fmtCO2e(2_000_000)).toBe('2.00 Mt CO₂e');
+    expect(fmtCO2e(388_000)).toBe('388 t CO₂e');
+    expect(fmtCO2e(2_629_000)).toBe('2,629 t CO₂e');
+    expect(fmtCO2e(2_500_000_000)).toBe('2.50 Mt CO₂e');
+  });
+  it('never labels thousands of tonnes as megatonnes', () => {
+    // Regression: 2,629,000 kg (2,629 t) used to render as "2.63 Mt CO₂e",
+    // a thousand times too large.
+    expect(fmtCO2e(2_629_000)).not.toMatch(/Mt/);
+    expect(fmtCO2e(999_999_999)).not.toMatch(/Mt/);
   });
 });
