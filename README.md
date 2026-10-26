@@ -51,6 +51,12 @@ its source.
 
 ![Environmental data entry: emissions by site and scope, with a supporting-document control on each row](docs/screenshots/data-entry.jpg)
 
+**Targets measured against the projects that will hit them.** Set absolute,
+intensity or SBTi 1.5 °C goals, then see how much of the required reduction
+is already achieved and how much your project pipeline covers.
+
+![Goals: current emissions, pipeline reduction, and each target's path showing achieved versus pipeline](docs/screenshots/goals.jpg)
+
 <table>
 <tr>
 <td width="38%" valign="top">

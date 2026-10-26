@@ -11,6 +11,7 @@ import { fmtCO2e } from '@/lib/utils';
 import { calculateSBTiTarget } from '@/lib/calculations';
 import { gapToTarget } from '@/lib/pipeline';
 import { formatMetric } from '@/lib/units';
+import { GOAL_SCOPE_LABELS } from '@/lib/goal-import-core';
 import {
   GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY, GOAL_METRIC_BASE_UNIT,
   GOAL_TYPES_BY_METRIC, asGoalMetric, computeGoalProgress, goalBaseline, goalTargetValue,
@@ -654,7 +655,7 @@ function GoalCard({
               </div>
               <p className="text-sm text-gray-500">
                 {GOAL_TYPE_LABELS[goal.goal_type] ?? goal.goal_type}
-                {goal.scope && <>{' · '}{goal.scope.replace(/_/g, ' ')}</>}
+                {goal.scope && <>{' · '}{GOAL_SCOPE_LABELS[goal.scope] ?? goal.scope}</>}
                 {' · '}
                 Base {goal.base_year} → Target {goal.target_year}
               </p>

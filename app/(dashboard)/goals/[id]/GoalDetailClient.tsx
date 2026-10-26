@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSBTiPathway, calculateSBTiTarget, calculateAbsoluteTarget } from '@/lib/calculations';
 import { formatMetric } from '@/lib/units';
+import { GOAL_SCOPE_LABELS } from '@/lib/goal-import-core';
 import {
   GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY, asGoalMetric, goalBaseline,
 } from '@/lib/goal-metrics';
@@ -188,7 +189,7 @@ export function GoalDetailClient({
               {GOAL_TYPE_LABELS[goal.goal_type] ?? goal.goal_type}
               {metric === 'ghg' && (
                 <>
-                  {goal.scope && <>{' · '}{goal.scope.replace(/_/g, ' ')}</>}
+                  {goal.scope && <>{' · '}{GOAL_SCOPE_LABELS[goal.scope] ?? goal.scope}</>}
                   {goal.scope2_accounting_method && (
                     <>{' · '}{goal.scope2_accounting_method.replace(/_/g, '-')} Scope 2</>
                   )}
