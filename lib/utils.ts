@@ -5,9 +5,23 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Format a date string (YYYY-MM-DD) for display */
+/**
+ * Format a date for display. Accepts a calendar date (`YYYY-MM-DD`), a full
+ * timestamp (`2026-06-14T12:34:56+00:00`, as Postgres returns timestamptz), or
+ * a Date.
+ *
+ * A bare calendar date is pinned to local midnight: `new Date('2026-09-30')`
+ * parses as UTC midnight, which displays as 29 September anywhere west of
+ * Greenwich. A timestamp is parsed as-is. Appending a time to it, as this once
+ * did for every string, produces "Invalid Date". Unparseable input renders as
+ * an em dash rather than that text.
+ */
 export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions): string {
-  const d = typeof date === 'string' ? new Date(date + 'T00:00:00') : date;
+  const d =
+    typeof date === 'string'
+      ? new Date(/^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00` : date)
+      : date;
+  if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',

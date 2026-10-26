@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt } from './utils';
+import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt, formatDate } from './utils';
 
 describe('reportingYearRange', () => {
   it('covers the full calendar year for a January fiscal start', () => {
@@ -47,6 +47,20 @@ describe('pctChange', () => {
     const r = pctChange(50, 0);
     expect(r.direction).toBe('flat');
     expect(r.label).toBe('—');
+  });
+});
+
+describe('formatDate', () => {
+  it('shows a calendar date on its own day, not the day before', () => {
+    expect(formatDate('2026-09-30')).toBe('Sep 30, 2026');
+  });
+  it('formats full timestamps instead of returning "Invalid Date"', () => {
+    // Regression: invitation and submission times rendered as "Invalid Date".
+    expect(formatDate('2026-06-14T12:00:00+00:00')).toBe('Jun 14, 2026');
+    expect(formatDate('2026-06-14T12:00:00.123456+00:00')).toBe('Jun 14, 2026');
+  });
+  it('renders unparseable input as an em dash', () => {
+    expect(formatDate('not a date')).toBe('—');
   });
 });
 
