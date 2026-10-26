@@ -1,11 +1,89 @@
 # BROC
 
-A self-hostable ESG and sustainability platform: carbon accounting (Scope 1,
-2 and 3), water, waste, social and governance metrics, supplier surveys, goals
-and projects, double materiality, disclosure frameworks and an audit trail, in
-one system you run yourself.
+**ESG software your team owns instead of rents.** Carbon accounting, supplier
+surveys, targets and framework disclosures in one system you run yourself —
+so the budget goes to reduction projects, not platform subscriptions.
 
-Apache-2.0 licensed. You host it and your team owns the running software.
+Free and open source (Apache-2.0). No licence fee, no per-seat pricing, no
+vendor holding your data.
+
+![The BROC dashboard: Scope 1, 2 and 3 totals, water, waste and goal progress](docs/screenshots/dashboard.jpg)
+
+## Who it's for
+
+Sustainability teams that:
+
+- report **Scope 1, 2 and 3** and have outgrown spreadsheets, but don't want
+  an enterprise platform contract to get out of them;
+- face **CSRD / ESRS, IFRS S2, TCFD, GRI, CBAM, EUDR or California SB 253/261**
+  and need one set of data to answer all of them;
+- need every reported number to **trace back to its source, factor and
+  calculation**, because an assurance provider is going to ask;
+- have someone who can run a web app — an analyst, an IT partner, or an AI
+  coding assistant working from the instructions in this repository.
+
+It is **not** a managed service. Nobody runs it for you, and there is no
+vendor support line. If that is what you need, a commercial platform is the
+better fit.
+
+## What it replaces
+
+| Today you might use | BROC gives you |
+| --- | --- |
+| A carbon accounting platform | Scope 1, 2 and 3 with cited emission factors and full lineage on every figure |
+| A supplier survey tool | Tokenized supplier surveys — CBAM, EUDR, PFAS, carbon, or your own questions — with no supplier login |
+| Target and project spreadsheets | Goals with SBTi pathways, and a reduction-project pipeline with savings estimates |
+| Disclosures assembled by hand | Framework reports built from the same data, with every omission named |
+| Evidence scattered across shared drives | Supporting documents attached to every reported figure, plus an append-only audit trail |
+
+## A closer look
+
+**One set of data, every framework.** TCFD, IFRS S2, ESRS, GRI, CSRD and the
+California climate laws read from the same inventory. Metrics answer
+themselves; narrative is written once.
+
+![Disclosures: framework tabs with coverage, and each requirement's status](docs/screenshots/disclosures.jpg)
+
+**Every figure carries its evidence.** Activity data is entered once,
+calculated with a cited factor, and can have the invoice or meter reading that
+backs it attached — so an assurance provider can follow any number back to
+its source.
+
+![Environmental data entry: emissions by site and scope, with a supporting-document control on each row](docs/screenshots/data-entry.jpg)
+
+<table>
+<tr>
+<td width="38%" valign="top">
+<img src="docs/screenshots/supplier-survey.jpg" alt="A supplier answering a CBAM survey in the browser, without an account">
+</td>
+<td valign="top">
+
+**Suppliers answer in a browser, with no account.** Send a link; they fill in
+a CBAM, EUDR, PFAS or carbon survey and the answers land on their supplier
+record, scored for data quality. CBAM declarations feed the built-in
+calculator, and supplier figures feed Scope 3 Category 1.
+
+</td>
+</tr>
+</table>
+
+## What it takes to run
+
+- **A Supabase project** (the free tier is enough to evaluate) and Node.js 20,
+  or Docker. Use Supabase Cloud, or self-host Supabase — in front of your own
+  PostgreSQL 15+ if you already run one ([`docs/DEPLOY.md`](docs/DEPLOY.md)).
+- **An afternoon** from clone to first login, following
+  [`docs/INSTALL.md`](docs/INSTALL.md). Demo data loads with one script, and
+  there is a [practice workspace](docs/SANDBOX.md) for trying things safely.
+- **Optional AI**, bring your own: Claude, OpenAI, or a self-hosted model. Off
+  by default, and nothing depends on it.
+- **Built to be changed with an AI coding assistant.**
+  [`CLAUDE.md`](CLAUDE.md) and [`.claude/skills/`](.claude/skills/) teach an
+  assistant the rules — never invent an emission factor, never fold Scope 3
+  into the Scope 1+2 total — so your team can adapt it without breaking the
+  numbers.
+
+## How it is built to be changed
 
 There is no admin UI for waste streams, metric vocabularies or business
 metrics, and that is deliberate: **the codebase is the configuration.** Editing
