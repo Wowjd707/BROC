@@ -87,6 +87,10 @@ export function DataEntryClient({
   // these narrow what is shown within that, so the two compose.
   const [siteFilter, setSiteFilter]   = useState('all');
   const [scopeFilter, setScopeFilter] = useState('all');
+  // The scope filter applies to emissions only; water and waste have no scope,
+  // so the control is hidden on those tabs (its value is kept for the return).
+  const [activeTab, setActiveTab] = useState('emissions');
+  const onEmissionsTab = activeTab === 'emissions';
   const fromDate = dateFrom ?? '';
   const toDate = dateTo ?? '';
 
@@ -118,7 +122,7 @@ export function DataEntryClient({
   const wasteEntries = filteredEhs.filter((e) => e.metric_type === 'waste');
 
   const filtersActive =
-    siteFilter !== 'all' || scopeFilter !== 'all' || fromDate !== '' || toDate !== '';
+    siteFilter !== 'all' || (onEmissionsTab && scopeFilter !== 'all') || fromDate !== '' || toDate !== '';
 
   function clearFilters() {
     setSiteFilter('all'); setScopeFilter('all');
@@ -226,6 +230,7 @@ export function DataEntryClient({
             {sites.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
+        {onEmissionsTab && (
         <div>
           <label className="block text-xs text-gray-500 mb-1">Scope</label>
           <select
@@ -238,6 +243,7 @@ export function DataEntryClient({
             <option value="scope2">Scope 2 only</option>
           </select>
         </div>
+        )}
         <div>
           <label className="block text-xs text-gray-500 mb-1">From</label>
           <input
@@ -263,7 +269,7 @@ export function DataEntryClient({
         )}
       </div>
 
-      <Tabs defaultValue="emissions">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="emissions"><FileText size={13} className="mr-1.5" />Emissions</TabsTrigger>
           <TabsTrigger value="water"><Droplets size={13} className="mr-1.5" />Water</TabsTrigger>
