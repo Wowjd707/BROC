@@ -138,6 +138,22 @@ describe('summarisePipeline', () => {
     expect(summarisePipeline(projects, 2026, 1, { includeCompleted: true }).annualisedValue).toBe(600_000);
   });
 
+  it('leaves out projects marked excluded from the pipeline', () => {
+    // Regression: pipeline_inclusion_status was ignored, so a project the
+    // import documents as counting for nothing counted toward every target.
+    const withExcluded = [...projects, project({ id: 'x', pipeline_inclusion_status: 'excluded', estimated_co2e_reduction_kg_per_year: 5_000_000 })];
+    expect(summarisePipeline(withExcluded, 2026, 1).annualisedValue).toBe(400_000);
+  });
+
+  it('keeps a project completed after the measured year until a measured year reflects it', () => {
+    const late = project({ id: 'late', status: 'completed', start_date: '2025-06-01', completion_date: '2026-03-01',
+      estimated_co2e_reduction_kg_per_year: 70_000 });
+    const early = project({ id: 'early', status: 'completed', start_date: '2024-06-01', completion_date: '2025-03-01',
+      estimated_co2e_reduction_kg_per_year: 30_000 });
+    const s = summarisePipeline([late, early], 2026, 1, { completedAfter: '2025-12-31' });
+    expect(s.projects.map((p) => p.id)).toEqual(['late']);
+  });
+
   it('separates current-year delivery from annualised run-rate', () => {
     const s = summarisePipeline(projects, 2026, 1, { includeCompleted: true });
     // a delivers fully (200k), b about half (50k), c nothing yet

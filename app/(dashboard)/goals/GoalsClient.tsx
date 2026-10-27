@@ -16,7 +16,7 @@ import { measurementCaption, type GoalMeasurement } from '@/lib/goal-period-core
 import {
   GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY,
   GOAL_TYPES_BY_METRIC, asGoalMetric, computeGoalProgress, goalBaseline, goalTargetValue,
-  progressColor, type GoalMetric,
+  progressColor, goalGhgValue, type GoalMetric, type ScopeTotals,
 } from '@/lib/goal-metrics';
 import { useUnits } from '@/components/layout/UnitPreferences';
 import { Card, CardContent } from '@/components/ui/card';
@@ -57,8 +57,8 @@ interface Goal {
 
 interface Props {
   goals: Goal[];
-  currentMarketKg: number;
-  currentLocationKg: number;
+  /** Boundary-adjusted Scope 1 and both Scope 2 totals for the measured year. */
+  currentGhg: ScopeTotals;
   currentWaterGal: number;
   currentWasteKg: number;
   /** Which year (and whether partial) each metric's current value covers. */
@@ -122,8 +122,7 @@ const EMPTY_FORM: CreateGoalForm = {
 
 export function GoalsClient({
   goals: initialGoals,
-  currentMarketKg,
-  currentLocationKg,
+  currentGhg,
   currentWaterGal,
   currentWasteKg,
   measuredIn,
@@ -237,10 +236,8 @@ export function GoalsClient({
     switch (asGoalMetric(goal.metric)) {
       case 'water': return currentWaterGal;
       case 'waste': return currentWasteKg;
-      default: {
-        const method = goal.scope2_accounting_method ?? 'market_based';
-        return method === 'location_based' ? currentLocationKg : currentMarketKg;
-      }
+      // Only the scope the goal covers, under its own Scope 2 method.
+      default: return goalGhgValue(currentGhg, goal.scope, goal.scope2_accounting_method ?? 'market_based');
     }
   }
 
@@ -297,7 +294,7 @@ export function GoalsClient({
         <Card>
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Measured Emissions</p>
-            <p className="text-2xl font-bold text-gray-900">{measuredIn.ghg ? fmtCO2e(currentMarketKg) : '—'}</p>
+            <p className="text-2xl font-bold text-gray-900">{measuredIn.ghg ? fmtCO2e(currentGhg.scope1 + currentGhg.scope2Market) : '—'}</p>
             <p className="text-xs text-gray-400">
               {measuredIn.ghg
                 ? `Scope 1+2, market-based, ${measuredIn.ghg.year}${measuredIn.ghg.partial ? ' to date' : ''}`
@@ -584,7 +581,7 @@ export function GoalsClient({
               <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800">
                 <p className="font-medium mb-0.5">SBTi 1.5°C Pathway</p>
                 <p>
-                  At 4.2%/yr compound reduction, the target for {form.target_year} would be{' '}
+                  At 4.2% of base-year emissions per year (linear, the SBTi 1.5°C minimum), the target for {form.target_year} would be{' '}
                   <strong>
                     {fmtCO2e(
                       calculateSBTiTarget(

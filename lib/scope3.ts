@@ -135,17 +135,53 @@ export function unitFamily(unit: string): UnitFamily | null {
 }
 
 /**
- * True when a factor expressed per `factorUnit` may be applied to an activity
- * measured in `activityUnit`. Requires an exact unit match, or at minimum the
- * same unit family — mismatched families are never compatible.
+ * Size of each unit in its family's base unit (kg, km, passenger-km,
+ * tonne-km, kWh, litre). Currency and count have no conversion: a per-USD
+ * factor applies to USD only (converting EUR needs an exchange rate and a
+ * price-year adjustment, which belong with the user, not a constant), and
+ * "units" of one thing are not "nights" of another.
  */
-export function unitsCompatible(activityUnit: string, factorUnit: string): boolean {
+const TO_BASE: Record<string, number> = {
+  // mass → kg
+  kg: 1, kilograms: 1, tonne: 1000, tonnes: 1000, t: 1000, metric_tons: 1000,
+  lb: 0.45359237, lbs: 0.45359237, short_tons: 907.18474,
+  // distance → km
+  km: 1, kilometers: 1, kilometres: 1, mile: 1.609344, miles: 1.609344,
+  // passenger-distance → passenger-km
+  'passenger-km': 1, 'passenger-mile': 1.609344,
+  // freight → tonne-km (a ton-mile is a short ton carried one mile)
+  'tonne-km': 1, 'tonne-mile': 1.609344, 'ton-mile': 0.90718474 * 1.609344, 'kg-km': 0.001,
+  // energy → kWh
+  kwh: 1, mwh: 1000, mmbtu: 293.07107, gj: 1000 / 3.6, therms: 29.307107,
+  // volume → litres
+  liters: 1, litres: 1, l: 1, gallons: 3.785411784, m3: 1000,
+};
+
+/**
+ * Multiplier that expresses an activity quantity in the factor's unit, or null
+ * when the two cannot be converted. 1 for an exact match.
+ */
+export function activityToFactorUnit(activityUnit: string, factorUnit: string): number | null {
   const a = normalizeUnit(activityUnit);
   const f = normalizeUnit(factorUnit);
-  if (a === f) return true;
+  if (a === f) return 1;
   const fa = unitFamily(a);
   const ff = unitFamily(f);
-  return fa != null && ff != null && fa === ff;
+  if (fa == null || fa !== ff) return null;
+  const ka = TO_BASE[a];
+  const kf = TO_BASE[f];
+  if (ka == null || kf == null) return null;
+  return ka / kf;
+}
+
+/**
+ * True when a factor expressed per `factorUnit` may be applied to an activity
+ * measured in `activityUnit`: an exact match, or two units of one physical
+ * family that convert (tonnes to kg, miles to km). Currency must match
+ * exactly, and mismatched families are never compatible.
+ */
+export function unitsCompatible(activityUnit: string, factorUnit: string): boolean {
+  return activityToFactorUnit(activityUnit, factorUnit) != null;
 }
 
 // ─── Calculation ─────────────────────────────────────────────────────────────
@@ -166,6 +202,8 @@ export interface Scope3CalculationInput {
 
 export interface Scope3CalculationResult {
   co2eKg: number;
+  /** Activity units → factor units (1 when they match). Reproducible from the two units. */
+  unitConversion: number;
   categoryNumber: number;
   method: Scope3Method;
   activityValue: number;
@@ -196,14 +234,23 @@ export function calculateScope3(input: Scope3CalculationInput): Scope3Calculatio
   if (!input.factorSource || !input.factorSource.trim()) {
     throw new Error('factorSource is required — every Scope 3 factor must cite its provenance.');
   }
-  if (!unitsCompatible(input.activityUnit, input.factorUnit)) {
+  // Convert the activity into the factor's unit before multiplying. Accepting
+  // "same family" units without converting them — as this once did — made
+  // 10 tonnes × 2 kg CO₂e/kg come out at 20 kg instead of 20,000.
+  const conversion = activityToFactorUnit(input.activityUnit, input.factorUnit);
+  if (conversion == null) {
+    const currency = unitFamily(input.activityUnit) === 'currency' && unitFamily(input.factorUnit) === 'currency';
     throw new Error(
-      `Factor unit "${input.factorUnit}" cannot be applied to activity measured in "${input.activityUnit}".`,
+      currency
+        ? `Factor is per ${input.factorUnit} but the spend is in ${input.activityUnit}. Convert the spend to `
+          + `${input.factorUnit} (at the exchange rate and price year the factor assumes) before entering it.`
+        : `Factor unit "${input.factorUnit}" cannot be applied to activity measured in "${input.activityUnit}".`,
     );
   }
 
   return {
-    co2eKg: input.activityValue * input.factorValue,
+    co2eKg: input.activityValue * conversion * input.factorValue,
+    unitConversion: conversion,
     categoryNumber: input.categoryNumber,
     method: input.method,
     activityValue: input.activityValue,

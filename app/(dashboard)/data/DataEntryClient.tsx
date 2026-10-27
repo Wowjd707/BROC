@@ -40,6 +40,24 @@ interface Props {
   rowLimit: number;
 }
 
+/**
+ * What priced the row, in a word: for Scope 2, how its market-based figure was
+ * derived; for gases and fuels reported outside the scopes, why.
+ */
+function methodLabel(e: { scope: string; accounting_method: string; scope2_market_basis?: string | null; outside_scopes_basis?: string | null }): string {
+  if (e.outside_scopes_basis === 'montreal_protocol_gas') return 'Montreal gas';
+  if (e.outside_scopes_basis === 'biogenic_co2') return 'Biogenic CO₂ separate';
+  if (e.scope !== 'scope2') return '—';
+  switch (e.scope2_market_basis) {
+    case 'contractual':    return 'Contract';
+    case 'residual_mix':   return 'Residual mix';
+    case 'grid_average':   return 'Grid average';
+    case 'self_generated': return 'Self-generated';
+    case 'heat_supplier':  return 'Heat supplier';
+    default:               return e.accounting_method === 'market_based' ? 'Contract' : 'Legacy';
+  }
+}
+
 export function DataEntryClient({
   sites, initialEmissions, initialEhsEntries, refrigerantFactors,
   organizationId, userRole, initialEvidenceCounts, dateFrom, dateTo, rowLimit,
@@ -285,7 +303,7 @@ export function DataEntryClient({
                       <th className="text-left px-4 py-3">Source</th>
                       <th className="text-right px-4 py-3">Quantity</th>
                       <th className="text-right px-4 py-3">CO₂e</th>
-                      <th className="text-left px-4 py-3">Method</th>
+                      <th className="text-left px-4 py-3">Basis</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
@@ -314,11 +332,26 @@ export function DataEntryClient({
                           {fmt(e.quantity)} {e.unit}
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                          {fmtCO2e(e.co2e_kg)}
+                          {/* Scope 2 rows store both figures; co2e_kg is the market-based one. */}
+                          {e.scope === 'scope2' && e.co2e_kg_location_based != null
+                            ? (
+                              <>
+                                {fmtCO2e(e.co2e_kg_location_based)}
+                                <span className="block text-[11px] font-normal text-gray-400">
+                                  market {fmtCO2e(e.co2e_kg)}
+                                </span>
+                              </>
+                            )
+                            : fmtCO2e(e.co2e_kg)}
+                          {Number(e.co2e_kg_outside_scopes ?? 0) > 0 && (
+                            <span className="block text-[11px] font-normal text-gray-400">
+                              +{fmtCO2e(Number(e.co2e_kg_outside_scopes))} outside scopes
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-xs text-gray-400">
-                            {e.accounting_method === 'market_based' ? 'Market' : 'Location'}
+                          <span className="text-xs text-gray-400" title={e.emission_factor_source}>
+                            {methodLabel(e)}
                           </span>
                         </td>
                         <td className="px-4 py-3">

@@ -26,6 +26,64 @@ export function toKWh(quantity: number, unit: string): number {
   }
 }
 
+/** 1 MMBtu = 1,055.05585 MJ (international table Btu). */
+const MJ_PER_MMBTU = 1_055.05585262;
+/** 1 MMBtu = 293.07107 kWh. */
+export const KWH_PER_MMBTU = MJ_PER_MMBTU / 3.6;
+
+/**
+ * Convert purchased heat or steam to kWh (thermal). Suppliers bill district
+ * heat and steam in energy units, not in kWh of electricity; this accepts the
+ * common ones so the quantity can be multiplied by the supplier's kg CO₂e/kWh.
+ */
+export function heatToKWh(quantity: number, unit: string): number {
+  switch (unit.toLowerCase().replace(/\s/g, '')) {
+    case 'kwh':   return quantity;
+    case 'mwh':   return quantity * 1_000;
+    case 'gwh':   return quantity * 1_000_000;
+    case 'mj':    return quantity / 3.6;
+    case 'gj':    return (quantity * 1_000) / 3.6;
+    case 'mmbtu': return quantity * KWH_PER_MMBTU;
+    case 'therm': case 'therms': return quantity * KWH_PER_MMBTU * 0.1;
+    default:
+      throw new Error(`Unsupported heat or steam unit: ${unit}`);
+  }
+}
+
+/**
+ * Higher heating values from the EPA GHG Emission Factors Hub (2024), Table 1.
+ * HHV throughout, to match the per-MMBtu emission factors, which are on an
+ * HHV basis too. Keys are fuel types with underscores removed.
+ */
+const MMBTU_PER_GALLON: Record<string, number> = {
+  diesel:     0.138, // distillate fuel oil No. 2 (EPA lists diesel under it)
+  fueloilno2: 0.138,
+  fueloilno4: 0.146,
+  fueloilno6: 0.150,
+  gasoline:   0.125, // motor gasoline
+  kerosene:   0.135,
+  propane:    0.091,
+  lpg:        0.092,
+};
+
+/** EPA Hub 2024 Table 1, MMBtu per short ton. */
+const MMBTU_PER_SHORT_TON: Record<string, number> = {
+  coalanthracite:    25.09,
+  coalbituminous:    24.93,
+  coalsubbituminous: 17.25,
+  coallignite:       14.21,
+  woodbiomass:       17.48, // wood and wood residuals
+};
+
+/** EPA Hub 2024 Table 1, MMBtu per standard cubic foot. */
+const MMBTU_PER_SCF: Record<string, number> = {
+  naturalgas: 0.001026,
+  propane:    0.002516, // propane gas
+};
+
+const KG_PER_SHORT_TON = 907.18474;
+const SCF_PER_M3 = 35.3146667;
+
 /** Convert any supported combustion-fuel unit to MMBtu */
 export function toMMBtu(quantity: number, unit: string, fuelType: string): number {
   const u = unit.toLowerCase().replace(/\s/g, '');
@@ -35,77 +93,65 @@ export function toMMBtu(quantity: number, unit: string, fuelType: string): numbe
   if (u === 'mmbtu')     return quantity;
   if (u === 'btu')       return quantity / 1_000_000;
   if (u === 'therms' || u === 'therm') return quantity * 0.1;
-  if (u === 'mj')        return quantity * 0.000948;
-  if (u === 'gj')        return quantity * 0.948;
+  if (u === 'mj')        return quantity / MJ_PER_MMBTU;
+  if (u === 'gj')        return (quantity * 1_000) / MJ_PER_MMBTU;
 
-  // Volume/mass — fuel-specific conversions
+  // Gas volumes. Each gaseous fuel has its own energy content: a cubic foot of
+  // propane carries about 2.5 times the energy of a cubic foot of natural gas,
+  // so applying the natural-gas value to every fuel understated propane by 60%.
+  const scf = (n: number): number => {
+    const perScf = MMBTU_PER_SCF[ft];
+    if (!perScf) throw new Error(`No volume→MMBtu factor for fuel: ${fuelType}. Enter it in MMBtu, therms or GJ.`);
+    return n * perScf;
+  };
+
+  // Mass. Throws for a fuel without a published HHV per ton rather than
+  // guessing: this once defaulted every unlisted fuel to bituminous coal, so a
+  // tonne of diesel came out 45% low.
+  const shortTons = (n: number): number => {
+    const perTon = MMBTU_PER_SHORT_TON[ft];
+    if (!perTon) throw new Error(`No mass→MMBtu factor for fuel: ${fuelType}. Enter it in volume or energy units.`);
+    return n * perTon;
+  };
+
   switch (u) {
-    // Natural gas
-    case 'cubic_feet': case 'cf': case 'scf':
-      return quantity * 0.001026;
-    case 'mcf':
-      return quantity * 1.026;
+    case 'cubic_feet': case 'cubicfeet': case 'cf': case 'scf':
+      return scf(quantity);
     case 'ccf':
-      return quantity * 0.1026;
-    case 'cubic_meters': case 'm3':
-      return quantity * 0.03616;
+      return scf(quantity * 100);
+    case 'mcf':
+      return scf(quantity * 1_000);
+    case 'cubic_meters': case 'cubicmeters': case 'm3':
+      return scf(quantity * SCF_PER_M3);
 
     // Liquid fuels — gallons
     case 'gallons': case 'gal': case 'usgal': {
-      const gallonFactors: Record<string, number> = {
-        diesel:     0.13756,
-        gasoline:   0.12454,
-        propane:    0.09150,
-        fueloilno2: 0.13860,
-        fueloilno4: 0.14590,
-        fueloilno6: 0.15010,
-        kerosene:   0.13500,
-        lpg:        0.09150,
-      };
-      const normalized = ft.replace(/_/g, '');
-      const factor = gallonFactors[normalized];
+      const factor = MMBTU_PER_GALLON[ft];
       if (!factor) throw new Error(`No gallon→MMBtu factor for fuel: ${fuelType}`);
       return quantity * factor;
     }
 
-    // Liquid fuels — liters (convert to gallons first)
-    case 'liters': case 'l': case 'litres': {
-      const gallons = quantity * 0.26417;
-      return toMMBtu(gallons, 'gallons', fuelType);
-    }
+    // Liquid fuels — litres (convert to US gallons first)
+    case 'liters': case 'l': case 'litres':
+      return toMMBtu(quantity / 3.785411784, 'gallons', fuelType);
 
     // Barrels
-    case 'barrels': case 'bbl': {
-      const gallons = quantity * 42;
-      return toMMBtu(gallons, 'gallons', fuelType);
-    }
+    case 'barrels': case 'bbl':
+      return toMMBtu(quantity * 42, 'gallons', fuelType);
 
-    // Mass (solid fuels / pellets). Energy content is MJ per kg, so the mass
-    // must be expressed in kg before applying it. 0.000948 converts MJ → MMBtu.
+    // Mass (solid fuels)
     case 'pounds': case 'lbs': case 'lb':
-      return quantity * 0.45359 * getCoalMJperKg(ft) * 0.000948;
+      return shortTons(quantity / 2_000);
     case 'kg': case 'kilograms':
-      return quantity * getCoalMJperKg(ft) * 0.000948;
+      return shortTons(quantity / KG_PER_SHORT_TON);
     case 'short_tons': case 'shorttons': case 'us_tons':
-      return quantity * 907.185 * getCoalMJperKg(ft) * 0.000948;
+      return shortTons(quantity);
     case 'metric_tons': case 'metrictons': case 'mt': case 'tonnes':
-      return quantity * 1000 * getCoalMJperKg(ft) * 0.000948;
+      return shortTons((quantity * 1_000) / KG_PER_SHORT_TON);
 
     default:
       throw new Error(`Unsupported unit "${unit}" for fuel "${fuelType}"`);
   }
-}
-
-/** Energy content (MJ/kg) for solid fuels, used in mass→MMBtu conversions */
-function getCoalMJperKg(ft: string): number {
-  const vals: Record<string, number> = {
-    coalanthracite:    26.8,
-    coalbituminous:    24.9,
-    coalsubbituminous: 18.8,
-    coallignite:       14.7,
-    woodbiomass:       17.4,
-  };
-  return vals[ft] ?? 24.9; // default to bituminous
 }
 
 // ─── Waste ───────────────────────────────────────────────────────────────────
@@ -163,9 +209,9 @@ export function normalizeEmissionInput(
   sourceType: string,
 ): NormalizationResult {
   if (scope === 'scope2') {
-    // Electricity → kWh
+    // Purchased heat and steam → kWh (thermal); electricity → kWh
     return {
-      quantityNormalized: toKWh(quantity, unit),
+      quantityNormalized: sourceType === 'district_heating' ? heatToKWh(quantity, unit) : toKWh(quantity, unit),
       unitNormalized: 'kWh',
     };
   }
@@ -235,6 +281,21 @@ export const ELECTRICITY_UNITS = [
   { value: 'GWh',  label: 'GWh' },
 ];
 
+export const HEAT_UNITS = [
+  { value: 'kWh',    label: 'kWh (thermal)' },
+  { value: 'MWh',    label: 'MWh (thermal)' },
+  { value: 'MMBtu',  label: 'MMBtu' },
+  { value: 'GJ',     label: 'GJ' },
+  { value: 'therms', label: 'Therms' },
+];
+
+export const SOLID_FUEL_UNITS = [
+  { value: 'short_tons',  label: 'Short Tons (US)' },
+  { value: 'metric_tons', label: 'Metric Tons (t)' },
+  { value: 'MMBtu',       label: 'MMBtu' },
+  { value: 'GJ',          label: 'GJ' },
+];
+
 export const NATURAL_GAS_UNITS = [
   { value: 'cubic_feet',  label: 'Cubic Feet (cf)' },
   { value: 'CCF',         label: 'CCF (hundred cubic feet)' },
@@ -272,13 +333,14 @@ export const REFRIGERANT_UNITS = [
 
 /** Returns the correct unit options for a given scope + source type */
 export function getUnitsForSource(scope: string, sourceType: string) {
-  if (scope === 'scope2') return ELECTRICITY_UNITS;
+  if (scope === 'scope2') return sourceType === 'district_heating' ? HEAT_UNITS : ELECTRICITY_UNITS;
   if (sourceType === 'natural_gas') return NATURAL_GAS_UNITS;
   if (sourceType === 'refrigerants') return REFRIGERANT_UNITS;
   if (['diesel', 'gasoline', 'propane', 'fuel_oil_no2', 'fuel_oil_no4',
        'fuel_oil_no6', 'kerosene', 'lpg'].includes(sourceType)) {
     return LIQUID_FUEL_UNITS;
   }
+  if (sourceType.startsWith('coal_') || sourceType === 'wood_biomass') return SOLID_FUEL_UNITS;
   // Fallback: energy units
   return [
     { value: 'MMBtu', label: 'MMBtu' },

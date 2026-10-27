@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  escapeHtml, renderReportHtml, buildReportModel,
+  escapeHtml, renderReportHtml, buildReportModel, renderMethodology,
   type BuildReportInput, type MaterialityScope,
 } from './report-builder';
 
@@ -234,5 +234,30 @@ describe('renderReportHtml — materiality scope', () => {
   it('stays self-contained with the scope section present', () => {
     const html = renderReportHtml(model({ materialityScope: scope }));
     expect(html).not.toMatch(/https?:\/\//);
+  });
+});
+
+describe('renderMethodology', () => {
+  it('states the boundary, the Scope 2 market-based basis and what sits outside the scopes', () => {
+    const html = renderMethodology({
+      consolidationApproach: 'equity_share',
+      partialSiteCount: 1,
+      excludedSiteCount: 0,
+      estimatedPercent: 4.2,
+      scope2MarketBasisKwh: { residual_mix: 600, grid_average: 400, self_generated: 500 },
+      biogenicCo2Kg: 93_800,
+      montrealGasesKg: 0,
+    });
+    expect(html).toContain('equity share approach');
+    expect(html).toContain('1 site is included at less than 100%');
+    // Self-generated electricity is not priced, so it is left out of the shares.
+    expect(html).toContain('60.0% residual mix');
+    expect(html).toContain('40.0% grid average, where no residual mix exists');
+    expect(html).toContain('4.2% of Scope 1 and 2 emissions rest on estimates');
+    expect(html).toContain('93.8 tCO₂');
+  });
+
+  it('renders nothing without a basis', () => {
+    expect(renderMethodology(null)).toBe('');
   });
 });

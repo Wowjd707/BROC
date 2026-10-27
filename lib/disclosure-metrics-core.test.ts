@@ -19,7 +19,9 @@ function inventory(overrides: Partial<InventoryInput> = {}): InventoryInput {
       { categoryNumber: 2, name: 'Capital goods', co2eKg: 0 },
     ],
     energyKwh: 1_200_000,
-    waterGallons: 45_000,
+    waterWithdrawalGallons: 45_000,
+    waterDischargeGallons: 0,
+    waterConsumptionGallons: 45_000,
     wasteKg: 80_000,
     intensityDenominator: 100_000,
     intensityDenominatorUnit: 'sq ft',
@@ -47,7 +49,7 @@ describe('resolveMetric', () => {
   it('sums all scopes using location-based Scope 2', () => {
     const m = resolveMetric('ghg_all_scopes', inventory())!;
     expect(m.value).toBe(2800); // 500 + 300 + 2000
-    expect(m.breakdown).toHaveLength(4);
+    expect(m.breakdown).toHaveLength(6);
   });
 
   it('omits zero categories from the Scope 3 breakdown', () => {
@@ -95,6 +97,43 @@ describe('resolveMetric', () => {
     const t = resolveMetric('waste_total', inventory())!;
     expect(t.unit).toBe('t');
     expect(t.value).toBe(80);
+  });
+
+  it('reports water consumption as withdrawal minus discharge', () => {
+    // Regression: 1,000 m³ withdrawn and 800 m³ discharged was reported as
+    // 1,800 m³ of consumption. It is 200.
+    const gal = (m3: number) => m3 / 0.003785411784;
+    const inv = inventory({
+      waterWithdrawalGallons: gal(1000),
+      waterDischargeGallons: gal(800),
+      waterConsumptionGallons: gal(200),
+    });
+    expect(resolveMetric('water_consumption', inv)!.value).toBeCloseTo(200, 6);
+    expect(resolveMetric('water_withdrawal', inv)!.value).toBeCloseTo(1000, 6);
+    expect(resolveMetric('water_discharge', inv)!.value).toBeCloseTo(800, 6);
+    expect(resolveMetric('water_consumption', inventory({ waterConsumptionGallons: null }))!.missing).toBe(true);
+  });
+
+  it('reports total GHG emissions on both Scope 2 bases (ESRS E1-6)', () => {
+    const m = resolveMetric('ghg_all_scopes', inventory())!;
+    const byLabel = Object.fromEntries(m.breakdown!.map((b) => [b.label, b.value]));
+    expect(byLabel['Total (location-based)']).toBeCloseTo(2800, 6);
+    expect(byLabel['Total (market-based)']).toBeCloseTo(2750, 6);
+  });
+
+  it('reports biogenic CO2 and Montreal gases outside the scopes, never in them', () => {
+    const inv = inventory({ outsideScopes: { biogenicCo2Kg: 93_800, montrealGasesKg: 19_600 } });
+    const m = resolveMetric('ghg_outside_scopes', inv)!;
+    expect(m.value).toBeCloseTo(113.4, 6);
+    expect(resolveMetric('scope1_total', inv)!.value).toBe(500);
+  });
+
+  it('discloses a recorded zero instead of calling it missing', () => {
+    // Regression: any sum of exactly 0 was flagged missing, so "we discharged
+    // no water" could not be disclosed.
+    const inv = inventory({ waterDischargeGallons: 0, presence: { waterDischarge: true } });
+    expect(resolveMetric('water_discharge', inv)!.missing).toBe(false);
+    expect(resolveMetric('water_discharge', inventory({ presence: { waterDischarge: false } }))!.missing).toBe(true);
   });
 
   it('lists only targets that have a reduction percentage', () => {

@@ -54,7 +54,7 @@ export default async function DashboardPage({
       .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
     fetchAll((from, to) => applyScope(supabase.from('ehs_entries').select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
       .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
-    fetchAll((from, to) => applyScope(supabase.from('ehs_entries').select('metric_type, quantity_normalized, entry_date')
+    fetchAll((from, to) => applyScope(supabase.from('ehs_entries').select('metric_type, source_type, quantity_normalized, entry_date')
       .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
     applyScope(supabase.from('sites').select('id, name, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true), scope.siteIds, 'id'),
     // Every active goal, not just the first: the dashboard now shows progress

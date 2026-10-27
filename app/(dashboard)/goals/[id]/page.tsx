@@ -3,7 +3,9 @@ import { notFound } from 'next/navigation';
 import { GoalDetailClient } from './GoalDetailClient';
 import { reportingYearRange } from '@/lib/utils';
 import { summarisePipeline } from '@/lib/pipeline';
-import { asGoalMetric } from '@/lib/goal-metrics';
+import { asGoalMetric, scopeTotals, goalGhgValue } from '@/lib/goal-metrics';
+import { boundaryMap, shareForEntry, type ConsolidationApproach } from '@/lib/consolidation-core';
+import { waterWithdrawal } from '@/lib/water-core';
 import { activeOrg } from '@/lib/active-org';
 import { fetchAll } from '@/lib/fetch-all';
 import { goalMeasurement } from '@/lib/goal-period-core';
@@ -19,7 +21,7 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
 
   const { data: userProfile } = await supabase
     .from('users')
-    .select('organization_id, active_organization_id, role, organizations!users_organization_id_fkey(reporting_year_start), active_organization:organizations!users_active_organization_id_fkey(reporting_year_start)')
+    .select('organization_id, active_organization_id, role, organizations!users_organization_id_fkey(reporting_year_start, consolidation_approach), active_organization:organizations!users_active_organization_id_fkey(reporting_year_start, consolidation_approach)')
     .eq('id', user.id)
     .single();
 
@@ -44,6 +46,16 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
   // made of the wrong numbers, so the source is chosen once, here.
   const metric = asGoalMetric(goal.metric);
 
+  // Same boundary as the report and the Goals page.
+  const { data: sites } = await supabase.from('sites').select('id, ownership_percent, is_controlled');
+  const approach = (org?.consolidation_approach ?? 'operational_control') as ConsolidationApproach;
+  const boundaries = boundaryMap((sites ?? []).map((x) => ({
+    id: x.id as string,
+    ownership_percent: Number(x.ownership_percent ?? 100),
+    is_controlled: x.is_controlled ?? true,
+  })));
+  const share = (siteId: string | null) => shareForEntry(siteId, boundaries, approach);
+
   const yearlyData: Array<{ year: number; actualValue: number | null }> = [];
   for (let y = goal.base_year; y <= curYear; y++) {
     const { startDate, endDate } = reportingYearRange(y, fyStart);
@@ -51,31 +63,26 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
     if (metric === 'ghg') {
       const { data: emRows } = await fetchAll((from, to) => supabase
         .from('emission_entries')
-        .select('scope, co2e_kg, co2e_kg_location_based, accounting_method')
+        .select('scope, co2e_kg, co2e_kg_location_based, site_id')
         .gte('entry_date', startDate)
         .lte('entry_date', endDate)
         .is('deleted_at', null)
         .order('id')
         .range(from, to));
 
-      const method = goal.scope2_accounting_method ?? 'market_based';
-      const total = (emRows ?? []).reduce((sum: number, r) => {
-        if (r.scope === 'scope1') return sum + r.co2e_kg;
-        if (r.scope === 'scope2') {
-          return sum + (method === 'location_based'
-            ? (r.co2e_kg_location_based ?? r.co2e_kg)
-            : r.co2e_kg);
-        }
-        return sum;
-      }, 0);
+      // The goal's own scope, under its Scope 2 method, boundary-adjusted.
+      const totals = scopeTotals(emRows, share);
 
       // null, not 0, for a year with no entries: a chart point at zero would
       // read as "we emitted nothing" rather than "we did not measure".
-      yearlyData.push({ year: y, actualValue: emRows && emRows.length > 0 ? total : null });
+      yearlyData.push({
+        year: y,
+        actualValue: totals ? goalGhgValue(totals, goal.scope, goal.scope2_accounting_method ?? 'market_based') : null,
+      });
     } else {
       const { data: ehsRows } = await fetchAll((from, to) => supabase
         .from('ehs_entries')
-        .select('metric_type, quantity_normalized')
+        .select('metric_type, source_type, quantity_normalized')
         .eq('metric_type', metric)
         .gte('entry_date', startDate)
         .lte('entry_date', endDate)
@@ -83,7 +90,10 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
         .order('id')
         .range(from, to));
 
-      const total = (ehsRows ?? []).reduce((sum, r) => sum + r.quantity_normalized, 0);
+      // Water is withdrawal; discharges are not use (lib/water-core.ts).
+      const total = metric === 'water'
+        ? waterWithdrawal(ehsRows ?? [])
+        : (ehsRows ?? []).reduce((sum, r) => sum + r.quantity_normalized, 0);
       yearlyData.push({ year: y, actualValue: ehsRows && ehsRows.length > 0 ? total : null });
     }
   }
@@ -94,7 +104,10 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
     .select('id, name, status, pipeline_inclusion_status, estimated_co2e_reduction_kg_per_year, actual_co2e_reduction_kg_per_year, estimated_water_reduction_gal_per_year, actual_water_reduction_gal_per_year, estimated_waste_reduction_kg_per_year, actual_waste_reduction_kg_per_year, start_date, completion_date')
     .in('status', ['approved', 'in_progress', 'completed']);
 
-  const pipelineValue = summarisePipeline(projects ?? [], curYear, fyStart, { metric }).annualisedValue;
+  // Projects completed after the latest complete year are not yet in any
+  // measured figure, so they stay in the pipeline until one reflects them.
+  const completedAfter = reportingYearRange(curYear - 1, fyStart).endDate;
+  const pipelineValue = summarisePipeline(projects ?? [], curYear, fyStart, { metric, completedAfter }).annualisedValue;
 
   // Judged on the latest complete reporting year; the year in progress is a
   // fallback only when no complete year has data. See lib/goal-period-core.ts.

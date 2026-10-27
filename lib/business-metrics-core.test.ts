@@ -31,19 +31,27 @@ describe('aggregateMetricValues', () => {
     ], 'point_in_time')).toBe(1200);
   });
 
-  it('keeps an organization-wide reading in its own bucket', () => {
+  it('uses an organization-wide figure as the total, never adding site figures to it', () => {
+    // Regression: an org-wide headcount of 1,000 and a site's 300 reported
+    // 1,300. A null site is the organization-wide figure (migration 027).
     expect(aggregateMetricValues([
       val({ site_id: null, as_of_date: '2026-12-31', value: 1000 }),
       val({ site_id: 'a', as_of_date: '2026-12-31', value: 300 }),
-    ], 'point_in_time')).toBe(1300);
+    ], 'point_in_time')).toBe(1000);
+    expect(aggregateMetricValues([
+      val({ site_id: null, value: 5_000_000 }),
+      val({ site_id: 'a', value: 2_000_000 }),
+    ], 'sum')).toBe(5_000_000);
   });
 
-  it('averages each site’s latest, not every reading', () => {
+  it('averages over the period per site, then sums the sites', () => {
+    // An average across sites is not a denominator; average headcount over
+    // the year, per site, summed, is.
     expect(aggregateMetricValues([
       val({ site_id: 'a', as_of_date: '2026-01-31', value: 10 }),
       val({ site_id: 'a', as_of_date: '2026-12-31', value: 20 }),
       val({ site_id: 'b', as_of_date: '2026-12-31', value: 40 }),
-    ], 'average')).toBe(30);
+    ], 'average')).toBe(55);
   });
 
   it('returns null for no data, never 0', () => {

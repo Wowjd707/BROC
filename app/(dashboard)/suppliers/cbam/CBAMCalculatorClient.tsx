@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
   CBAM_COMMODITIES, CBAM_COUNTRIES, SECTOR_COLORS,
-  searchCBAMCommodities, calculateCBAM,
+  searchCBAMCommodities, calculateCBAM, directEmissionsOnly,
   type CBAMCommodity,
 } from '@/lib/cbam-data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -151,9 +151,7 @@ function CommoditySearch({
               </span>
             </div>
             <p className="text-sm font-medium text-gray-900 mt-1">{value.name}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              EU default: {fmt(value.defaultFactor, 4)} tCO₂e / {value.unit}
-            </p>
+            <p className="text-xs text-gray-500 mt-0.5">Factor per {value.unit}</p>
           </div>
           <button
             onClick={clear}
@@ -203,9 +201,7 @@ function CommoditySearch({
                       </span>
                     </div>
                     <p className="text-sm text-gray-900 mt-0.5">{c.name}</p>
-                    <p className="text-xs text-gray-400">
-                      Default: {fmt(c.defaultFactor, 4)} tCO₂e / {c.unit}
-                    </p>
+                    <p className="text-xs text-gray-400">per {c.unit}</p>
                   </button>
                 ))
               )}
@@ -245,6 +241,10 @@ export function CBAMCalculatorClient({
   const [massUnit, setMassUnit] = useState<'kg' | 'tonnes'>('tonnes');
   const [factorMode, setFactorMode] = useState<'eu_default' | 'supplier_provided'>('eu_default');
   const [customFactor, setCustomFactor] = useState('');
+  // EU default values are not shipped (see lib/cbam-data.ts): the user enters
+  // the value from the Commission's current publication and cites it.
+  const [defaultValue, setDefaultValue] = useState('');
+  const [defaultSource, setDefaultSource] = useState('');
   // No default price. A built-in figure goes stale within weeks and then
   // silently prices every estimate; the user enters the price they are using.
   const [certPrice, setCertPrice] = useState('');
@@ -270,10 +270,11 @@ export function CBAMCalculatorClient({
 
   // ─── Live calculation ─────────────────────────────────────────────────────
 
-  const activeFactor =
-    factorMode === 'eu_default'
-      ? commodity?.defaultFactor ?? null
-      : parseFloat(customFactor) || null;
+  const parsedFactor = (v: string) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) && n >= 0 && v.trim() !== '' ? n : null;
+  };
+  const activeFactor = factorMode === 'eu_default' ? parsedFactor(defaultValue) : parsedFactor(customFactor);
 
   const result = useMemo(() => {
     if (!commodity || !quantity || !country || activeFactor === null) return null;
@@ -301,6 +302,10 @@ export function CBAMCalculatorClient({
   async function handleSaveCalc() {
     if (!result || !commodity) return;
     if (!priceEntered) { flash('Enter the certificate price you are using before saving.', true); return; }
+    if (factorMode === 'eu_default' && !defaultSource.trim()) {
+      flash('Cite the default value: the Commission publication and its date.', true);
+      return;
+    }
     setError('');
     const qty = parseFloat(quantity);
     const price = parseFloat(certPrice);
@@ -319,7 +324,7 @@ export function CBAMCalculatorClient({
       emission_factor: activeFactor!,
       factor_type: factorMode,
       factor_source: factorMode === 'eu_default'
-        ? 'EU Commission Implementing Regulation (EU) 2023/1773'
+        ? defaultSource.trim()
         : saveFactorSource || null,
       total_tco2e: result.totalTCO2e,
       certificate_price_eur: price,
@@ -610,20 +615,33 @@ export function CBAMCalculatorClient({
                   </div>
 
                   {factorMode === 'eu_default' ? (
-                    <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
-                      {commodity ? (
-                        <div className="space-y-1">
-                          <p className="text-xs text-gray-500">EU default factor (Reg. 2023/1773 Annex III)</p>
-                          <p className="text-lg font-semibold text-gray-900">
-                            {fmt(commodity.defaultFactor, 4)}{' '}
-                            <span className="text-sm font-normal text-gray-500">
-                              tCO₂e / {commodity.unit}
-                            </span>
-                          </p>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-gray-400">Select a commodity to see its EU default factor.</p>
-                      )}
+                    <div className="space-y-3">
+                      <div>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                          EU default value (tCO₂e / {commodity?.unit ?? 'tonne'})
+                        </Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={defaultValue}
+                          onChange={(e) => setDefaultValue(e.target.value)}
+                          placeholder="From the Commission's default values"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">Source *</Label>
+                        <Input
+                          value={defaultSource}
+                          onChange={(e) => setDefaultSource(e.target.value)}
+                          placeholder="e.g. Commission default values, definitive period, published DD Mon YYYY"
+                        />
+                        <p className="text-xs text-gray-400 mt-1">
+                          Default values are set per period, and electricity&apos;s per country, so none ship
+                          with the platform. Enter the value for this CN code from the Commission&apos;s
+                          current publication and cite it.
+                        </p>
+                      </div>
                     </div>
                   ) : (
                     <div className="space-y-3">
@@ -830,6 +848,10 @@ export function CBAMCalculatorClient({
                             Before the adjustment for EU ETS free allocation and for any carbon price paid in
                             the country of origin (Regulation (EU) 2023/956, Articles 31 and 9), both of which
                             reduce the certificates actually owed.
+                            {commodity && directEmissionsOnly(commodity.sector) && (
+                              <> For {commodity.sector.toLowerCase()}, certificates cover direct embedded
+                              emissions only (Annex II), so use a direct-only factor for this estimate.</>
+                            )}
                           </p>
                         </div>
                       </div>

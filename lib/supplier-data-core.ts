@@ -105,9 +105,12 @@ export function declarationFromSurveyAnswers(
     supplierId,
     supplierName,
     source: 'survey_response',
+    // CBAM embedded emissions stop at the installation gate plus precursors:
+    // narrower than the cradle-to-gate boundary a Scope 3 Category 1 factor
+    // assumes. Said in the label so the figure is never read as full scope.
     sourceLabel: verified && verificationRef
-      ? `Supplier CBAM survey response (third-party verified: ${verificationRef})`
-      : 'Supplier CBAM survey response (self-declared)',
+      ? `Supplier CBAM survey response (third-party verified: ${verificationRef}; CBAM embedded-emissions boundary, partial cradle-to-gate)`
+      : 'Supplier CBAM survey response (self-declared; CBAM embedded-emissions boundary, partial cradle-to-gate)',
     intensityKgCo2e: intensity,
     unit,
     product: (answers.q1 ?? '').trim() || null,

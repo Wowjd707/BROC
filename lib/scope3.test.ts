@@ -59,6 +59,12 @@ describe('unit compatibility', () => {
     expect(unitsCompatible('miles', 'km')).toBe(true);
   });
 
+  it('rejects a different currency and unlike counts', () => {
+    // Converting EUR to USD needs an exchange rate and a price year.
+    expect(unitsCompatible('EUR', 'USD')).toBe(false);
+    expect(unitsCompatible('nights', 'units')).toBe(false);
+  });
+
   it('rejects cross-family matches', () => {
     expect(unitsCompatible('USD', 'kg')).toBe(false);
     expect(unitsCompatible('miles', 'tonne-km')).toBe(false);
@@ -67,6 +73,24 @@ describe('unit compatibility', () => {
 });
 
 describe('calculateScope3', () => {
+  it('converts the activity into the factor\'s unit before multiplying', () => {
+    // Regression: same-family units were accepted but never converted, so
+    // 10 tonnes × 2 kg CO₂e/kg came out at 20 kg instead of 20,000.
+    const tonnes = calculateScope3(input({ activityValue: 10, activityUnit: 'tonnes', factorValue: 2, factorUnit: 'kg' }));
+    expect(tonnes.co2eKg).toBeCloseTo(20_000, 6);
+    expect(tonnes.unitConversion).toBe(1000);
+    const mwh = calculateScope3(input({ activityValue: 500, activityUnit: 'MWh', factorValue: 0.05, factorUnit: 'kWh' }));
+    expect(mwh.co2eKg).toBeCloseTo(25_000, 6);
+    const miles = calculateScope3(input({ activityValue: 1000, activityUnit: 'miles', factorValue: 0.15, factorUnit: 'km' }));
+    expect(miles.co2eKg).toBeCloseTo(241.4016, 4);
+    const tonMiles = calculateScope3(input({ activityValue: 1, activityUnit: 'ton-mile', factorValue: 1, factorUnit: 'tonne-km' }));
+    expect(tonMiles.co2eKg).toBeCloseTo(1.459972, 5);
+  });
+
+  it('refuses spend in one currency against a factor in another', () => {
+    expect(() => calculateScope3(input({ activityUnit: 'EUR', factorUnit: 'USD' }))).toThrow(/Convert the spend/);
+  });
+
   it('multiplies activity by factor (spend-based)', () => {
     const r = calculateScope3(input());
     expect(r.co2eKg).toBeCloseTo(250, 6); // 1000 USD × 0.25

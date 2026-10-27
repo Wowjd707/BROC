@@ -32,6 +32,8 @@ interface Project {
   description: string | null;
   category: string;
   status: string;
+  /** 'forecasted' | 'realized' count toward the reduction pipeline; 'excluded' does not. */
+  pipeline_inclusion_status: string;
   site_id: string | null;
   estimated_co2e_reduction_kg_per_year: number | null;
   estimated_cost_usd: number | null;
@@ -108,6 +110,9 @@ const EMPTY_FORM = {
   description: '',
   category: 'energy_efficiency',
   status: 'idea' as Status,
+  // Counts toward the pipeline once approved. Ideas and cancelled projects
+  // never count, whatever this says (lib/pipeline.ts).
+  pipeline_inclusion_status: 'forecasted',
   site_id: '',
   estimated_co2e_reduction_kg_per_year: '',
   estimated_water_reduction_gal_per_year: '',
@@ -205,7 +210,7 @@ export function ProjectsClient({
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalPipeline = visible
-    .filter(p => ['approved', 'in_progress'].includes(p.status))
+    .filter(p => ['approved', 'in_progress'].includes(p.status) && p.pipeline_inclusion_status !== 'excluded')
     .reduce((s, p) => s + (p.estimated_co2e_reduction_kg_per_year ?? 0), 0);
   // Measured savings only. A completed project with no measured figure is
   // "not measured", not zero — summing it as 0 showed "0 kg CO₂e/yr" next to a
@@ -229,6 +234,7 @@ export function ProjectsClient({
       description: project.description ?? '',
       category: project.category,
       status: project.status as Status,
+      pipeline_inclusion_status: project.pipeline_inclusion_status ?? 'excluded',
       site_id: project.site_id ?? '',
       estimated_co2e_reduction_kg_per_year: toForm(project.estimated_co2e_reduction_kg_per_year, 'carbon'),
       estimated_water_reduction_gal_per_year: toForm(project.estimated_water_reduction_gal_per_year, 'water'),
@@ -257,6 +263,7 @@ export function ProjectsClient({
       description: form.description || null,
       category: form.category,
       status: form.status,
+      pipeline_inclusion_status: form.pipeline_inclusion_status,
       site_id: form.site_id || null,
       estimated_co2e_reduction_kg_per_year: fromForm(form.estimated_co2e_reduction_kg_per_year, 'carbon'),
       estimated_water_reduction_gal_per_year: fromForm(form.estimated_water_reduction_gal_per_year, 'water'),
@@ -679,6 +686,21 @@ export function ProjectsClient({
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div>
+              <Label>Reduction pipeline</Label>
+              <Select value={form.pipeline_inclusion_status} onValueChange={v => setField('pipeline_inclusion_status', v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="forecasted">Counted — forecast saving</SelectItem>
+                  <SelectItem value="realized">Counted — realized saving</SelectItem>
+                  <SelectItem value="excluded">Not counted</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                Whether this project&apos;s savings count toward goal coverage once it is approved.
+                Ideas and cancelled projects never count.
+              </p>
             </div>
             <div>
               <Label>Site</Label>

@@ -288,14 +288,15 @@ export function DisclosuresClient({
         sourceRef: framework.source_ref,
       },
       coverage,
+      // Same figures, units and missing/zero rule as the metric blocks: each row
+      // comes from resolveMetric, so the table cannot say 0 where a block says
+      // "not recorded", or state water in gallons beside a block in m³.
       inventorySummary: [
-        { label: 'Scope 1 (direct)', value: inventory.scope1Kg / 1000, unit: 'tCO₂e' },
-        { label: 'Scope 2 (location-based)', value: inventory.scope2LocationKg / 1000, unit: 'tCO₂e' },
-        { label: 'Scope 2 (market-based)', value: inventory.scope2MarketKg / 1000, unit: 'tCO₂e' },
+        summaryRow('scope1_total', 'Scope 1 (direct)'),
+        summaryRow('scope2_location', 'Scope 2 (location-based)'),
+        summaryRow('scope2_market', 'Scope 2 (market-based)'),
         {
-          label: 'Scope 3 (value chain)',
-          value: inventory.scope3Kg / 1000,
-          unit: 'tCO₂e',
+          ...summaryRow('scope3_total', 'Scope 3 (value chain)'),
           note: `across ${provenance.scope3CategoriesWithData} of 15 categories`,
         },
         {
@@ -303,10 +304,25 @@ export function DisclosuresClient({
           value: (inventory.scope1Kg + inventory.scope2LocationKg + inventory.scope3Kg) / 1000,
           unit: 'tCO₂e',
         },
-        { label: 'Energy consumption', value: inventory.energyKwh, unit: 'kWh' },
-        { label: 'Water consumption', value: inventory.waterGallons, unit: 'gallons' },
-        { label: 'Waste generated', value: inventory.wasteKg, unit: 'kg' },
+        {
+          label: 'Total (Scope 1 + 2 market-based + 3)',
+          value: (inventory.scope1Kg + inventory.scope2MarketKg + inventory.scope3Kg) / 1000,
+          unit: 'tCO₂e',
+        },
+        summaryRow('energy_consumption', 'Energy consumption'),
+        summaryRow('water_withdrawal', 'Water withdrawal'),
+        summaryRow('water_consumption', 'Water consumption'),
+        summaryRow('waste_total', 'Waste generated'),
       ],
+      basis: {
+        consolidationApproach: inventory.consolidation?.approach ?? 'operational_control',
+        partialSiteCount: inventory.consolidation?.partialSiteCount ?? 0,
+        excludedSiteCount: inventory.consolidation?.excludedSiteCount ?? 0,
+        estimatedPercent: inventory.dataQuality?.estimatedPercent ?? null,
+        scope2MarketBasisKwh: inventory.scope2MarketBasisKwh ?? {},
+        biogenicCo2Kg: inventory.outsideScopes?.biogenicCo2Kg ?? 0,
+        montrealGasesKg: inventory.outsideScopes?.montrealGasesKg ?? 0,
+      },
       // Built from `rows`, not from the on-screen `sections`: what the report
       // contains must not depend on whether a UI toggle happened to be open.
       // Excluded requirements are named in the scope statement instead.
@@ -334,6 +350,11 @@ export function DisclosuresClient({
     a.download = `${orgName.replace(/[^\w-]+/g, '_')}_${framework.code}_${currentYear}.html`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function summaryRow(key: string, label: string): { label: string; value: number | null; unit: string } {
+    const m = resolveMetric(key, inventory);
+    return { label, value: m && !m.missing ? m.value : null, unit: m?.unit ?? '' };
   }
 
   function openRow(reqId: string, existing: string | null) {

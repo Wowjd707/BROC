@@ -3,8 +3,15 @@
  * Always calculates at entry time. Dashboard reads stored values.
  */
 
-import { normalizeEmissionInput, normalizeEhsInput, toMMBtu } from './conversions';
+import { normalizeEmissionInput } from './conversions';
 import { fmtCO2e } from './utils';
+
+export type Scope2MarketBasis =
+  | 'contractual'
+  | 'residual_mix'
+  | 'grid_average'
+  | 'self_generated'
+  | 'heat_supplier';
 
 export interface EmissionCalculationInput {
   scope: 'scope1' | 'scope2';
@@ -12,32 +19,60 @@ export interface EmissionCalculationInput {
   sourceDetail?: string; // e.g. refrigerant code
   quantity: number;
   unit: string;
-  // Scope 2 specific
+  // ── Scope 2 ──
+  /** market_based means a contractual instrument or supplier factor applies. */
   accountingMethod?: 'location_based' | 'market_based';
-  locationBasedFactor?: number;   // kg CO2e / kWh
-  marketBasedFactor?: number;     // kg CO2e / kWh (supplier/contractual)
+  locationBasedFactor?: number;   // kg CO2e / kWh, grid average for the site
+  locationFactorSource?: string;
+  marketBasedFactor?: number;     // kg CO2e / kWh, contractual (supplier / certificate)
+  residualMixFactor?: number;     // kg CO2e / kWh, residual mix for the site's market
+  residualMixSource?: string;
+  heatFactor?: number;            // kg CO2e / kWh thermal, heat or steam supplier
+  heatFactorSource?: string;
   instrumentType?: string;
-  // Scope 1 specific
+  // ── Scope 1 ──
   scope1Factor?: number;          // kg CO2e / MMBtu (from scope1_emission_factors)
+  /** kg biogenic CO2 / MMBtu, reported outside the scopes (biomass only). */
+  biogenicCo2Factor?: number;
   refrigerantGwp?: number;        // GWP value (from refrigerant_factors), for refrigerants
+  /** HCFCs and other Montreal Protocol gases are reported outside the scopes. */
+  isMontrealProtocol?: boolean;
   emissionFactorSource?: string;
 }
 
 export interface EmissionCalculationResult {
   quantityNormalized: number;
   unitNormalized: string;
+  /** Scope 1: the emission. Scope 2: the MARKET-based figure, for every row. */
   co2eKg: number;
-  co2eKgLocationBased: number;    // always populated; same as co2eKg for location-based
+  /** Scope 1: same as co2eKg. Scope 2: the location-based figure. */
+  co2eKgLocationBased: number;
   emissionFactorUsed: number;
   emissionFactorSource: string;
   accountingMethod: 'location_based' | 'market_based';
   instrumentType?: string;
   supplierEmissionFactor?: number;
+  /** Scope 2 only. */
+  locationFactorUsed?: number;
+  locationFactorSource?: string;
+  scope2MarketBasis?: Scope2MarketBasis;
+  /** Biogenic CO2 and Montreal Protocol gases: reported separately, never in a scope total. */
+  co2eKgOutsideScopes: number;
+  outsideScopesBasis?: string;
 }
+
+export const SELF_GENERATED_SOURCE =
+  'On-site generation consumed on site: no Scope 2 emissions (GHG Protocol Scope 2 Guidance)';
 
 /**
  * Calculate CO2e for an emission entry.
  * Returns all values to be stored in emission_entries.
+ *
+ * Every factor comes from the caller (lib/entries.ts resolves them from the
+ * reference tables and the organization's custom factors). There are no
+ * built-in fallback numbers here: a hard-coded grid factor drifts from the
+ * reference table it claims to mirror, and a missing factor is an error the
+ * user can fix, not a gap to fill silently.
  */
 export function calculateEmissionCO2e(
   input: EmissionCalculationInput,
@@ -49,62 +84,50 @@ export function calculateEmissionCO2e(
     input.sourceType,
   );
 
-  // ─── Scope 2: Electricity ───────────────────────────────────────────────
-  if (input.scope === 'scope2') {
-    const method = input.accountingMethod ?? 'location_based';
-    const locationFactor = input.locationBasedFactor ?? 0.386; // US national fallback
-    const locationCo2e = quantityNormalized * locationFactor;
-
-    if (method === 'market_based') {
-      const marketFactor = input.marketBasedFactor ?? 0.455; // US residual mix fallback
-      const marketCo2e = quantityNormalized * marketFactor;
-
-      return {
-        quantityNormalized,
-        unitNormalized,
-        co2eKg: marketCo2e,
-        co2eKgLocationBased: locationCo2e,
-        emissionFactorUsed: marketFactor,
-        emissionFactorSource: input.emissionFactorSource ?? 'M-RETS_Greene_2023_residual_mix',
-        accountingMethod: 'market_based',
-        instrumentType: input.instrumentType,
-        supplierEmissionFactor: input.marketBasedFactor,
-      };
-    }
-
-    return {
-      quantityNormalized,
-      unitNormalized,
-      co2eKg: locationCo2e,
-      co2eKgLocationBased: locationCo2e,
-      emissionFactorUsed: locationFactor,
-      emissionFactorSource: input.emissionFactorSource ?? 'eGRID2023',
-      accountingMethod: 'location_based',
-    };
-  }
+  if (input.scope === 'scope2') return calculateScope2(input, quantityNormalized, unitNormalized);
 
   // ─── Scope 1: Refrigerants (kg × GWP) ──────────────────────────────────
   if (input.sourceType === 'refrigerants') {
-    if (!input.refrigerantGwp) {
+    if (input.refrigerantGwp == null || !Number.isFinite(input.refrigerantGwp)) {
       throw new Error('refrigerantGwp is required for refrigerant entries');
     }
     const co2eKg = quantityNormalized * input.refrigerantGwp;
+    const source = input.emissionFactorSource ?? 'IPCC_AR6';
+    // Montreal Protocol gases are outside the Kyoto basket: the GHG Protocol
+    // has them reported separately, not in Scope 1.
+    if (input.isMontrealProtocol) {
+      return {
+        quantityNormalized,
+        unitNormalized,
+        co2eKg: 0,
+        co2eKgLocationBased: 0,
+        emissionFactorUsed: input.refrigerantGwp,
+        emissionFactorSource: source,
+        accountingMethod: 'location_based',
+        co2eKgOutsideScopes: co2eKg,
+        outsideScopesBasis: 'montreal_protocol_gas',
+      };
+    }
     return {
       quantityNormalized,
       unitNormalized,
       co2eKg,
       co2eKgLocationBased: co2eKg,
       emissionFactorUsed: input.refrigerantGwp,
-      emissionFactorSource: input.emissionFactorSource ?? 'IPCC_AR6',
+      emissionFactorSource: source,
       accountingMethod: 'location_based',
+      co2eKgOutsideScopes: 0,
     };
   }
 
   // ─── Scope 1: Combustion fuels (MMBtu × factor) ─────────────────────────
-  if (!input.scope1Factor) {
+  if (input.scope1Factor == null || !Number.isFinite(input.scope1Factor)) {
     throw new Error(`scope1Factor is required for Scope 1 source: ${input.sourceType}`);
   }
   const co2eKg = quantityNormalized * input.scope1Factor;
+  const biogenic = input.biogenicCo2Factor != null && input.biogenicCo2Factor > 0
+    ? quantityNormalized * input.biogenicCo2Factor
+    : 0;
 
   return {
     quantityNormalized,
@@ -112,9 +135,145 @@ export function calculateEmissionCO2e(
     co2eKg,
     co2eKgLocationBased: co2eKg,
     emissionFactorUsed: input.scope1Factor,
-    emissionFactorSource: input.emissionFactorSource ?? 'EPA_2024',
+    emissionFactorSource: input.emissionFactorSource ?? 'EPA_2024_AR6',
     accountingMethod: 'location_based',
+    co2eKgOutsideScopes: biogenic,
+    outsideScopesBasis: biogenic > 0 ? 'biogenic_co2' : undefined,
   };
+}
+
+/**
+ * Scope 2, following the GHG Protocol Scope 2 Guidance (2015):
+ *
+ *  - Location-based: the grid-average factor for where the energy is used.
+ *  - Market-based, for every row: a contractual instrument or supplier factor
+ *    if there is one; otherwise the residual mix for that market; otherwise,
+ *    where no residual mix exists, the grid average, and the row records that
+ *    it was used so the report can disclose it.
+ *  - Electricity generated on site and consumed on site was not purchased, so
+ *    it carries no Scope 2 emissions under either method.
+ *  - Purchased heat and steam use the supplier's factor under both methods: an
+ *    electricity grid factor says nothing about a heat network.
+ */
+function calculateScope2(
+  input: EmissionCalculationInput,
+  quantityNormalized: number,
+  unitNormalized: string,
+): EmissionCalculationResult {
+  const base = { quantityNormalized, unitNormalized, co2eKgOutsideScopes: 0 };
+
+  if (input.sourceType === 'renewable_generated') {
+    return {
+      ...base,
+      co2eKg: 0,
+      co2eKgLocationBased: 0,
+      emissionFactorUsed: 0,
+      emissionFactorSource: SELF_GENERATED_SOURCE,
+      accountingMethod: 'location_based',
+      locationFactorUsed: 0,
+      locationFactorSource: SELF_GENERATED_SOURCE,
+      scope2MarketBasis: 'self_generated',
+    };
+  }
+
+  if (input.sourceType === 'district_heating') {
+    if (input.heatFactor == null || !Number.isFinite(input.heatFactor)) {
+      throw new Error(
+        'Purchased heat or steam needs the supplier\'s emission factor. Add a "Scope 2 heat/steam (site)" '
+        + 'custom factor for this site on the Emission factors page, then save the entry again.',
+      );
+    }
+    const co2e = quantityNormalized * input.heatFactor;
+    const source = input.heatFactorSource ?? 'heat supplier factor';
+    return {
+      ...base,
+      co2eKg: co2e,
+      co2eKgLocationBased: co2e,
+      emissionFactorUsed: input.heatFactor,
+      emissionFactorSource: source,
+      accountingMethod: 'location_based',
+      locationFactorUsed: input.heatFactor,
+      locationFactorSource: source,
+      scope2MarketBasis: 'heat_supplier',
+    };
+  }
+
+  if (input.locationBasedFactor == null || !Number.isFinite(input.locationBasedFactor)) {
+    throw new Error(
+      'No location-based grid factor for this site. Add a "Scope 2 grid (site)" custom factor for it '
+      + 'on the Emission factors page, then save the entry again.',
+    );
+  }
+  const locationFactor = input.locationBasedFactor;
+  const locationSource = input.locationFactorSource ?? 'grid average';
+  const locationCo2e = quantityNormalized * locationFactor;
+  const location = {
+    co2eKgLocationBased: locationCo2e,
+    locationFactorUsed: locationFactor,
+    locationFactorSource: locationSource,
+  };
+
+  if (input.accountingMethod === 'market_based') {
+    if (input.marketBasedFactor == null || !Number.isFinite(input.marketBasedFactor) || input.marketBasedFactor < 0) {
+      throw new Error(
+        'A market-based entry needs its contractual emission factor (kg CO₂e/kWh) — from the supplier, '
+        + 'the PPA, or 0 for certificates retired on your behalf. Without a contract, choose Location-based: '
+        + 'the market-based figure then comes from the residual mix.',
+      );
+    }
+    return {
+      ...base,
+      ...location,
+      co2eKg: quantityNormalized * input.marketBasedFactor,
+      emissionFactorUsed: input.marketBasedFactor,
+      emissionFactorSource: `contractual: ${instrumentLabel(input.instrumentType)}`,
+      accountingMethod: 'market_based',
+      instrumentType: input.instrumentType,
+      supplierEmissionFactor: input.marketBasedFactor,
+      scope2MarketBasis: 'contractual',
+    };
+  }
+
+  if (input.sourceType === 'renewable_purchased') {
+    throw new Error(
+      'Purchased renewable electricity is a market-based claim: choose Market-based and enter the '
+      + 'contractual factor (usually 0 where certificates are retired on your behalf). Without a '
+      + 'contract or certificates, enter it as grid electricity.',
+    );
+  }
+
+  if (input.residualMixFactor != null && Number.isFinite(input.residualMixFactor)) {
+    return {
+      ...base,
+      ...location,
+      co2eKg: quantityNormalized * input.residualMixFactor,
+      emissionFactorUsed: input.residualMixFactor,
+      emissionFactorSource: input.residualMixSource ?? 'residual mix',
+      accountingMethod: 'location_based',
+      scope2MarketBasis: 'residual_mix',
+    };
+  }
+
+  return {
+    ...base,
+    ...location,
+    co2eKg: locationCo2e,
+    emissionFactorUsed: locationFactor,
+    emissionFactorSource: `${locationSource} — grid average used for market-based: no residual mix for this market`,
+    accountingMethod: 'location_based',
+    scope2MarketBasis: 'grid_average',
+  };
+}
+
+const INSTRUMENT_LABELS: Record<string, string> = {
+  rec: 'energy attribute certificate',
+  ppa: 'power purchase agreement',
+  green_tariff: 'green tariff',
+  supplier_specific: 'supplier-specific factor',
+};
+
+function instrumentLabel(t: string | undefined): string {
+  return (t && INSTRUMENT_LABELS[t]) || 'supplier-specific factor';
 }
 
 // ─── Project savings calculators ────────────────────────────────────────────
@@ -175,12 +334,13 @@ export interface SavingsResult {
   summary: string;
 }
 
-const GASOLINE_CO2E_PER_GALLON = 8.78;  // kg CO2e / gallon (EPA 2024)
-const DIESEL_CO2E_PER_GALLON   = 10.21; // kg CO2e / gallon (EPA 2024)
-const GASOLINE_MMBtu_PER_GAL   = 0.12454;
-const DIESEL_MMBtu_PER_GAL     = 0.13756;
-const GASOLINE_CO2E_FACTOR     = 70.22; // kg/MMBtu
-const DIESEL_CO2E_FACTOR       = 73.96; // kg/MMBtu
+// Fleet estimates: per-gallon CO2e from the EPA Hub 2024 HHVs (MMBtu/gallon)
+// and the EPA 2024 + AR6 CO2e factors per MMBtu that migration 038 seeds.
+// Estimates only — measured fuel use goes through Scope 1 entries.
+const GASOLINE_MMBTU_PER_GAL = 0.125;
+const DIESEL_MMBTU_PER_GAL   = 0.138;
+const GASOLINE_CO2E_PER_MMBTU = 70.47;
+const DIESEL_CO2E_PER_MMBTU   = 74.21;
 
 export function calculateProjectSavings(input: SavingsInput): SavingsResult {
   switch (input.type) {
@@ -214,8 +374,8 @@ export function calculateProjectSavings(input: SavingsInput): SavingsResult {
       const miles = input.milesReducedPerYear ?? 0;
       const gallonsSaved = miles / input.mpg;
       const factor = input.fuelTypeDisplaced === 'gasoline'
-        ? GASOLINE_MMBtu_PER_GAL * GASOLINE_CO2E_FACTOR
-        : DIESEL_MMBtu_PER_GAL * DIESEL_CO2E_FACTOR;
+        ? GASOLINE_MMBTU_PER_GAL * GASOLINE_CO2E_PER_MMBTU
+        : DIESEL_MMBTU_PER_GAL * DIESEL_CO2E_PER_MMBTU;
       const co2e = gallonsSaved * factor;
       return {
         estimatedCo2eReductionKgPerYear: Math.round(co2e),
@@ -250,22 +410,33 @@ export function calculateProjectSavings(input: SavingsInput): SavingsResult {
 
 // ─── SBTi 1.5°C pathway ─────────────────────────────────────────────────────
 
-/** Annual compound reduction rate for SBTi 1.5°C science-based target */
-const SBTI_15C_ANNUAL_REDUCTION = 0.042; // 4.2% per year
+/**
+ * SBTi absolute contraction approach, 1.5 °C: a minimum 4.2% of BASE-YEAR
+ * emissions per year, linear — the source of the familiar "42% by 2030 from a
+ * 2020 base". This was once compounded (base × 0.958^years), which gives 34.9%
+ * over the same ten years: a target about 12% of base-year emissions weaker
+ * than the one SBTi validates.
+ *
+ * This is the minimum ambition under the near-term criteria and nothing more.
+ * SBTi revises its criteria (separate Scope 1 and Scope 2 minimums, base-year
+ * rules, the 5–10-year window); check the version in force when setting a
+ * target and record it with the goal.
+ */
+export const SBTI_15C_ANNUAL_REDUCTION = 0.042; // 4.2% of base-year emissions per year
+
+function sbtiFraction(years: number): number {
+  return Math.min(1, Math.max(0, SBTI_15C_ANNUAL_REDUCTION * years));
+}
 
 export function calculateSBTiTarget(
   baseYearEmissionsKg: number,
   baseYear: number,
   targetYear: number,
 ): { targetEmissionsKg: number; reductionPct: number } {
-  const years = targetYear - baseYear;
-  const targetEmissionsKg =
-    baseYearEmissionsKg * Math.pow(1 - SBTI_15C_ANNUAL_REDUCTION, years);
-  const reductionPct =
-    ((baseYearEmissionsKg - targetEmissionsKg) / baseYearEmissionsKg) * 100;
+  const fraction = sbtiFraction(targetYear - baseYear);
   return {
-    targetEmissionsKg: Math.round(targetEmissionsKg),
-    reductionPct: Math.round(reductionPct * 100) / 100,
+    targetEmissionsKg: Math.round(baseYearEmissionsKg * (1 - fraction)),
+    reductionPct: Math.round(fraction * 100 * 100) / 100,
   };
 }
 
@@ -277,10 +448,7 @@ export function getSBTiPathway(
 ): Array<{ year: number; targetKg: number }> {
   const pathway = [];
   for (let y = baseYear; y <= targetYear; y++) {
-    const years = y - baseYear;
-    const targetKg =
-      baseYearEmissionsKg * Math.pow(1 - SBTI_15C_ANNUAL_REDUCTION, years);
-    pathway.push({ year: y, targetKg: Math.round(targetKg) });
+    pathway.push({ year: y, targetKg: Math.round(baseYearEmissionsKg * (1 - sbtiFraction(y - baseYear))) });
   }
   return pathway;
 }

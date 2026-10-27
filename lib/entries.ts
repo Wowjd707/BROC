@@ -173,65 +173,93 @@ export async function createEmissionEntry(
     };
   }
 
+  // The category must fit the source: refrigerant leaks are fugitive
+  // emissions, and fuel burned is combustion, not a leak.
+  if (input.scope === 'scope1' && input.scope1Category) {
+    if (input.sourceType === 'refrigerants' && input.scope1Category !== 'fugitive_emissions') {
+      return { ok: false, status: 400, error: 'Refrigerant losses are fugitive emissions. Set the Scope 1 category to fugitive_emissions.' };
+    }
+    if (input.sourceType !== 'refrigerants' && input.scope1Category === 'fugitive_emissions') {
+      return { ok: false, status: 400, error: `Fuel burned (${input.sourceType}) is combustion, not a fugitive emission. Choose stationary_combustion or mobile_combustion.` };
+    }
+  }
+
   const supabase = await createServerClient();
 
   // The site drives the Scope 2 location factor; also confirms the site is in
   // the caller's org (RLS on the select).
   const { data: site } = await supabase
     .from('sites')
-    .select('id, zip_code')
+    .select('id, zip_code, country')
     .eq('id', input.siteId)
     .maybeSingle();
   if (!site) return { ok: false, status: 400, error: 'Unknown site.' };
 
   let scope1Factor: number | undefined;
+  let biogenicCo2Factor: number | undefined;
   let refrigerantGwp: number | undefined;
+  let isMontrealProtocol = false;
   let locationBasedFactor: number | undefined;
+  let locationFactorSource: string | undefined;
   let marketBasedFactor: number | undefined;
+  let residualMixFactor: number | undefined;
+  let residualMixSource: string | undefined;
+  let heatFactor: number | undefined;
+  let heatFactorSource: string | undefined;
   let emissionFactorSource: string | undefined;
 
   try {
     if (input.scope === 'scope2') {
-      // Org custom grid factor for this site overrides the global location factor.
-      const customLoc = await getCustomFactor('scope2_location', input.siteId, input.entryDate);
-      if (customLoc) {
-        locationBasedFactor = customLoc.factor;
-        emissionFactorSource = customLoc.source;
-      } else {
-        const loc = await getScope2LocationFactor(site.zip_code ?? undefined);
-        locationBasedFactor = loc.factor;
-        // The basis travels with the source. A site whose ZIP is not in the
-        // seeded set silently falls back to the US national average, which can
-        // be off by 80% or more against a real subregion — and recording it as
-        // plain "eGRID2023" made that indistinguishable from a genuine match.
-        // An assurance provider must be able to see which entries were
-        // estimated; that is the whole lineage claim.
-        emissionFactorSource = loc.basis ? `${loc.source} (${loc.basis})` : loc.source;
-      }
-      if (input.accountingMethod === 'market_based') {
-        if (input.supplierFactor != null && Number.isFinite(input.supplierFactor)) {
-          marketBasedFactor = input.supplierFactor;
-          emissionFactorSource = 'supplier_specific';
+      if (input.sourceType === 'district_heating') {
+        // Purchased heat or steam: the supplier's factor, entered per site.
+        const heat = await getCustomFactor('scope2_heat', input.siteId, input.entryDate);
+        if (heat) { heatFactor = heat.factor; heatFactorSource = heat.source; }
+      } else if (input.sourceType !== 'renewable_generated') {
+        // Location-based: an org custom grid factor for this site overrides
+        // the reference table. No reference factor and no custom one means the
+        // entry is refused with a message saying what to add — never a
+        // built-in number standing in.
+        const customLoc = await getCustomFactor('scope2_location', input.siteId, input.entryDate);
+        if (customLoc) {
+          locationBasedFactor = customLoc.factor;
+          locationFactorSource = customLoc.source;
         } else {
-          const residual = await getResidualMixFactor();
-          marketBasedFactor = residual.factor;
-          emissionFactorSource = residual.source;
+          const loc = await getScope2LocationFactor({ zipCode: site.zip_code, country: site.country });
+          if (loc) {
+            locationBasedFactor = loc.factor;
+            // The basis travels with the source, so an entry priced at the US
+            // national average (ZIP not in the table) is distinguishable from
+            // a genuine ZIP match.
+            locationFactorSource = `${loc.source} (${loc.basis})`;
+          }
+        }
+
+        // Market-based: every row gets one (Scope 2 Guidance). A contract if
+        // the user supplied one; otherwise the residual mix for the site's
+        // market; otherwise the calculation uses the grid average and records
+        // that it did.
+        if (input.accountingMethod === 'market_based') {
+          if (input.supplierFactor != null && Number.isFinite(input.supplierFactor)) {
+            marketBasedFactor = input.supplierFactor;
+          }
+        } else {
+          const customResidual = await getCustomFactor('scope2_residual', input.siteId, input.entryDate);
+          const residual = customResidual ?? await getResidualMixFactor(site.country);
+          if (residual) { residualMixFactor = residual.factor; residualMixSource = residual.source; }
         }
       }
     } else if (input.sourceType === 'refrigerants') {
       if (!input.refrigerantCode) {
         return { ok: false, status: 400, error: 'A refrigerant type is required.' };
       }
+      const rf = await getRefrigerantGwp(input.refrigerantCode);
       const custom = await getCustomFactor('refrigerant', input.refrigerantCode, input.entryDate);
-      if (custom) {
-        refrigerantGwp = custom.factor;
-        emissionFactorSource = custom.source;
-      } else {
-        const rf = await getRefrigerantGwp(input.refrigerantCode);
-        if (!rf) return { ok: false, status: 400, error: 'Unknown refrigerant.' };
-        refrigerantGwp = rf.gwp;
-        emissionFactorSource = rf.source;
-      }
+      if (!rf && !custom) return { ok: false, status: 400, error: 'Unknown refrigerant.' };
+      // Whether a gas is a Montreal Protocol gas is a property of the gas, so
+      // it comes from the reference table even when the GWP is custom.
+      isMontrealProtocol = rf?.isMontrealProtocol ?? false;
+      refrigerantGwp = custom ? custom.factor : rf!.gwp;
+      emissionFactorSource = custom ? custom.source : rf!.source;
     } else {
       const custom = await getCustomFactor('scope1', input.sourceType, input.entryDate);
       if (custom) {
@@ -241,6 +269,7 @@ export async function createEmissionEntry(
         const f = await getScope1Factor(input.sourceType);
         if (!f) return { ok: false, status: 400, error: `No emission factor for fuel: ${input.sourceType}` };
         scope1Factor = f.factor;
+        biogenicCo2Factor = f.biogenicCo2Factor ?? undefined;
         emissionFactorSource = f.source;
       }
     }
@@ -252,10 +281,17 @@ export async function createEmissionEntry(
       unit: input.unit,
       accountingMethod: input.accountingMethod,
       locationBasedFactor,
+      locationFactorSource,
       marketBasedFactor,
+      residualMixFactor,
+      residualMixSource,
+      heatFactor,
+      heatFactorSource,
       instrumentType: input.instrumentType,
       scope1Factor,
+      biogenicCo2Factor,
       refrigerantGwp,
+      isMontrealProtocol,
       emissionFactorSource,
     });
 
@@ -280,6 +316,11 @@ export async function createEmissionEntry(
         supplier_emission_factor: result.supplierEmissionFactor ?? null,
         emission_factor_used: result.emissionFactorUsed,
         emission_factor_source: result.emissionFactorSource,
+        location_factor_used: result.locationFactorUsed ?? null,
+        location_factor_source: result.locationFactorSource ?? null,
+        scope2_market_basis: result.scope2MarketBasis ?? null,
+        co2e_kg_outside_scopes: result.co2eKgOutsideScopes,
+        outside_scopes_basis: result.outsideScopesBasis ?? null,
         // An estimate must carry its basis. Rejected here with a readable
         // message rather than surfacing the raw CHECK violation from Postgres.
         data_quality: input.dataQuality ?? 'calculated',

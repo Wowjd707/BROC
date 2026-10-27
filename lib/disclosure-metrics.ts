@@ -15,6 +15,8 @@ import {
   type ConsolidationApproach,
 } from './consolidation-core';
 import { resolveDenominator } from './business-metrics-core';
+import { waterBalance, waterClassOf } from './water-core';
+import { KWH_PER_MMBTU } from './conversions';
 
 export * from './disclosure-metrics-core';
 
@@ -91,7 +93,7 @@ export async function getInventoryForYear(
       // the inventory without a word. See lib/fetch-all.ts.
       fetchAll((from, to) => supabase
         .from('emission_entries')
-        .select('scope, co2e_kg, co2e_kg_location_based, source_type, quantity_normalized, unit_normalized, site_id, data_quality')
+        .select('scope, co2e_kg, co2e_kg_location_based, co2e_kg_outside_scopes, outside_scopes_basis, scope2_market_basis, source_type, quantity_normalized, unit_normalized, site_id, data_quality')
         .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
         .order('id').range(from, to)),
       fetchAll((from, to) => supabase
@@ -110,7 +112,7 @@ export async function getInventoryForYear(
         .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
         .order('id').range(from, to)),
       supabase.from('sites').select('id, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true),
-      supabase.from('goals').select('name, metric, target_year, target_reduction_pct, status'),
+      supabase.from('goals').select('name, metric, goal_type, target_year, target_value, target_unit, target_reduction_pct, status'),
       supabase.from('organizations').select('consolidation_approach, intensity_metric_key').limit(1).maybeSingle(),
       supabase.from('business_metrics')
         .select('metric_key, label, description, unit, category, aggregation, is_denominator, display_order, organization_id')
@@ -159,7 +161,6 @@ export async function getInventoryForYear(
   // site in MMBtu. Both count toward total energy consumption (ESRS E1-5,
   // GRI 302-1). Summing only the kWh rows reported electricity as if it were
   // the whole of the organization's energy use.
-  const KWH_PER_MMBTU = 293.07107;
   const energyKwh = rows.reduce((s, e) => {
     if (e.unit_normalized === 'kWh') return s + e.quantity_normalized * share(e.site_id);
     if (e.unit_normalized === 'MMBtu') return s + e.quantity_normalized * KWH_PER_MMBTU * share(e.site_id);
@@ -177,12 +178,33 @@ export async function getInventoryForYear(
     co2eKg: t.co2eKg,
   }));
 
-  const waterGallons = (ehs ?? [])
-    .filter((e) => e.metric_type === 'water')
-    .reduce((s, e) => s + e.quantity_normalized, 0);
-  const wasteKg = (ehs ?? [])
-    .filter((e) => e.metric_type === 'waste')
-    .reduce((s, e) => s + e.quantity_normalized, 0);
+  // Water is a balance, not a sum: withdrawals in, discharges out. Water,
+  // waste and the social metrics are reported on the full operational
+  // boundary (not share-adjusted); the basis of preparation says so.
+  const waterRows = (ehs ?? []).filter((e) => e.metric_type === 'water');
+  const water = waterBalance(waterRows);
+  const wasteRows = (ehs ?? []).filter((e) => e.metric_type === 'waste');
+  const wasteKg = wasteRows.reduce((s, e) => s + e.quantity_normalized, 0);
+
+  // Reported separately from the scopes; share-adjusted like the scopes are.
+  const outsideScopes = rows.reduce(
+    (acc, e) => {
+      const kg = Number(e.co2e_kg_outside_scopes ?? 0) * share(e.site_id);
+      if (e.outside_scopes_basis === 'biogenic_co2') acc.biogenicCo2Kg += kg;
+      else if (e.outside_scopes_basis === 'montreal_protocol_gas') acc.montrealGasesKg += kg;
+      return acc;
+    },
+    { biogenicCo2Kg: 0, montrealGasesKg: 0 },
+  );
+
+  // Which rung of the Scope 2 market-based hierarchy produced each figure, by
+  // kWh — the report discloses how much rests on grid average.
+  const scope2MarketBasisKwh: Record<string, number> = {};
+  for (const e of rows) {
+    if (e.scope !== 'scope2') continue;
+    const k = e.scope2_market_basis ?? 'legacy';
+    scope2MarketBasisKwh[k] = (scope2MarketBasisKwh[k] ?? 0) + e.quantity_normalized * share(e.site_id);
+  }
 
   // Social and governance: aggregated per metric under each metric's own rule,
   // never summed across a whole family. Water and waste keep their simple
@@ -199,8 +221,12 @@ export async function getInventoryForYear(
     }));
   const social = inputsFromAggregates(aggregateAll(socialReadings));
 
-  const floorArea = (sites ?? []).reduce((s, x) => s + (x.floor_area_sqft ?? 0), 0);
-  const missingFloorArea = (sites ?? []).filter(
+  // Floor area follows the same boundary as the emissions it divides: weighted
+  // by each site's share, and a site outside the boundary (share 0) neither
+  // adds area nor blocks the ratio for having none recorded.
+  const inBoundary = (sites ?? []).filter((x) => share(x.id as string) > 0);
+  const floorArea = inBoundary.reduce((s, x) => s + (x.floor_area_sqft ?? 0) * share(x.id as string), 0);
+  const missingFloorArea = inBoundary.filter(
     (x) => x.floor_area_sqft === null || x.floor_area_sqft === 0,
   ).length;
 
@@ -232,8 +258,21 @@ export async function getInventoryForYear(
     scope3Kg,
     scope3ByCategory,
     energyKwh,
-    waterGallons,
+    waterWithdrawalGallons: water.withdrawal,
+    waterDischargeGallons: water.discharge,
+    waterConsumptionGallons: water.consumption,
     wasteKg,
+    presence: {
+      scope1: rows.some((e) => e.scope === 'scope1'),
+      scope2: rows.some((e) => e.scope === 'scope2'),
+      scope3: scope3Rows.length > 0,
+      energy: rows.some((e) => e.unit_normalized === 'kWh' || e.unit_normalized === 'MMBtu'),
+      waterWithdrawal: waterRows.some((e) => waterClassOf(e.source_type) === 'withdrawal'),
+      waterDischarge: waterRows.some((e) => waterClassOf(e.source_type) === 'discharge'),
+      waste: wasteRows.length > 0,
+    },
+    outsideScopes,
+    scope2MarketBasisKwh,
     intensityDenominator: denominator.value,
     intensityDenominatorUnit: denominator.unit,
     intensityDenominatorLabel: denominator.label,
@@ -250,16 +289,21 @@ export async function getInventoryForYear(
     // state what the platform never decided.
     hoursBasis: 200_000,
     // Climate targets only: a water or waste goal answering ESRS E1-4 or the
-    // TCFD targets disclosure is a misstatement. And a reduction percentage or
-    // nothing — target_value is an absolute amount in kg or gallons, and
-    // falling back to it printed "30,283 % reduction".
+    // TCFD targets disclosure is a misstatement. The percentage lives in
+    // target_value when target_unit is 'pct_reduction' (the goal form and the
+    // import have written it there since migration 007); target_reduction_pct
+    // is the pre-007 column. A target_value in any other unit is an absolute
+    // amount and is never printed as a percentage.
     targets: (goals ?? [])
       .filter((g) => g.status === 'active' && asGoalMetric(g.metric) === 'ghg')
       .map((g) => ({
         name: g.name,
         targetYear: g.target_year,
-        targetReductionPct: g.target_reduction_pct ?? null,
+        targetReductionPct: g.target_unit === 'pct_reduction' && g.target_value != null
+          ? Number(g.target_value)
+          : g.goal_type === 'net_zero' ? null : (g.target_reduction_pct ?? null),
         status: g.status,
+        goalType: g.goal_type ?? undefined,
       })),
   };
 }

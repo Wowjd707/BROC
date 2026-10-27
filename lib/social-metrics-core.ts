@@ -400,19 +400,19 @@ export function deriveRates(
     rate(
       'turnover_total', 'Total turnover rate',
       separations, inputs.headcount, 100, '%',
-      '(voluntary + involuntary separations) × 100 ÷ headcount',
+      '(voluntary + involuntary separations) × 100 ÷ headcount (latest reading in the period)',
       ['workforce:separations_voluntary', 'workforce:separations_involuntary', 'workforce:headcount'],
     ),
     rate(
       'turnover_voluntary', 'Voluntary turnover rate',
       inputs.separationsVoluntary, inputs.headcount, 100, '%',
-      'voluntary separations × 100 ÷ headcount',
+      'voluntary separations × 100 ÷ headcount (latest reading in the period)',
       ['workforce:separations_voluntary', 'workforce:headcount'],
     ),
     rate(
       'training_hours_per_employee', 'Average training hours per employee',
       inputs.trainingHours, inputs.headcount, 1, 'hours',
-      'training hours ÷ headcount',
+      'training hours ÷ headcount. GRI 404-1 counts all training: health and safety training hours are recorded separately and are included here only if entered under training hours as well',
       ['training:training_hours', 'workforce:headcount'],
     ),
     rate(

@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–037** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–039** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–037 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean, 008–037 re-apply with only that exception failing, and `verify_install.sql` passes in full. |
+| 008–039 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–039 apply clean, 038 and 039 re-apply, and all 32 checks in `verify_install.sql` pass. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -71,9 +71,21 @@ half-applied script must be able to finish on a second run.
   column-mapping UI for an arbitrary publisher workbook; use `factor-packs/`
   to convert one into the template.
 - **US-centric defaults.** The seeded reference factors are US (eGRID, ZIP
-  codes, gallons/MMBtu). International factor sets (DEFRA, IEA and others) are
-  loaded by you through the custom-factor importer, under their own licences —
-  see `docs/FACTORS.md`.
+  codes, gallons/MMBtu) plus AIB residual mixes for ten European countries.
+  International factor sets (DEFRA, IEA and others) are loaded by you through
+  the custom-factor importer, under their own licences — see `docs/FACTORS.md`.
+  A site outside the US cannot record electricity until it has a grid factor.
+- **Methodology gaps an adopting team may need to close.** One `is_controlled`
+  flag serves both control approaches, and joint control is not modelled
+  (financial control should take a jointly controlled operation at its equity
+  share). Energy is stated on HHV; ESRS readers usually expect NCV, and the
+  E1-5 fossil/nuclear/renewable split is not computed. Intensity goals are not
+  computable until a goal stores its numerator and denominator. Mobile
+  combustion uses stationary CH₄/N₂O factors per MMBtu (EPA publishes mobile
+  ones per mile). Water storage change is taken as zero.
+- **Pre-039 Scope 2 rows.** Entries saved before migration 039 carry
+  `scope2_market_basis = 'legacy'`; some market-based ones used an unsourced
+  0.455 kg/kWh default. Re-save them (docs/FACTORS.md has the query).
 - **Report output** is self-contained HTML (prints to PDF). ESRS XBRL tagging,
   required for an actual CSRD filing, is not built.
 - **Regulatory frameworks, crosswalk and glossary start empty.** Migration 033
@@ -96,7 +108,22 @@ changed, change it knowingly and update this list.
 
 - **No fabricated factors or regulatory content.** Scope 3 factor libraries and
   SASB/CDP content ship empty because they are licensed and revised annually.
-  Demo factors are labelled `DEMO DATA — not for reporting`.
+  Demo factors are labelled `DEMO DATA — not for reporting`. Nor do CBAM
+  default values or a certificate price ship. The calculation engine has no
+  built-in fallback factor: a missing factor refuses the entry with a message
+  saying what to add, because a hard-coded number drifts from the table it
+  claims to mirror (the 0.386 and 0.455 that once did both matched nothing).
+- **Every Scope 2 row carries both figures.** `co2e_kg` is market-based on a
+  Scope 2 row (contract → residual mix → grid average, recorded in
+  `scope2_market_basis` and disclosed); `co2e_kg_location_based` is
+  location-based. Electricity generated and used on site is zero under both;
+  purchased heat uses the supplier's factor, never a grid factor.
+- **Biogenic CO₂ and Montreal Protocol gases are reported outside the scopes**
+  (`co2e_kg_outside_scopes`), so every total that sums `co2e_kg` excludes them
+  without a filter. GHG Protocol Corporate Standard ch. 4 and 9.
+- **Water consumption is withdrawal minus discharge**, and every "water use"
+  view reads withdrawal (`lib/water-core.ts`). A new water source type must be
+  classified there or it is left out of every total.
 - **No filing deadlines stored** for the California frameworks. SB 253's
   first-year deadline has been re-noticed by CARB; SB 261 is under a Ninth
   Circuit injunction. The catalog records *what*, not *when*.
@@ -146,14 +173,20 @@ changed, change it knowingly and update this list.
   conversion between them. `base_year_emissions_kg` stays as the GHG-only
   predecessor, written in step for GHG goals and left `NULL` for water and
   waste, where populating it would be a unit lie.
-- **SBTi and net-zero targets are GHG-only.** The 1.5 °C pathway's 4.2 %/yr is
-  defined on greenhouse gases. Applying it to a water volume would fabricate a
+- **SBTi and net-zero targets are GHG-only.** The 1.5 °C pathway's 4.2 %/yr
+  (of base-year emissions, linear — not compounded) is defined on greenhouse
+  gases. Applying it to a water volume would fabricate a
   methodology under a name an assurance provider recognises, so no target is
   derived at all rather than a plausible-looking wrong one.
 - **Goal progress is delivered reduction over required reduction**, never
   current-over-target. A 1,000 → 600 t goal is 25 % done at 900 t, not 150 %.
   One implementation in `lib/goal-metrics.ts` serves both the Goals page and the
-  dashboard, so the two can never disagree about the same target.
+  dashboard, so the two can never disagree about the same target. A GHG goal is
+  measured on its own scope (`scope1`, `scope2`, `scope1_2`) and Scope 2
+  method, with the consolidation boundary applied as in the report.
+- **`pipeline_inclusion_status = 'excluded'` keeps a project out of the
+  pipeline**; the project form sets it ("Reduction pipeline"). Ideas and
+  cancelled projects never count whatever it says.
 - **A project with no saving for a metric counts as zero, not as excluded** from
   that pipeline. The project count and the savings total answer different
   questions, and dropping it would hide that its water saving was never

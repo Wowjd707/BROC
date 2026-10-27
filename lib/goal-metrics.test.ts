@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  goalScopeEmissions,
+  scopeTotals,
+  goalGhgValue,
   asGoalMetric, goalBaseline, goalTargetValue, computeGoalProgress,
   GOAL_TYPES_BY_METRIC, type GoalLike,
 } from './goal-metrics';
@@ -62,9 +65,15 @@ describe('goalTargetValue', () => {
 
   it('derives an SBTi target from the pathway', () => {
     const t = goalTargetValue(goal({ goal_type: 'sbti_15c', target_value: null }))!;
-    // 4.2%/yr compounded over 10 years leaves roughly 65% of the baseline.
-    expect(t).toBeGreaterThan(640_000);
-    expect(t).toBeLessThan(660_000);
+    // 4.2% of the baseline per year, linear: ten years leaves 58%.
+    expect(t).toBe(580_000);
+  });
+
+  it('does not grade an intensity goal against absolute emissions', () => {
+    // Regression: an intensity goal's percentage was applied to the absolute
+    // baseline and compared with absolute Scope 1+2.
+    expect(goalTargetValue(goal({ goal_type: 'intensity', target_value: 30 }))).toBeNull();
+    expect(computeGoalProgress(goal({ goal_type: 'intensity', target_value: 30, progress_pct: 12 }), 500).isComputable).toBe(false);
   });
 
   it('refuses an SBTi target for a non-GHG metric', () => {
@@ -129,5 +138,41 @@ describe('GOAL_TYPES_BY_METRIC', () => {
       expect(values).not.toContain('sbti_15c');
       expect(values).not.toContain('net_zero');
     }
+  });
+});
+
+describe('goalScopeEmissions', () => {
+  it('measures a goal against the scope it covers', () => {
+    // Regression: a Scope 1 goal (1,000 → 500 t) with Scope 1 at 800 t and
+    // Scope 2 at 600 t was compared with 1,400 t and showed 0% progress.
+    expect(goalScopeEmissions('scope1', 800, 600)).toBe(800);
+    expect(goalScopeEmissions('scope2', 800, 600)).toBe(600);
+    expect(goalScopeEmissions('scope1_2', 800, 600)).toBe(1400);
+    expect(goalScopeEmissions(null, 800, 600)).toBe(1400);
+    const p = computeGoalProgress(goal({ base_year_value: 1000, target_value: 50 }), goalScopeEmissions('scope1', 800, 600));
+    expect(p.progressPct).toBeCloseTo(40, 6);
+  });
+});
+
+describe('scopeTotals / goalGhgValue', () => {
+  const rows = [
+    { scope: 'scope1', co2e_kg: 800, co2e_kg_location_based: 800, site_id: 'own' },
+    { scope: 'scope2', co2e_kg: 700, co2e_kg_location_based: 600, site_id: 'own' },
+    { scope: 'scope1', co2e_kg: 400, co2e_kg_location_based: 400, site_id: 'jv' },
+  ];
+  it('applies the consolidation share to every row', () => {
+    // Regression: the Goals page summed raw co2e_kg, so a 50% joint venture
+    // counted in full toward goal progress and at half in the report.
+    const t = scopeTotals(rows, (id) => (id === 'jv' ? 0.5 : 1))!;
+    expect(t).toEqual({ scope1: 1000, scope2Market: 700, scope2Location: 600 });
+  });
+  it('picks the goal\'s scope and Scope 2 method', () => {
+    const t = scopeTotals(rows)!;
+    expect(goalGhgValue(t, 'scope1', 'market_based')).toBe(1200);
+    expect(goalGhgValue(t, 'scope2', 'location_based')).toBe(600);
+    expect(goalGhgValue(t, 'scope1_2', 'market_based')).toBe(1900);
+  });
+  it('is null, not zero, for a period with no Scope 1 or 2 rows', () => {
+    expect(scopeTotals([])).toBeNull();
   });
 });

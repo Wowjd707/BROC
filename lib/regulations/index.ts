@@ -60,10 +60,10 @@ export const CBAM_QUESTIONS: RegulationQuestionSet = {
     },
     {
       id: 'q3_co2e_intensity',
-      label: 'What is the direct carbon intensity of production? (kg CO₂e per unit of product)',
+      label: 'What are the specific embedded emissions of this product? (kg CO₂e per unit of product)',
       type: 'number',
       required: true,
-      helpText: 'Direct emissions from your production process per unit of product output. Use the same unit as your production volume above.',
+      helpText: 'Direct emissions plus the emissions from electricity and heat consumed, including relevant precursors, per unit of product output (the CBAM "specific embedded emissions"). Use the same unit as your production volume above.',
     },
     {
       id: 'q4_fuel',

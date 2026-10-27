@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying 001–035. It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–039). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -334,6 +334,26 @@ checks(sort_key, check_name, status, detail) AS (
       ELSE (SELECT count(*)::text FROM orphan_evidence) || ' attachment(s) point at a deleted record. '
         || 'Settings → Organization → Remove unlinked documents removes them and their files.'
     END
+
+  UNION ALL SELECT 31, 'Factors — reference factors corrected to their cited sources',
+    CASE WHEN EXISTS (
+      SELECT 1 FROM scope1_emission_factors WHERE fuel_type = 'natural_gas' AND factor_source = 'EPA_2024_AR6'
+    ) AND NOT EXISTS (
+      SELECT 1 FROM scope2_emission_factors WHERE factor_source = 'M-RETS_Greene_2023'
+    ) THEN 'PASS' ELSE 'FAIL' END,
+    'EPA 2024 fuel factors as CO2e at AR6, eGRID2023 rev. 2 grid rates, AIB 2023 residual mixes, '
+      || 'AR6 refrigerant blends. Re-apply 038 if this fails.'
+
+  UNION ALL SELECT 32, 'Scope 2 — market-based figure and lineage on every row',
+    CASE WHEN EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='emission_entries' AND column_name='scope2_market_basis'
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='emission_entries' AND column_name='co2e_kg_outside_scopes'
+    ) THEN 'PASS' ELSE 'FAIL' END,
+    'Residual mix or disclosed grid average for every Scope 2 row, both factors stored, and biogenic '
+      || 'CO2 and Montreal gases kept outside the scopes. Re-apply 039 if this fails.'
 )
 
 SELECT

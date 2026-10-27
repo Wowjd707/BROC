@@ -101,9 +101,12 @@ so it is unit-testable and auditable:
 - `calculations.ts` — the CO₂e engine (`calculateEmissionCO2e`), project savings
   estimators, and SBTi 1.5 °C target pathways.
 - `emission-factors.ts` — server-side factor lookups against the reference
-  tables (Scope 1 by fuel, Scope 2 by ZIP → eGRID → national, residual mix,
-  refrigerant GWP).
-- `cbam-data.ts` — CBAM commodities, EU default factors, and the CBAM calculator.
+  tables (Scope 1 by fuel, Scope 2 by ZIP → eGRID → national for US sites or by
+  country elsewhere, residual mix by country, refrigerant GWP). No built-in
+  fallback numbers: a missing factor returns null and the entry is refused.
+- `water-core.ts` — water withdrawal, discharge and consumption.
+- `cbam-data.ts` — the CBAM goods catalogue (no default values) and the CBAM
+  calculator.
 
 These are covered by Vitest (`lib/*.test.ts`); run `npm test`.
 

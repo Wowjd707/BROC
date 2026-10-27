@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   toKWh,
+  heatToKWh,
   toMMBtu,
   wasteToKg,
   waterToGallons,
@@ -25,48 +26,74 @@ describe('toKWh', () => {
   });
 });
 
+describe('heatToKWh', () => {
+  it('converts purchased heat and steam energy units to kWh', () => {
+    expect(heatToKWh(1, 'MMBtu')).toBeCloseTo(293.07107, 4);
+    expect(heatToKWh(1, 'GJ')).toBeCloseTo(277.7778, 4);
+    expect(heatToKWh(10, 'therms')).toBeCloseTo(293.07107, 4);
+    expect(heatToKWh(2, 'MWh')).toBe(2000);
+    expect(() => heatToKWh(1, 'gallons')).toThrow(/heat or steam/);
+  });
+  it('is what normalizeEmissionInput applies to district heating', () => {
+    expect(normalizeEmissionInput(1, 'MMBtu', 'scope2', 'district_heating').quantityNormalized).toBeCloseTo(293.07107, 4);
+    expect(() => normalizeEmissionInput(1, 'MMBtu', 'scope2', 'electricity')).toThrow(/electricity unit/);
+  });
+});
+
 describe('toMMBtu', () => {
   it('passes through MMBtu and converts direct energy units', () => {
     expect(toMMBtu(5, 'MMBtu', 'natural_gas')).toBe(5);
     expect(toMMBtu(1_000_000, 'btu', 'natural_gas')).toBe(1);
     expect(toMMBtu(10, 'therms', 'natural_gas')).toBeCloseTo(1, 10);
-    expect(toMMBtu(1, 'GJ', 'natural_gas')).toBeCloseTo(0.948, 10);
+    // 1 GJ = 1000 MJ / 1055.056 MJ per MMBtu
+    expect(toMMBtu(1, 'GJ', 'natural_gas')).toBeCloseTo(0.947817, 6);
   });
 
-  it('converts natural gas volume units', () => {
+  it('converts natural gas volume units at the EPA HHV of 1,026 Btu/scf', () => {
     expect(toMMBtu(1000, 'cubic_feet', 'natural_gas')).toBeCloseTo(1.026, 6);
     expect(toMMBtu(1, 'MCF', 'natural_gas')).toBeCloseTo(1.026, 6);
     expect(toMMBtu(1, 'CCF', 'natural_gas')).toBeCloseTo(0.1026, 6);
+    // 1 m³ = 35.3147 scf
+    expect(toMMBtu(1, 'cubic_meters', 'natural_gas')).toBeCloseTo(35.3146667 * 0.001026, 8);
   });
 
-  it('converts liquid fuel gallons with fuel-specific factors', () => {
-    expect(toMMBtu(100, 'gallons', 'diesel')).toBeCloseTo(13.756, 6);
-    expect(toMMBtu(100, 'gallons', 'gasoline')).toBeCloseTo(12.454, 6);
+  it('uses each gaseous fuel\'s own energy content per cubic foot', () => {
+    // Regression: every gas volume used the natural-gas value, so 1,000 cf of
+    // propane came out as 1.026 MMBtu instead of 2.516 (EPA, propane gas).
+    expect(toMMBtu(1000, 'cubic_feet', 'propane')).toBeCloseTo(2.516, 6);
+    expect(() => toMMBtu(1000, 'cubic_feet', 'diesel')).toThrow(/No volume/);
+  });
+
+  it('converts liquid fuel gallons with EPA Hub HHVs', () => {
+    expect(toMMBtu(100, 'gallons', 'diesel')).toBeCloseTo(13.8, 6);
+    expect(toMMBtu(100, 'gallons', 'gasoline')).toBeCloseTo(12.5, 6);
+    expect(toMMBtu(100, 'gallons', 'lpg')).toBeCloseTo(9.2, 6);
   });
 
   it('converts liters and barrels via gallons', () => {
-    // 1 barrel = 42 gallons diesel
-    expect(toMMBtu(1, 'barrels', 'diesel')).toBeCloseTo(42 * 0.13756, 6);
+    expect(toMMBtu(1, 'barrels', 'diesel')).toBeCloseTo(42 * 0.138, 6);
+    expect(toMMBtu(3.785411784, 'liters', 'diesel')).toBeCloseTo(0.138, 9);
   });
 
-  it('converts solid-fuel mass using per-kg energy content', () => {
-    // 1 tonne bituminous coal = 1000 kg × 24.9 MJ/kg × 0.000948 MMBtu/MJ ≈ 23.6 MMBtu
-    expect(toMMBtu(1, 'metric_tons', 'coal_bituminous')).toBeCloseTo(
-      1000 * 24.9 * 0.000948,
-      6,
-    );
-    // kg and tonnes must agree at 1000:1 (regression guard for the former
-    // factor-of-1000 error where mass was normalized to tonnes but multiplied
-    // by a per-kg energy density)
+  it('converts solid-fuel mass using EPA HHV per short ton', () => {
+    expect(toMMBtu(1, 'short_tons', 'coal_bituminous')).toBeCloseTo(24.93, 9);
+    expect(toMMBtu(1, 'short_tons', 'coal_anthracite')).toBeCloseTo(25.09, 9);
+    expect(toMMBtu(1, 'short_tons', 'wood_biomass')).toBeCloseTo(17.48, 9);
+    // 1 tonne = 1000 / 907.18474 short tons
+    expect(toMMBtu(1, 'metric_tons', 'coal_bituminous')).toBeCloseTo(24.93 * 1000 / 907.18474, 9);
+    expect(toMMBtu(2000, 'lbs', 'coal_lignite')).toBeCloseTo(14.21, 9);
+    // kg and tonnes must agree at 1000:1
     expect(toMMBtu(1000, 'kg', 'coal_bituminous')).toBeCloseTo(
       toMMBtu(1, 'metric_tons', 'coal_bituminous'),
       9,
     );
-    // short tons use the 907.185 kg/ton factor
-    expect(toMMBtu(1, 'short_tons', 'wood_biomass')).toBeCloseTo(
-      907.185 * 17.4 * 0.000948,
-      6,
-    );
+  });
+
+  it('refuses mass units for a fuel without a published HHV per ton', () => {
+    // Regression: unlisted fuels defaulted to bituminous coal, so a tonne of
+    // diesel came out at 23.6 MMBtu instead of about 43.
+    expect(() => toMMBtu(1, 'metric_tons', 'diesel')).toThrow(/No mass/);
+    expect(() => toMMBtu(1, 'kg', 'propane')).toThrow(/No mass/);
   });
 
   it('throws when a gallon factor is missing for a fuel', () => {

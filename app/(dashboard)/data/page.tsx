@@ -32,7 +32,7 @@ export default async function DataPage({
     : { data: null };
 
   const [{ data: sites }, { data: emissions }, { data: ehsEntries }, { data: refrigerants }] = await Promise.all([
-    applyScope(supabase.from('sites').select('id, name, city, state, zip_code').eq('is_active', true).order('name'), scope.siteIds, 'id'),
+    applyScope(supabase.from('sites').select('id, name, city, state, zip_code, country').eq('is_active', true).order('name'), scope.siteIds, 'id'),
     applyScope(inRange(supabase.from('emission_entries')
       .select('*, sites(name)')
       .is('deleted_at', null))

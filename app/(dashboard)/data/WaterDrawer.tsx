@@ -21,14 +21,16 @@ interface Props {
   onSaved: (entry: unknown) => void;
 }
 
+// Each source is a withdrawal, a discharge or on-site reuse (lib/water-core.ts
+// classifies them; consumption = withdrawal − discharge). The labels say which.
 const WATER_SOURCES = [
-  { value: 'municipal_consumption',  label: 'Municipal Consumption' },
-  { value: 'municipal_discharge',    label: 'Municipal Discharge' },
-  { value: 'groundwater',            label: 'Groundwater' },
-  { value: 'surface_water',          label: 'Surface Water' },
-  { value: 'recycled_water',         label: 'Recycled Water' },
-  { value: 'treated_discharge',      label: 'Treated Water Discharge' },
-  { value: 'stormwater',             label: 'Stormwater Collection' },
+  { value: 'municipal_consumption',  label: 'Withdrawal — municipal supply' },
+  { value: 'groundwater',            label: 'Withdrawal — groundwater' },
+  { value: 'surface_water',          label: 'Withdrawal — surface water' },
+  { value: 'stormwater',             label: 'Withdrawal — rainwater / stormwater collected' },
+  { value: 'municipal_discharge',    label: 'Discharge — to municipal sewer' },
+  { value: 'treated_discharge',      label: 'Discharge — treated effluent' },
+  { value: 'recycled_water',         label: 'Recycled / reused on site' },
 ];
 
 

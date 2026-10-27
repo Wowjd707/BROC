@@ -135,11 +135,14 @@ external assurance provider can reconstruct the number:
 | --- | --- |
 | `quantity`, `unit` | the **raw** activity data as entered |
 | `quantity_normalized`, `unit_normalized` | normalized to a base unit (kWh / MMBtu / kg) |
-| `emission_factor_used` | the exact factor applied |
-| `emission_factor_source` | provenance of that factor (e.g. `EPA_2024`, `eGRID2023`, `IPCC_AR6`) |
-| `co2e_kg` | the reported figure (market-based when applicable) |
-| `co2e_kg_location_based` | always populated, for GHG Protocol dual reporting |
-| `accounting_method`, `instrument_type`, `supplier_emission_factor` | Scope 2 market-based detail (REC/PPA/green tariff) |
+| `emission_factor_used` | the exact factor applied (for Scope 2, the market-based factor) |
+| `emission_factor_source` | provenance of that factor (e.g. `EPA_2024_AR6`, `eGRID2023 (ZIP 28202)`, `IPCC_AR6`, `AIB_2023 (direct CO2)`) |
+| `co2e_kg` | Scope 1: the emission. Scope 2: the **market-based** figure, on every row (039) |
+| `co2e_kg_location_based` | Scope 1: same as `co2e_kg`. Scope 2: the location-based figure |
+| `location_factor_used`, `location_factor_source` | Scope 2: the grid-average factor behind the location-based figure (039) |
+| `scope2_market_basis` | Scope 2: which rung of the Scope 2 Guidance hierarchy priced the market-based figure — `contractual`, `residual_mix`, `grid_average` (no residual mix for that market; disclosed in reports), `self_generated`, `heat_supplier`, or `legacy` (saved before 039) |
+| `accounting_method`, `instrument_type`, `supplier_emission_factor` | Scope 2: `market_based` means a contractual instrument or supplier factor applies (REC/PPA/green tariff) |
+| `co2e_kg_outside_scopes`, `outside_scopes_basis` | Emissions reported separately from every scope (039): `biogenic_co2` from burning biomass, `montreal_protocol_gas` for HCFC leaks. Never in a scope total |
 | `created_by`, `created_at` | who and when |
 
 The chain is: **raw input → normalized quantity → factor (with source) → CO₂e**,
@@ -156,18 +159,23 @@ Water and waste, same raw + normalized pattern (`metric_type` in
 Factors are **data, not code**, and every row cites its source and year —
 never fabricated:
 
-- `scope1_emission_factors` — kg CO₂e per MMBtu by fuel (EPA 2024).
+- `scope1_emission_factors` — kg CO₂e per MMBtu by fuel: EPA Hub 2024 CO₂,
+  CH₄ and N₂O at IPCC AR6 GWPs (038). `biogenic_co2_factor` (039) carries the
+  biogenic CO₂ of biomass, reported outside the scopes.
 - `scope2_emission_factors` — kg CO₂e per kWh. `factor_type` electricity
   (location-based) or residual_mix (market-based); `geographic_scope` ZIP →
   eGRID subregion → country → national. Lookup priority lives in
   `emission-factors.ts`.
-- `refrigerant_factors` — 100-year GWP per refrigerant (IPCC AR6).
+- `refrigerant_factors` — 100-year GWP per refrigerant (IPCC AR6; blends
+  mass-weighted from AR6 component values, 038). `is_montreal_protocol` (039)
+  marks HCFCs, whose leaks are reported outside the scopes.
 
 ### `custom_emission_factors` (org overrides)
 Lets an org replace a global reference factor with its own measured or
 supplier-specific value without a code change. Keyed by `factor_category`
-(`scope1` → fuel_type, `scope2_location` → site_id, `refrigerant` →
-refrigerant_code) and versioned by `[effective_from, effective_to)` so a
+(`scope1` → fuel_type, `scope2_location` / `scope2_residual` / `scope2_heat`
+→ site_id, `refrigerant` → refrigerant_code; the residual-mix and heat
+categories were added by 039) and versioned by `[effective_from, effective_to)` so a
 historical entry uses the factor in force on its activity date. Every row
 requires a cited `factor_source` and `data_year`, same as the reference tables,
 and changes are captured in `audit_log`. Resolution: `lib/custom-factors.ts`
@@ -476,7 +484,7 @@ catalog** through `requirement_topics` — see
 ### `goals`
 Reduction targets: `absolute` / `intensity` / `net_zero` / `sbti_15c`. Holds the
 base year, target year, and a flexible `target_value` / `target_unit` pair.
-SBTi 1.5 °C pathways are computed in `calculations.ts` (4.2 %/yr compound).
+SBTi 1.5 °C pathways are computed in `calculations.ts`: 4.2 % of base-year emissions per year, linear (the absolute contraction minimum; check the SBTi criteria version in force when setting a target).
 
 Migration 021 added **`metric`** (`ghg` / `water` / `waste`) and
 **`base_year_value`**. Baselines and targets are stored in the metric family's
@@ -598,6 +606,8 @@ authenticated user. The token is the only capability a supplier needs.
 | 022 | `supplier_survey_questions` — bespoke question definitions backing `regulation_type = 'custom'`; `supplier_survey_invitations.last_reminded_at`. Regulatory question sets (CBAM/EUDR/PFAS) stay in `lib/regulations/` |
 | 023–036 (no 034) | See each file's header: social and governance metrics, the regulatory tracker and watch, business metrics, the consolidation boundary, data quality, the auditor role, SSO, the sandbox, regulatory frameworks, staged imports, custom regulation names |
 | 037 | Release hardening: RLS helpers resolve a deactivated user to no organization; only an admin may change `is_active`, never on themselves; `record_audit()` skips rows whose organization is being deleted (fixes sandbox reset); audit triggers on `sites` and `organizations`; `SET search_path` on every SECURITY DEFINER helper; evidence record types widened to sites, goals, projects, business metric values and materiality assessments |
+| 038 | Reference factors corrected to their cited sources: EPA Hub 2024 fuels as CO₂e at AR6 (wood's biogenic CO₂ out of Scope 1; LPG and "other combustion" fixed), eGRID2023 rev. 2 subregion and ZIP rates, AIB 2023 residual mixes, the unsourced US residual mix removed, AR6 refrigerant blend GWPs. Existing entries are not recalculated |
+| 039 | Scope 2 market-based figure and lineage on every row (`location_factor_used`, `location_factor_source`, `scope2_market_basis`); `co2e_kg_outside_scopes` / `outside_scopes_basis` for biogenic CO₂ and Montreal gases; `scope1_emission_factors.biogenic_co2_factor`; `refrigerant_factors.is_montreal_protocol`; custom factor categories `scope2_residual` and `scope2_heat`; `emission_factor_source` widened to TEXT |
 
 ## Applying migrations
 

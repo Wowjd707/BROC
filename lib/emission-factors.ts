@@ -6,112 +6,96 @@
  */
 
 import { createServerClient } from './supabase/server';
+import { isUsSite, toIso2 } from './country-core';
 
-/** Look up Scope 1 factor by fuel type */
+/**
+ * Look up a Scope 1 factor by fuel type. `biogenicCo2Factor` is set for
+ * biomass: its CO2 is reported outside the scopes (migration 039).
+ */
 export async function getScope1Factor(
   fuelType: string,
-): Promise<{ factor: number; source: string } | null> {
+): Promise<{ factor: number; source: string; biogenicCo2Factor: number | null } | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase
     .from('scope1_emission_factors')
-    .select('co2e_factor, factor_source')
+    .select('co2e_factor, factor_source, biogenic_co2_factor')
     .eq('fuel_type', fuelType)
     .order('data_year', { ascending: false })
     .limit(1)
     .single();
 
   if (error || !data) return null;
-  return { factor: data.co2e_factor, source: data.factor_source };
-}
-
-/**
- * Look up Scope 2 electricity factor.
- * Priority order: zip_code → egrid_subregion → national_average
- */
-export async function getScope2LocationFactor(
-  zipCode?: string,
-  egridSubregion?: string,
-): Promise<{ factor: number; source: string; basis: string }> {
-  const supabase = await createServerClient();
-
-  // 1. Try ZIP code
-  if (zipCode) {
-    const { data } = await supabase
-      .from('scope2_emission_factors')
-      .select('co2e_factor, factor_source, geographic_identifier')
-      .eq('factor_type', 'electricity')
-      .eq('geographic_scope', 'zip_code')
-      .eq('geographic_identifier', zipCode)
-      .order('data_year', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data) {
-      return {
-        factor: data.co2e_factor,
-        source: data.factor_source,
-        basis: `ZIP ${zipCode}`,
-      };
-    }
-  }
-
-  // 2. Try eGRID subregion
-  if (egridSubregion) {
-    const { data } = await supabase
-      .from('scope2_emission_factors')
-      .select('co2e_factor, factor_source')
-      .eq('factor_type', 'electricity')
-      .eq('geographic_scope', 'egrid_subregion')
-      .eq('geographic_identifier', egridSubregion)
-      .order('data_year', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data) {
-      return {
-        factor: data.co2e_factor,
-        source: data.factor_source,
-        basis: `eGRID subregion ${egridSubregion}`,
-      };
-    }
-  }
-
-  // 3. Fall back to US national average
   return {
-    factor: 0.386,
-    source: 'eGRID2023',
-    basis: 'US national average',
+    factor: Number(data.co2e_factor),
+    source: data.factor_source,
+    biogenicCo2Factor: data.biogenic_co2_factor == null ? null : Number(data.biogenic_co2_factor),
   };
 }
 
-/**
- * Look up Scope 2 residual mix factor for market-based accounting.
- * Falls back to US national residual mix if country-specific not found.
- */
-export async function getResidualMixFactor(
-  countryCode: string = 'US',
-): Promise<{ factor: number; source: string; isDefault: boolean }> {
+async function scope2Row(
+  factorType: 'electricity' | 'residual_mix',
+  scopes: string[],
+  identifier: string,
+): Promise<{ factor: number; source: string } | null> {
   const supabase = await createServerClient();
-
   const { data } = await supabase
     .from('scope2_emission_factors')
     .select('co2e_factor, factor_source')
-    .eq('factor_type', 'residual_mix')
-    .eq('geographic_identifier', countryCode.toUpperCase())
+    .eq('factor_type', factorType)
+    .in('geographic_scope', scopes)
+    .eq('geographic_identifier', identifier)
     .order('data_year', { ascending: false })
     .limit(1)
     .maybeSingle();
+  return data ? { factor: Number(data.co2e_factor), source: data.factor_source } : null;
+}
 
-  if (data) {
-    return { factor: data.co2e_factor, source: data.factor_source, isDefault: false };
+/**
+ * Look up the location-based (grid-average) electricity factor for a site.
+ *
+ * US sites: ZIP → eGRID subregion → the US national average, all read from
+ * the reference table. A site outside the US needs a country-level factor in
+ * the table; there is none by default, so it returns null and the entry is
+ * refused until the organization adds one (a "Scope 2 grid (site)" custom
+ * factor). It once fell back to a hard-coded US average for every site
+ * anywhere, which priced a German plant on the American grid.
+ */
+export async function getScope2LocationFactor(
+  site: { zipCode?: string | null; country?: string | null; egridSubregion?: string | null },
+): Promise<{ factor: number; source: string; basis: string } | null> {
+  if (!isUsSite(site.country)) {
+    const iso = toIso2(site.country);
+    if (!iso) return null;
+    const row = await scope2Row('electricity', ['country', 'national_average'], iso);
+    return row ? { ...row, basis: `country ${iso}` } : null;
   }
 
-  // Default: US residual mix
-  return {
-    factor: 0.455,
-    source: 'M-RETS_Greene_2023',
-    isDefault: true,
-  };
+  if (site.zipCode) {
+    const row = await scope2Row('electricity', ['zip_code'], site.zipCode);
+    if (row) return { ...row, basis: `ZIP ${site.zipCode}` };
+  }
+  if (site.egridSubregion) {
+    const row = await scope2Row('electricity', ['egrid_subregion'], site.egridSubregion);
+    if (row) return { ...row, basis: `eGRID subregion ${site.egridSubregion}` };
+  }
+  const national = await scope2Row('electricity', ['national_average'], 'US');
+  return national ? { ...national, basis: 'US national average' } : null;
+}
+
+/**
+ * Look up the residual mix for a site's market (market-based Scope 2).
+ * Returns null when none is held — there is no default. Under the Scope 2
+ * Guidance the market-based figure then uses the grid average, and the entry
+ * records that it did. (The US has no national residual mix: Green-e
+ * publishes by eGRID subregion. Load one per site as a "Scope 2 residual mix
+ * (site)" custom factor.)
+ */
+export async function getResidualMixFactor(
+  country: string | null | undefined,
+): Promise<{ factor: number; source: string } | null> {
+  const iso = isUsSite(country) ? 'US' : toIso2(country);
+  if (!iso) return null;
+  return scope2Row('residual_mix', ['country', 'national_average'], iso);
 }
 
 /** Get all refrigerant factors for dropdown + GWP lookup */
@@ -129,16 +113,20 @@ export async function getRefrigerantFactors() {
 /** Get GWP for a specific refrigerant code */
 export async function getRefrigerantGwp(
   refrigerantCode: string,
-): Promise<{ gwp: number; source: string } | null> {
+): Promise<{ gwp: number; source: string; isMontrealProtocol: boolean } | null> {
   const supabase = await createServerClient();
   const { data, error } = await supabase
     .from('refrigerant_factors')
-    .select('gwp_100_year, factor_source')
+    .select('gwp_100_year, factor_source, is_montreal_protocol')
     .eq('refrigerant_code', refrigerantCode)
     .single();
 
   if (error || !data) return null;
-  return { gwp: data.gwp_100_year, source: data.factor_source };
+  return {
+    gwp: Number(data.gwp_100_year),
+    source: data.factor_source,
+    isMontrealProtocol: data.is_montreal_protocol === true,
+  };
 }
 
 // ─── Source type display labels ─────────────────────────────────────────────

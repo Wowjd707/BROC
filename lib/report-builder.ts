@@ -77,6 +77,26 @@ export interface MaterialityScope {
   undeterminedTopics: string[];
 }
 
+/**
+ * The methodology choices a reader needs to interpret the figures. GHG
+ * Protocol Corporate Standard ch. 9 requires the consolidation approach, the
+ * GWP source and any exclusions to be stated; the Scope 2 Guidance (ch. 7)
+ * requires disclosure of where grid average stood in for a residual mix.
+ * Every field is computed from the inventory, never typed.
+ */
+export interface BasisOfPreparation {
+  /** 'operational_control' | 'financial_control' | 'equity_share' */
+  consolidationApproach: string;
+  partialSiteCount: number;
+  excludedSiteCount: number;
+  /** Share of Scope 1 + 2 emissions resting on estimates, 0–100. */
+  estimatedPercent: number | null;
+  /** Scope 2 kWh by market-based basis (see InventoryInput.scope2MarketBasisKwh). */
+  scope2MarketBasisKwh: Record<string, number>;
+  biogenicCo2Kg: number;
+  montrealGasesKg: number;
+}
+
 export interface BuildReportInput {
   orgName: string;
   reportingYear: number;
@@ -93,6 +113,7 @@ export interface BuildReportInput {
   sections: ReportSection[];
   provenance: ProvenanceInput;
   materialityScope?: MaterialityScope | null;
+  basis?: BasisOfPreparation | null;
 }
 
 export type ReportModel = BuildReportInput;
@@ -287,6 +308,70 @@ function renderMaterialityScope(scope: MaterialityScope): string {
     ${undetermined}`;
 }
 
+const APPROACH_LABELS: Record<string, string> = {
+  operational_control: 'operational control',
+  financial_control: 'financial control',
+  equity_share: 'equity share',
+};
+
+/** The methodology paragraphs computed from the inventory. Empty without it. */
+export function renderMethodology(basis: BasisOfPreparation | null | undefined): string {
+  if (!basis) return '';
+  const approach = APPROACH_LABELS[basis.consolidationApproach] ?? basis.consolidationApproach;
+  const boundaryNotes: string[] = [];
+  if (basis.partialSiteCount > 0) {
+    boundaryNotes.push(`${basis.partialSiteCount} site${basis.partialSiteCount === 1 ? ' is' : 's are'} included at less than 100%`);
+  }
+  if (basis.excludedSiteCount > 0) {
+    boundaryNotes.push(`${basis.excludedSiteCount} site${basis.excludedSiteCount === 1 ? ' falls' : 's fall'} outside the boundary and ${basis.excludedSiteCount === 1 ? 'is' : 'are'} excluded`);
+  }
+
+  const kwh = basis.scope2MarketBasisKwh;
+  const priced = Object.entries(kwh)
+    .filter(([k]) => k !== 'self_generated')
+    .reduce((s, [, v]) => s + v, 0);
+  const share = (k: string) => (priced > 0 ? ((kwh[k] ?? 0) / priced) * 100 : 0);
+  const scope2Lines: string[] = [];
+  if (priced > 0) {
+    if (share('contractual') > 0) scope2Lines.push(`${share('contractual').toFixed(1)}% contractual instruments or supplier-specific factors`);
+    if (share('residual_mix') > 0) scope2Lines.push(`${share('residual_mix').toFixed(1)}% residual mix`);
+    if (share('grid_average') > 0) scope2Lines.push(`${share('grid_average').toFixed(1)}% grid average, where no residual mix exists for the market`);
+    if (share('heat_supplier') > 0) scope2Lines.push(`${share('heat_supplier').toFixed(1)}% purchased heat or steam at the supplier's factor`);
+    if (share('legacy') > 0) scope2Lines.push(`${share('legacy').toFixed(1)}% entries recorded before the market-based hierarchy was applied per entry, whose market-based figure may be the grid average`);
+  }
+
+  const t = (kg: number) => (kg / 1000).toLocaleString('en-US', { maximumFractionDigits: 1 });
+
+  return `
+    <h3>Organizational boundary</h3>
+    <p>
+      Scope 1 and Scope 2 emissions and energy are consolidated under the ${escapeHtml(approach)} approach${
+        boundaryNotes.length ? `; ${escapeHtml(boundaryNotes.join(', and '))}` : ''}.
+      Scope 3 emissions, water, waste and social metrics are reported for the full operational boundary
+      without share adjustment, because many of those records are organization-level with no site to
+      attribute a share to.
+    </p>
+
+    <h3>Methodology</h3>
+    <ul>
+      <li>Global warming potentials: IPCC Sixth Assessment Report (AR6), 100-year values, in the reference factors. Any organization-specific factor is listed with its own source below.</li>
+      <li>Scope 2 market-based figures were derived, by electricity consumed, from: ${
+        scope2Lines.length ? escapeHtml(scope2Lines.join('; ')) : 'no Scope 2 consumption recorded'}.</li>
+      ${basis.estimatedPercent != null
+        ? `<li>${basis.estimatedPercent.toFixed(1)}% of Scope 1 and 2 emissions rest on estimates; each estimate records its method.</li>`
+        : ''}
+      <li>Energy from fuels is stated on a higher heating value (gross calorific value) basis.</li>
+      <li>Water consumption is withdrawal less discharge; change in storage is not recorded and is taken as zero.</li>
+    </ul>
+
+    <h3>Emissions reported outside the scopes</h3>
+    <p>
+      Biogenic CO₂ from biomass combustion: ${escapeHtml(t(basis.biogenicCo2Kg))} tCO₂.
+      Montreal Protocol gases (e.g. HCFC-22): ${escapeHtml(t(basis.montrealGasesKg))} tCO₂e.
+      Neither is included in any scope total, as the GHG Protocol Corporate Standard requires.
+    </p>`;
+}
+
 function renderBasisOfPreparation(model: ReportModel): string {
   const { provenance } = model;
   const mix = provenance.dataQualityMix;
@@ -309,6 +394,7 @@ function renderBasisOfPreparation(model: ReportModel): string {
       Scope 3 emissions are categorised in accordance with the GHG Protocol Corporate Value Chain
       (Scope 3) Standard.
     </p>
+${renderMethodology(model.basis)}
 
     <h3>Emission factor sources</h3>
     <p>The following emission factor sources were applied to the activity data in this report:</p>

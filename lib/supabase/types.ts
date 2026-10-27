@@ -644,6 +644,7 @@ export type Database = {
           accounting_method: string
           co2e_kg: number
           co2e_kg_location_based: number | null
+          co2e_kg_outside_scopes: number
           created_at: string
           created_by: string | null
           data_quality: string
@@ -654,12 +655,16 @@ export type Database = {
           estimation_method: string | null
           id: string
           instrument_type: string | null
+          location_factor_source: string | null
+          location_factor_used: number | null
           notes: string | null
           organization_id: string
+          outside_scopes_basis: string | null
           quantity: number
           quantity_normalized: number
           scope: string
           scope1_category: string | null
+          scope2_market_basis: string | null
           site_id: string
           source_detail: string | null
           source_type: string
@@ -671,6 +676,7 @@ export type Database = {
           accounting_method?: string
           co2e_kg: number
           co2e_kg_location_based?: number | null
+          co2e_kg_outside_scopes?: number
           created_at?: string
           created_by?: string | null
           data_quality?: string
@@ -681,12 +687,16 @@ export type Database = {
           estimation_method?: string | null
           id?: string
           instrument_type?: string | null
+          location_factor_source?: string | null
+          location_factor_used?: number | null
           notes?: string | null
           organization_id?: string
+          outside_scopes_basis?: string | null
           quantity: number
           quantity_normalized: number
           scope: string
           scope1_category?: string | null
+          scope2_market_basis?: string | null
           site_id: string
           source_detail?: string | null
           source_type: string
@@ -698,6 +708,7 @@ export type Database = {
           accounting_method?: string
           co2e_kg?: number
           co2e_kg_location_based?: number | null
+          co2e_kg_outside_scopes?: number
           created_at?: string
           created_by?: string | null
           data_quality?: string
@@ -708,12 +719,16 @@ export type Database = {
           estimation_method?: string | null
           id?: string
           instrument_type?: string | null
+          location_factor_source?: string | null
+          location_factor_used?: number | null
           notes?: string | null
           organization_id?: string
+          outside_scopes_basis?: string | null
           quantity?: number
           quantity_normalized?: number
           scope?: string
           scope1_category?: string | null
+          scope2_market_basis?: string | null
           site_id?: string
           source_detail?: string | null
           source_type?: string
@@ -1307,6 +1322,7 @@ export type Database = {
       }
       refrigerant_factors: {
         Row: {
+          is_montreal_protocol: boolean
           data_year: number
           factor_source: string
           gwp_100_year: number
@@ -1315,6 +1331,7 @@ export type Database = {
           refrigerant_name: string
         }
         Insert: {
+          is_montreal_protocol?: boolean
           data_year?: number
           factor_source?: string
           gwp_100_year: number
@@ -1323,6 +1340,7 @@ export type Database = {
           refrigerant_name: string
         }
         Update: {
+          is_montreal_protocol?: boolean
           data_year?: number
           factor_source?: string
           gwp_100_year?: number
@@ -1869,6 +1887,7 @@ export type Database = {
       }
       scope1_emission_factors: {
         Row: {
+          biogenic_co2_factor: number | null
           co2e_factor: number
           data_year: number
           factor_source: string
@@ -1877,6 +1896,7 @@ export type Database = {
           unit: string
         }
         Insert: {
+          biogenic_co2_factor?: number | null
           co2e_factor: number
           data_year?: number
           factor_source?: string
@@ -1885,6 +1905,7 @@ export type Database = {
           unit: string
         }
         Update: {
+          biogenic_co2_factor?: number | null
           co2e_factor?: number
           data_year?: number
           factor_source?: string

@@ -115,8 +115,76 @@ export function goalTargetValue(goal: GoalLike): number | null {
 
   if (goal.goal_type === 'net_zero') return 0;
 
+  // An intensity target is a ratio (per unit of revenue, production, floor
+  // area). Its percentage cannot be applied to an absolute baseline: that would
+  // grade an intensity goal against absolute emissions, which is a different
+  // target. Until a goal stores its numerator and denominator, it is not
+  // computable and the entered progress is shown instead.
+  if (goal.goal_type === 'intensity') return null;
+
   if (goal.target_value == null) return null;
   return calculateAbsoluteTarget(base, goal.target_value);
+}
+
+/** Which emissions a GHG goal covers. */
+export type GoalScope = 'scope1' | 'scope2' | 'scope1_2';
+
+/**
+ * The current emissions a GHG goal is measured against: only the scope it
+ * covers. A Scope 1 goal was being compared with Scope 1 + 2, so a site that
+ * had cut Scope 1 by 40% showed no progress at all. `scope2Kg` should already
+ * reflect the goal's Scope 2 method (location- or market-based).
+ */
+export function goalScopeEmissions(
+  scope: string | null | undefined,
+  scope1Kg: number,
+  scope2Kg: number,
+): number {
+  if (scope === 'scope1') return scope1Kg;
+  if (scope === 'scope2') return scope2Kg;
+  return scope1Kg + scope2Kg;
+}
+
+/** Scope 1 and both Scope 2 totals for a period, boundary-adjusted. */
+export interface ScopeTotals {
+  scope1: number;
+  scope2Market: number;
+  scope2Location: number;
+}
+
+/**
+ * Sum emission rows into Scope 1 and Scope 2 totals, each row multiplied by
+ * its site's consolidation share — the same boundary the report, dashboard and
+ * KPI page apply, so a 50% joint venture cannot count fully toward a goal and
+ * half in the report. Null when the period has no Scope 1 or 2 rows (not
+ * measured is not zero).
+ */
+export function scopeTotals(
+  rows: { scope: string; co2e_kg: number; co2e_kg_location_based: number | null; site_id?: string | null }[] | null | undefined,
+  share: (siteId: string | null) => number = () => 1,
+): ScopeTotals | null {
+  const s12 = (rows ?? []).filter((r) => r.scope === 'scope1' || r.scope === 'scope2');
+  if (s12.length === 0) return null;
+  const t: ScopeTotals = { scope1: 0, scope2Market: 0, scope2Location: 0 };
+  for (const r of s12) {
+    const k = share(r.site_id ?? null);
+    if (r.scope === 'scope1') t.scope1 += Number(r.co2e_kg) * k;
+    else {
+      t.scope2Market += Number(r.co2e_kg) * k;
+      t.scope2Location += Number(r.co2e_kg_location_based ?? r.co2e_kg) * k;
+    }
+  }
+  return t;
+}
+
+/** A GHG goal's current value: its scope, under its Scope 2 method. */
+export function goalGhgValue(
+  totals: ScopeTotals,
+  scope: string | null | undefined,
+  scope2Method: string | null | undefined,
+): number {
+  const s2 = scope2Method === 'location_based' ? totals.scope2Location : totals.scope2Market;
+  return goalScopeEmissions(scope, totals.scope1, s2);
 }
 
 export interface GoalProgress {

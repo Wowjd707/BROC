@@ -123,23 +123,26 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **Scope 1 & 2** — activity-data entry (fuels, electricity, refrigerants), unit
   normalization, and CO₂e calculation with full lineage (raw input, factor, and
   factor source stored on every entry). Calculation happens **server-side**,
-  in one write path (see SECURITY.md for its limits). Dual location-based /
-  market-based Scope 2 per the GHG Protocol Scope 2 Guidance, and GHG Protocol
-  Scope 1 source categories (stationary, mobile, process, fugitive).
+  in one write path (see SECURITY.md for its limits). Both Scope 2 figures on
+  every entry per the GHG Protocol Scope 2 Guidance (contract, then residual
+  mix, then a disclosed grid average), GHG Protocol Scope 1 source categories
+  (stationary, mobile, process, fugitive), and biogenic CO₂ and HCFCs reported
+  outside the scopes.
 - **Scope 3** — all 15 categories, with an org-scoped factor library that
   **ships empty** (licensed data — you load your own via CSV) and supplier
   declarations feeding Category 1.
-- **Emission factors** — cited global reference tables (EPA 2024, eGRID2023,
-  IPCC AR6) plus org-scoped, effective-dated custom overrides, entered singly or
-  bulk-loaded from CSV.
-- **Water & waste (EHS)** — entry, normalization, diversion rate, recycling
-  streams.
+- **Emission factors** — cited global reference tables (EPA Hub 2024, eGRID2023,
+  AIB 2023 residual mixes, IPCC AR6), checked against their publications, plus
+  org-scoped, effective-dated custom overrides, entered singly or bulk-loaded
+  from CSV.
+- **Water & waste (EHS)** — entry, normalization, water withdrawal, discharge
+  and consumption, diversion rate, recycling streams.
 
 **Program management**
 
 - **Dashboard & KPIs** — emissions totals, intensities, year-over-year change.
-- **Goals** — absolute, intensity, net-zero, and SBTi 1.5 °C pathways (4.2 %/yr,
-  GHG only), across GHG, water and waste.
+- **Goals** — absolute, intensity, net-zero, and SBTi 1.5 °C pathways (4.2 % of
+  base-year emissions a year, linear; GHG only), across GHG, water and waste.
 - **Projects** — reduction initiatives with per-category savings estimators,
   pro-rated by in-service date.
 - **Org structure** — business-unit hierarchy, many-to-many site groups, and
@@ -166,8 +169,9 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 - **Suppliers** — registry, tokenized public surveys (CBAM, EUDR, PFAS, general
   carbon, plus bespoke question sets), supplier data-quality scoring, and a
-  **CBAM calculator** with EU default factors (Reg. (EU) 2023/1773 Annex III)
-  and supplier-provided overrides.
+  **CBAM calculator** for embedded emissions from supplier-verified data or a
+  cited EU default value (none ship: they are set per period and, for
+  electricity, per country).
 
 **Optional AI layer**
 
@@ -226,7 +230,7 @@ The `send-survey-email` Edge Function additionally needs `RESEND_API_KEY`,
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–037**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–039**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -363,14 +367,14 @@ lib/                     business logic + Supabase clients (~53 modules)
   anomaly.ts             data-review analysis (pure core in anomaly-core.ts)
   report-builder.ts      self-contained HTML framework reports
   goal-metrics.ts        goal progress, shared by Goals page and dashboard
-  cbam-data.ts           CBAM commodities, factors, calculator
+  cbam-data.ts           CBAM goods catalogue and calculator
   branding.ts            single source of truth for product naming
   regulations/           supplier survey question sets (CBAM, EUDR, PFAS)
   ai/                    optional provider-agnostic AI layer
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–037, numbered SQL (source of truth for schema)
+  migrations/            001–039, numbered SQL (source of truth for schema)
   functions/             Deno Edge Functions (send-survey-email)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)

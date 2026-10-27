@@ -95,7 +95,8 @@ export function CustomFactorImportDialog({ open, onClose }: Props) {
             <p>
               <strong>factor_key</strong> is the fuel type for <code>scope1</code>, the refrigerant
               code for <code>refrigerant</code>, and the <strong>site name</strong> for{' '}
-              <code>scope2_location</code>. Spelling is matched loosely (<code>Natural Gas</code>{' '}
+              <code>scope2_location</code> (grid average), <code>scope2_residual</code> (residual
+              mix) and <code>scope2_heat</code> (purchased heat or steam, per kWh thermal). Spelling is matched loosely (<code>Natural Gas</code>{' '}
               finds <code>natural_gas</code>), but a key that matches nothing is rejected — a factor
               keyed to something the platform does not recognise would never be applied.
             </p>

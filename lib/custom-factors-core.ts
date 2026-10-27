@@ -4,7 +4,21 @@
  * tested and reused on either side of the network boundary.
  */
 
-export type CustomFactorCategory = 'scope1' | 'scope2_location' | 'refrigerant';
+export type CustomFactorCategory =
+  | 'scope1'
+  | 'scope2_location'
+  | 'scope2_residual'
+  | 'scope2_heat'
+  | 'refrigerant';
+
+/** Categories keyed by site id rather than by a fuel or refrigerant code. */
+export const SITE_KEYED_CATEGORIES: readonly CustomFactorCategory[] = [
+  'scope2_location', 'scope2_residual', 'scope2_heat',
+];
+
+export function isSiteKeyed(category: string): boolean {
+  return (SITE_KEYED_CATEGORIES as readonly string[]).includes(category);
+}
 
 export interface ResolvedFactor {
   factor: number;

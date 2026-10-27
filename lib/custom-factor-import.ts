@@ -1,4 +1,5 @@
 import 'server-only';
+import { isSiteKeyed } from './custom-factors-core';
 import { createServerClient } from './supabase/server';
 import { parseCsvToObjects } from './csv';
 import {
@@ -142,7 +143,7 @@ async function findExistingCollisions(
     if (source === undefined) continue;
 
     // Site ids are meaningless in an error message; show the name from the file.
-    const shown = row.factor_category === 'scope2_location'
+    const shown = isSiteKeyed(row.factor_category)
       ? siteNameById.get(row.factor_key) ?? row.factor_key
       : row.factor_key;
 

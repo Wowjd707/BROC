@@ -111,41 +111,41 @@ BEGIN
     trend    := CASE WHEN yr = 2026 THEN 0.94 ELSE 1.0 END;
 
     -- ── Electricity (Scope 2, location-based) ──
-    -- HQ Office · Charlotte 28202 → SRVC 0.2870 kg/kWh (eGRID2023)
+    -- HQ Office · Charlotte 28202 → SRVC 0.2705 kg/kWh (eGRID2023, migration 038)
     kwh := ROUND(58000 * seasonal * trend);
     INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type,
       quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
       accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
     VALUES (v_org, v_hq, d + 27, 'scope2', 'electricity',
-      kwh, 'kWh', kwh, 'kWh', kwh * 0.2870, kwh * 0.2870,
-      'location_based', 0.2870, 'eGRID2023', '[DEMO] Monthly utility bill', v_user);
+      kwh, 'kWh', kwh, 'kWh', kwh * 0.2705, kwh * 0.2705,
+      'location_based', 0.2705, 'eGRID2023 (ZIP 28202)', '[DEMO] Monthly utility bill', v_user);
 
-    -- Main Plant · Chicago 60601 → RFCW 0.5423 kg/kWh
+    -- Main Plant · Chicago 60601 → RFCW 0.4155 kg/kWh
     kwh := ROUND(410000 * seasonal * trend);
     INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type,
       quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
       accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
     VALUES (v_org, v_plant, d + 27, 'scope2', 'electricity',
-      kwh, 'kWh', kwh, 'kWh', kwh * 0.5423, kwh * 0.5423,
-      'location_based', 0.5423, 'eGRID2023', '[DEMO] Monthly utility bill', v_user);
+      kwh, 'kWh', kwh, 'kWh', kwh * 0.4155, kwh * 0.4155,
+      'location_based', 0.4155, 'eGRID2023 (ZIP 60601)', '[DEMO] Monthly utility bill', v_user);
 
-    -- Distribution Center · Austin 78701 → ERCT 0.3618 kg/kWh
+    -- Distribution Center · Austin 78701 → ERCT 0.3341 kg/kWh
     kwh := ROUND(96000 * seasonal * trend);
     INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type,
       quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
       accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
     VALUES (v_org, v_dc, d + 27, 'scope2', 'electricity',
-      kwh, 'kWh', kwh, 'kWh', kwh * 0.3618, kwh * 0.3618,
-      'location_based', 0.3618, 'eGRID2023', '[DEMO] Monthly utility bill', v_user);
+      kwh, 'kWh', kwh, 'kWh', kwh * 0.3341, kwh * 0.3341,
+      'location_based', 0.3341, 'eGRID2023 (ZIP 78701)', '[DEMO] Monthly utility bill', v_user);
 
-    -- ── Natural gas (Scope 1) — therms → MMBtu × 53.06 kg/MMBtu (EPA_2024) ──
+    -- ── Natural gas (Scope 1) — therms → MMBtu × 53.12 kg CO2e/MMBtu (EPA_2024_AR6) ──
     therms := ROUND(14500 * (1 + 0.55 * COS(2 * PI() * (m - 1) / 12.0)) * trend);
     INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type, scope1_category,
       quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
       accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
     VALUES (v_org, v_plant, d + 27, 'scope1', 'natural_gas', 'stationary_combustion',
-      therms, 'therms', therms * 0.1, 'MMBtu', therms * 0.1 * 53.06, therms * 0.1 * 53.06,
-      'location_based', 53.06, 'EPA_2024', '[DEMO] Process heat + building heating', v_user);
+      therms, 'therms', therms * 0.1, 'MMBtu', therms * 0.1 * 53.12, therms * 0.1 * 53.12,
+      'location_based', 53.12, 'EPA_2024_AR6', '[DEMO] Process heat + building heating', v_user);
 
     -- Smaller gas load at HQ
     therms := ROUND(1800 * (1 + 0.7 * COS(2 * PI() * (m - 1) / 12.0)) * trend);
@@ -154,18 +154,18 @@ BEGIN
         quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
         accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
       VALUES (v_org, v_hq, d + 27, 'scope1', 'natural_gas', 'stationary_combustion',
-        therms, 'therms', therms * 0.1, 'MMBtu', therms * 0.1 * 53.06, therms * 0.1 * 53.06,
-        'location_based', 53.06, 'EPA_2024', '[DEMO] Building heating', v_user);
+        therms, 'therms', therms * 0.1, 'MMBtu', therms * 0.1 * 53.12, therms * 0.1 * 53.12,
+        'location_based', 53.12, 'EPA_2024_AR6', '[DEMO] Building heating', v_user);
     END IF;
 
-    -- ── Fleet diesel (Scope 1) — gal × 0.13756 MMBtu × 73.96 kg/MMBtu ──
+    -- ── Fleet diesel (Scope 1) — gal × 0.138 MMBtu × 74.21 kg CO2e/MMBtu ──
     gal := ROUND(3200 * trend);
     INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type, scope1_category,
       quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
       accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
     VALUES (v_org, v_dc, d + 27, 'scope1', 'diesel', 'mobile_combustion',
-      gal, 'gallons', gal * 0.13756, 'MMBtu', gal * 0.13756 * 73.96, gal * 0.13756 * 73.96,
-      'location_based', 73.96, 'EPA_2024', '[DEMO] Delivery fleet fuel card', v_user);
+      gal, 'gallons', gal * 0.138, 'MMBtu', gal * 0.138 * 74.21, gal * 0.138 * 74.21,
+      'location_based', 74.21, 'EPA_2024_AR6', '[DEMO] Delivery fleet fuel card', v_user);
 
     -- ── Water + waste ──
     INSERT INTO ehs_entries (organization_id, site_id, entry_date, metric_type, source_type,
@@ -185,16 +185,16 @@ BEGIN
        ROUND(520 * trend), 'kg', ROUND(520 * trend), 'kg', '[DEMO] Solvents + machining coolant', v_user);
   END LOOP;
 
-  -- ── Refrigerant top-ups (Scope 1) — kg × GWP 2088 (R-410A, IPCC_AR6) ──────
+  -- ── Refrigerant top-ups (Scope 1) — kg × GWP 2256 (R-410A, IPCC_AR6) ──────
   INSERT INTO emission_entries (organization_id, site_id, entry_date, scope, source_type, scope1_category, source_detail,
     quantity, unit, quantity_normalized, unit_normalized, co2e_kg, co2e_kg_location_based,
     accounting_method, emission_factor_used, emission_factor_source, notes, created_by)
   VALUES
     (v_org, v_plant, DATE '2025-06-18', 'scope1', 'refrigerants', 'fugitive_emissions', 'R-410A',
-     34, 'kg', 34, 'kg', 34 * 2088, 34 * 2088, 'location_based', 2088, 'IPCC_AR6',
+     34, 'kg', 34, 'kg', 34 * 2256, 34 * 2256, 'location_based', 2256, 'IPCC_AR6',
      '[DEMO] Chiller recharge after leak repair', v_user),
     (v_org, v_plant, DATE '2026-05-12', 'scope1', 'refrigerants', 'fugitive_emissions', 'R-410A',
-     21, 'kg', 21, 'kg', 21 * 2088, 21 * 2088, 'location_based', 2088, 'IPCC_AR6',
+     21, 'kg', 21, 'kg', 21 * 2256, 21 * 2256, 'location_based', 2256, 'IPCC_AR6',
      '[DEMO] Annual chiller service', v_user);
 
   -- ── Market-based Scope 2: a renewable PPA at the plant (2026) ─────────────
@@ -203,9 +203,26 @@ BEGIN
     accounting_method, instrument_type, supplier_emission_factor,
     emission_factor_used, emission_factor_source, notes, created_by)
   VALUES (v_org, v_plant, DATE '2026-03-31', 'scope2', 'electricity',
-    900000, 'kWh', 900000, 'kWh', 900000 * 0.0, 900000 * 0.5423,
-    'market_based', 'ppa', 0.0, 0.0, 'supplier_specific',
+    900000, 'kWh', 900000, 'kWh', 900000 * 0.0, 900000 * 0.4155,
+    'market_based', 'ppa', 0.0, 0.0, 'contractual: power purchase agreement',
     '[DEMO] Wind PPA — Q1 contractual volume', v_user);
+
+  -- Scope 2 lineage (migration 039), as lib/entries.ts writes it for a US site:
+  -- no US residual mix is held, so a row without a contract carries the grid
+  -- average as its market-based figure, and says so.
+  UPDATE emission_entries SET
+    location_factor_used = emission_factor_used,
+    location_factor_source = emission_factor_source,
+    scope2_market_basis = 'grid_average',
+    emission_factor_source = emission_factor_source || ' — grid average used for market-based: no residual mix for this market'
+  WHERE organization_id = v_org AND scope = 'scope2' AND accounting_method = 'location_based'
+    AND notes LIKE '[DEMO]%' AND scope2_market_basis IS NULL;
+  UPDATE emission_entries SET
+    location_factor_used = 0.4155,
+    location_factor_source = 'eGRID2023 (ZIP 60601)',
+    scope2_market_basis = 'contractual'
+  WHERE organization_id = v_org AND scope = 'scope2' AND accounting_method = 'market_based'
+    AND notes LIKE '[DEMO]%' AND scope2_market_basis IS NULL;
 
   -- ── Goal ──────────────────────────────────────────────────────────────────
   -- target_emissions_kg is set explicitly (4,200,000 × 58%) so the dashboard

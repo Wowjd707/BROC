@@ -434,9 +434,10 @@ export function SettingsClient({
 
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs font-medium text-gray-500 mb-2">Emission Factor Versions</p>
-              <div className="flex gap-4 text-xs text-gray-600">
-                <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 1: EPA 2024</span>
-                <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 2: eGRID 2023</span>
+              <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 1: EPA Hub 2024, IPCC AR6 GWPs</span>
+                <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 2 location: eGRID2023</span>
+                <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 2 residual mix: AIB 2023 (Europe)</span>
                 <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Refrigerants: IPCC AR6</span>
               </div>
               <p className="text-xs text-gray-400 mt-1">Each entry keeps the factor version it was calculated with, for auditability. New editions are loaded when publishers release them, usually annually.</p>

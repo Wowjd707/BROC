@@ -28,7 +28,10 @@ export const METRIC_KEYS = [
   'ghg_intensity',
   'energy_consumption',
   'water_consumption',
+  'water_withdrawal',
+  'water_discharge',
   'waste_total',
+  'ghg_outside_scopes',
   'targets',
   // Social — GRI 403/401/404, ESRS S1
   'safety_trir',
@@ -54,7 +57,10 @@ export type MetricKey =
   | 'ghg_intensity'
   | 'energy_consumption'
   | 'water_consumption'
+  | 'water_withdrawal'
+  | 'water_discharge'
   | 'waste_total'
+  | 'ghg_outside_scopes'
   | 'targets'
   | 'safety_trir'
   | 'safety_dart'
@@ -89,8 +95,31 @@ export interface InventoryInput {
   scope3Kg: number;
   scope3ByCategory: { categoryNumber: number; name: string; co2eKg: number }[];
   energyKwh: number;
-  waterGallons: number;
+  /** Water drawn in (US gallons). See lib/water-core.ts for the classification. */
+  waterWithdrawalGallons: number;
+  /** Water discharged (US gallons). */
+  waterDischargeGallons: number;
+  /** Withdrawal − discharge; null when no withdrawal was recorded. */
+  waterConsumptionGallons: number | null;
   wasteKg: number;
+  /**
+   * Whether any rows fed each figure. Distinguishes "nothing recorded" from a
+   * genuine zero (a site that discharged no water, a year with no Scope 1).
+   * Optional: absent, a zero sum is read as missing, as before.
+   */
+  presence?: Partial<Record<'scope1' | 'scope2' | 'scope3' | 'energy' | 'waterWithdrawal' | 'waterDischarge' | 'waste', boolean>>;
+  /**
+   * Emissions reported separately from the scopes (GHG Protocol Corporate
+   * Standard ch. 4 and 9): biogenic CO₂ from burning biomass, and Montreal
+   * Protocol gases such as HCFC-22. Never part of any scope total.
+   */
+  outsideScopes?: { biogenicCo2Kg: number; montrealGasesKg: number };
+  /**
+   * Scope 2 kWh by the rung of the market-based hierarchy that priced it
+   * (contractual, residual_mix, grid_average, self_generated, heat_supplier,
+   * legacy). The basis of preparation discloses the grid-average share.
+   */
+  scope2MarketBasisKwh?: Record<string, number>;
   /** Denominator for intensity, e.g. floor area or revenue. Null when unknown. */
   intensityDenominator: number | null;
   intensityDenominatorUnit: string;
@@ -116,7 +145,14 @@ export interface InventoryInput {
     partialSiteCount: number;
     excludedSiteCount: number;
   };
-  targets: { name: string; targetYear: number; targetReductionPct: number | null; status: string }[];
+  targets: {
+    name: string;
+    targetYear: number;
+    targetReductionPct: number | null;
+    status: string;
+    /** 'absolute' | 'intensity' | 'net_zero' | 'sbti_15c' — an intensity percentage is a cut in the ratio. */
+    goalType?: string;
+  }[];
   /**
    * Raw social and governance counts for the reporting year. Optional so that
    * every existing caller and test fixture stays valid; absent means the S and
@@ -136,6 +172,15 @@ function tonnes(kg: number): number {
 }
 
 /**
+ * Missing means no rows fed the figure. When the inventory says whether rows
+ * existed, a recorded zero is a value (a disclosure of zero); otherwise a zero
+ * sum is read as missing, which is the conservative reading.
+ */
+function isMissing(present: boolean | undefined, value: number): boolean {
+  return present === undefined ? value === 0 : !present;
+}
+
+/**
  * Resolve a metric key against the inventory. Returns `missing: true` rather
  * than a zero when the platform genuinely holds no data — a disclosure that
  * reports 0 when it means "not measured" is a misstatement, and the coverage
@@ -148,7 +193,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Scope 1 (direct) GHG emissions',
         value: tonnes(inv.scope1Kg),
         unit: 'tCO₂e',
-        missing: inv.scope1Kg === 0,
+        missing: isMissing(inv.presence?.scope1, inv.scope1Kg),
       };
 
     case 'scope2_location':
@@ -156,7 +201,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Scope 2 (location-based)',
         value: tonnes(inv.scope2LocationKg),
         unit: 'tCO₂e',
-        missing: inv.scope2LocationKg === 0,
+        missing: isMissing(inv.presence?.scope2, inv.scope2LocationKg),
       };
 
     case 'scope2_market':
@@ -164,7 +209,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Scope 2 (market-based)',
         value: tonnes(inv.scope2MarketKg),
         unit: 'tCO₂e',
-        missing: inv.scope2MarketKg === 0,
+        missing: isMissing(inv.presence?.scope2, inv.scope2MarketKg),
       };
 
     case 'scope2_both':
@@ -176,7 +221,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
           { label: 'Location-based', value: tonnes(inv.scope2LocationKg), unit: 'tCO₂e' },
           { label: 'Market-based', value: tonnes(inv.scope2MarketKg), unit: 'tCO₂e' },
         ],
-        missing: inv.scope2LocationKg === 0 && inv.scope2MarketKg === 0,
+        missing: isMissing(inv.presence?.scope2, inv.scope2LocationKg + inv.scope2MarketKg),
       };
 
     case 'scope3_total':
@@ -184,7 +229,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Scope 3 (other indirect) GHG emissions',
         value: tonnes(inv.scope3Kg),
         unit: 'tCO₂e',
-        missing: inv.scope3Kg === 0,
+        missing: isMissing(inv.presence?.scope3, inv.scope3Kg),
       };
 
     case 'scope3_by_category':
@@ -195,11 +240,15 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         breakdown: inv.scope3ByCategory
           .filter((c) => c.co2eKg > 0)
           .map((c) => ({ label: `${c.categoryNumber}. ${c.name}`, value: tonnes(c.co2eKg), unit: 'tCO₂e' })),
-        missing: inv.scope3Kg === 0,
+        missing: isMissing(inv.presence?.scope3, inv.scope3Kg),
       };
 
     case 'ghg_all_scopes': {
+      // ESRS E1-6 (§44) requires total GHG emissions on BOTH a location-based
+      // and a market-based Scope 2 basis. The headline is location-based, as
+      // before; both totals are in the breakdown.
       const total = inv.scope1Kg + inv.scope2LocationKg + inv.scope3Kg;
+      const totalMarket = inv.scope1Kg + inv.scope2MarketKg + inv.scope3Kg;
       return {
         label: 'Gross GHG emissions, all scopes',
         value: tonnes(total),
@@ -209,8 +258,29 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
           { label: 'Scope 2 (location-based)', value: tonnes(inv.scope2LocationKg), unit: 'tCO₂e' },
           { label: 'Scope 2 (market-based)', value: tonnes(inv.scope2MarketKg), unit: 'tCO₂e' },
           { label: 'Scope 3', value: tonnes(inv.scope3Kg), unit: 'tCO₂e' },
+          { label: 'Total (location-based)', value: tonnes(total), unit: 'tCO₂e' },
+          { label: 'Total (market-based)', value: tonnes(totalMarket), unit: 'tCO₂e' },
+        ],
+        missing: total === 0 && totalMarket === 0
+          && !inv.presence?.scope1 && !inv.presence?.scope2 && !inv.presence?.scope3,
+      };
+    }
+
+    case 'ghg_outside_scopes': {
+      const o = inv.outsideScopes ?? { biogenicCo2Kg: 0, montrealGasesKg: 0 };
+      const total = o.biogenicCo2Kg + o.montrealGasesKg;
+      return {
+        label: 'Emissions reported outside the scopes',
+        value: tonnes(total),
+        unit: 'tCO₂e',
+        breakdown: [
+          { label: 'Biogenic CO₂ from biomass combustion', value: tonnes(o.biogenicCo2Kg), unit: 'tCO₂' },
+          { label: 'Montreal Protocol gases (e.g. HCFC-22)', value: tonnes(o.montrealGasesKg), unit: 'tCO₂e' },
         ],
         missing: total === 0,
+        methodologyNote:
+          'Reported separately from Scopes 1–3 as the GHG Protocol Corporate Standard requires '
+          + '(GRI 305-1(c) and ESRS E1-6 for biogenic CO₂). Not included in any scope total.',
       };
     }
 
@@ -246,6 +316,10 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'GHG emissions intensity (Scope 1+2)',
         value: tonnes(total) / inv.intensityDenominator,
         unit: `tCO₂e per ${inv.intensityDenominatorUnit}`,
+        breakdown: [
+          { label: 'Location-based', value: tonnes(total) / inv.intensityDenominator, unit: `tCO₂e per ${inv.intensityDenominatorUnit}` },
+          { label: 'Market-based', value: tonnes(inv.scope1Kg + inv.scope2MarketKg) / inv.intensityDenominator, unit: `tCO₂e per ${inv.intensityDenominatorUnit}` },
+        ],
         missing: total === 0,
         // Names the denominator explicitly. An intensity figure whose divisor
         // is ambiguous cannot be compared to anyone else's, or to last year's.
@@ -265,18 +339,42 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Total energy consumption',
         value: inv.energyKwh / 1000,
         unit: 'MWh',
-        missing: inv.energyKwh === 0,
+        missing: isMissing(inv.presence?.energy, inv.energyKwh),
         methodologyNote:
           'Electricity and other purchased energy, plus fuel combusted on site converted at '
           + '1 MMBtu = 293.07 kWh (higher heating value, as stored).',
       };
 
     case 'water_consumption':
+      // Withdrawal minus discharge (GRI 303-5, ESRS E3-4). Summing every water
+      // row reported discharges as if they were consumed.
       return {
         label: 'Water consumption',
-        value: inv.waterGallons * M3_PER_US_GALLON,
+        value: inv.waterConsumptionGallons == null ? null : inv.waterConsumptionGallons * M3_PER_US_GALLON,
         unit: 'm³',
-        missing: inv.waterGallons === 0,
+        breakdown: inv.waterConsumptionGallons == null ? undefined : [
+          { label: 'Withdrawal', value: inv.waterWithdrawalGallons * M3_PER_US_GALLON, unit: 'm³' },
+          { label: 'Discharge', value: inv.waterDischargeGallons * M3_PER_US_GALLON, unit: 'm³' },
+        ],
+        missing: inv.waterConsumptionGallons == null,
+        methodologyNote:
+          'Consumption = withdrawal − discharge. Change in water storage is not recorded and is taken as zero.',
+      };
+
+    case 'water_withdrawal':
+      return {
+        label: 'Total water withdrawal',
+        value: inv.waterWithdrawalGallons * M3_PER_US_GALLON,
+        unit: 'm³',
+        missing: isMissing(inv.presence?.waterWithdrawal, inv.waterWithdrawalGallons),
+      };
+
+    case 'water_discharge':
+      return {
+        label: 'Total water discharge',
+        value: inv.waterDischargeGallons * M3_PER_US_GALLON,
+        unit: 'm³',
+        missing: isMissing(inv.presence?.waterDischarge, inv.waterDischargeGallons),
       };
 
     case 'waste_total':
@@ -284,7 +382,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Total waste generated',
         value: tonnes(inv.wasteKg),
         unit: 't',
-        missing: inv.wasteKg === 0,
+        missing: isMissing(inv.presence?.waste, inv.wasteKg),
       };
 
     case 'targets':
@@ -299,7 +397,7 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
           .map((t) => ({
             label: `${t.name} (by ${t.targetYear})`,
             value: t.targetReductionPct as number,
-            unit: '% reduction',
+            unit: t.goalType === 'intensity' ? '% intensity reduction' : '% reduction',
           })),
         missing: inv.targets.length === 0,
       };

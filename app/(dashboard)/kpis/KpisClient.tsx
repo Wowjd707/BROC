@@ -19,6 +19,7 @@ import { fmt, fmtAxis, pctChange, reportingYearRange } from '@/lib/utils';
 import { latestEntryMonth, samePeriodLastYear } from '@/lib/period-compare-core';
 import { useUnits, UnitToggle } from '@/components/layout/UnitPreferences';
 import { formatCarbon, formatWater, formatWaste, formatEnergy, convertForDisplay, unitLabel } from '@/lib/units';
+import { waterWithdrawal } from '@/lib/water-core';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -84,6 +85,8 @@ function totalEmissions(rows: EmissionRow[], method: 'market' | 'location'): num
 }
 
 function totalEhsQty(rows: EhsRow[], metricType: string): number {
+  // Water use is withdrawal; discharges are flows out (lib/water-core.ts).
+  if (metricType === 'water') return waterWithdrawal(rows);
   return rows
     .filter(r => r.metric_type === metricType)
     .reduce((sum, r) => sum + (r.quantity_normalized ?? 0), 0);
@@ -485,7 +488,7 @@ export function KpisClient({
             comparedTo={emCmp.label}
           />
           <KpiCard
-            label="Total Water Use"
+            label="Water Withdrawal"
             value={formatWater(curWater, units)}
             change={priorWater > 0 ? pctChange(curWater, priorWater) : undefined}
             comparedTo={ehsCmp.label}
@@ -736,7 +739,7 @@ export function KpisClient({
               vs: emCmp.label,
             },
             {
-              label: 'Water Consumption',
+              label: 'Water Withdrawal',
               cur: formatWater(curWater, units),
               prior: formatWater(priorWater, units),
               chg: priorWater > 0 ? lowerIsBetter(pctChange(curWater, priorWater)) : null,

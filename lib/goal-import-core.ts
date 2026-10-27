@@ -291,8 +291,9 @@ export function mapGoalRow(
     targetValue = reductionPct;
     targetUnit = 'pct_reduction';
   } else if (reductionPct !== null) {
-    // intensity and net_zero carry their target differently; storing a
-    // percentage against them would be read as something it is not.
+    // An intensity goal's percentage is a reduction in the RATIO. It is kept as
+    // entered and never applied to absolute emissions: goalTargetValue returns
+    // null for intensity goals (lib/goal-metrics.ts).
     targetValue = reductionPct;
     targetUnit = 'pct_reduction';
   }

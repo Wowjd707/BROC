@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useTransition } from 'react';
+import { isSiteKeyed } from '@/lib/custom-factors-core';
 import { releaseEvidence } from '@/components/evidence/release-evidence';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -39,6 +40,12 @@ interface Props {
 const CATEGORY_META: Record<string, { label: string; unit: string; keyLabel: string; badge: 'default' | 'secondary' | 'blue' }> = {
   scope1:          { label: 'Scope 1 fuel',        unit: 'MMBtu', keyLabel: 'Fuel type',    badge: 'default' },
   scope2_location: { label: 'Scope 2 grid (site)', unit: 'kWh',   keyLabel: 'Site',         badge: 'blue' },
+  // Market-based Scope 2 for a site with no contract, e.g. the Green-e
+  // residual mix for its eGRID subregion. Without one, market-based uses the
+  // grid average and the report discloses it.
+  scope2_residual: { label: 'Scope 2 residual mix (site)', unit: 'kWh', keyLabel: 'Site',    badge: 'blue' },
+  // Purchased heat or steam, from the supplier. Required for district heating.
+  scope2_heat:     { label: 'Scope 2 heat/steam (site)', unit: 'kWh', keyLabel: 'Site', badge: 'blue' },
   refrigerant:     { label: 'Refrigerant GWP',     unit: 'kg',    keyLabel: 'Refrigerant',  badge: 'secondary' },
 };
 
@@ -91,7 +98,7 @@ export function FactorsClient({
 
   function keyLabelFor(f: { factor_category: string; factor_key: string; label: string | null }): string {
     if (f.label) return f.label;
-    if (f.factor_category === 'scope2_location') return siteName.get(f.factor_key) ?? f.factor_key;
+    if (isSiteKeyed(f.factor_category)) return siteName.get(f.factor_key) ?? f.factor_key;
     return toTitleCase(f.factor_key);
   }
 

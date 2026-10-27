@@ -157,8 +157,8 @@ export interface PipelineSummary {
 /**
  * Summarise a pipeline for a reporting year: the reductions still to come.
  *
- * `cancelled` projects are excluded. `idea`-stage projects are excluded by
- * default, since an unapproved idea should not count toward a target.
+ * `cancelled` projects, and projects whose `pipeline_inclusion_status` is
+ * `excluded`, are left out. `idea`-stage projects are excluded by default, since an unapproved idea should not count toward a target.
  * `completed` projects are excluded by default too: their savings are already
  * in the measured emissions, so counting them here as well added them twice —
  * once in "achieved" (base minus current) and again as "pipeline" — and
@@ -173,15 +173,33 @@ export function summarisePipeline(
   projects: PipelineProject[],
   year: number,
   fyStart: number = 1,
-  options: { includeIdeas?: boolean; includeCompleted?: boolean; metric?: PipelineMetric } = {},
+  options: {
+    includeIdeas?: boolean;
+    includeCompleted?: boolean;
+    /**
+     * Keep completed projects whose completion date falls after this date
+     * (the end of the latest measured year). Their savings are not yet in any
+     * measured figure, so dropping them left them in neither "achieved" nor
+     * "pipeline" and understated coverage.
+     */
+    completedAfter?: string;
+    metric?: PipelineMetric;
+  } = {},
 ): PipelineSummary {
   const metric = options.metric ?? 'ghg';
+
+  const keepCompleted = (p: PipelineProject) =>
+    options.includeCompleted
+    || (options.completedAfter != null && p.completion_date != null && p.completion_date > options.completedAfter);
 
   const eligible = projects.filter(
     (p) =>
       p.status !== 'cancelled' &&
+      // 'excluded' means the project's savings count for nothing, as the
+      // project import documents. It was ignored here.
+      p.pipeline_inclusion_status !== 'excluded' &&
       (options.includeIdeas ? true : p.status !== 'idea') &&
-      (options.includeCompleted ? true : p.status !== 'completed'),
+      (p.status !== 'completed' || keepCompleted(p)),
   );
 
   const prorated = eligible.map((p) => prorateProject(p, year, fyStart, metric));

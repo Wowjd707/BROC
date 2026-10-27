@@ -4,13 +4,16 @@ import {
   searchCBAMCommodities,
   findCBAMCommodityByCN,
   calculateCBAM,
+  directEmissionsOnly,
   type CBAMCommodity,
 } from './cbam-data';
 
 describe('CBAM commodity reference data', () => {
-  it('carries a positive default factor and a unit for every commodity', () => {
+  it('carries a unit for every commodity and ships no default values', () => {
+    // Regression: "default factors" cited to an annex that holds none, and
+    // that did not match the Commission's published defaults.
     for (const c of CBAM_COMMODITIES) {
-      expect(c.defaultFactor).toBeGreaterThan(0);
+      expect('defaultFactor' in c).toBe(false);
       expect(['tonne', 'MWh']).toContain(c.unit);
       expect(c.cnCode).toBeTruthy();
       expect(c.name).toBeTruthy();
@@ -57,7 +60,6 @@ describe('calculateCBAM', () => {
     cnCode: '7208',
     name: 'Hot-rolled steel',
     sector: 'Iron & Steel',
-    defaultFactor: 2.123,
     unit: 'tonne',
   };
 
@@ -94,7 +96,6 @@ describe('calculateCBAM', () => {
       cnCode: '2716 00',
       name: 'Electrical energy',
       sector: 'Electricity',
-      defaultFactor: 0.501,
       unit: 'MWh',
     };
     const r = calculateCBAM({
@@ -107,5 +108,15 @@ describe('calculateCBAM', () => {
     });
     expect(r.quantityTonnes).toBe(1000); // MWh not divided
     expect(r.totalTCO2e).toBeCloseTo(501, 4);
+  });
+});
+
+describe('directEmissionsOnly', () => {
+  it('limits iron and steel, aluminium and hydrogen to direct emissions (Reg. 2023/956 Annex II)', () => {
+    expect(directEmissionsOnly('Iron & Steel')).toBe(true);
+    expect(directEmissionsOnly('Aluminium')).toBe(true);
+    expect(directEmissionsOnly('Hydrogen')).toBe(true);
+    expect(directEmissionsOnly('Cement')).toBe(false);
+    expect(directEmissionsOnly('Fertilisers')).toBe(false);
   });
 });

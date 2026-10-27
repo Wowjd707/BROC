@@ -25,8 +25,9 @@ import {
 import { summarisePipeline, gapToTarget, type PipelineProject, type PipelineMetric } from '@/lib/pipeline';
 import {
   GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY,
-  asGoalMetric, computeGoalProgress, progressColor, type GoalMetric,
+  asGoalMetric, computeGoalProgress, progressColor, scopeTotals, goalGhgValue, type GoalMetric,
 } from '@/lib/goal-metrics';
+import { waterWithdrawal } from '@/lib/water-core';
 import { SCOPE1_CATEGORY_LABELS } from '@/lib/emission-factor-types';
 import { TrendingDown, TrendingUp, Minus, Info, ArrowUpRight } from 'lucide-react';
 
@@ -48,7 +49,7 @@ interface PriorEmissionRow { scope: string; co2e_kg: number; co2e_kg_location_ba
 // site_id is nullable: entity-level governance metrics (board composition,
 // confirmed corruption incidents) belong to the organization, not a site.
 interface EhsRow { metric_type: string; source_type: string; quantity_normalized: number; unit_normalized: string; site_id: string | null; entry_date: string; }
-interface PriorEhsRow { metric_type: string; quantity_normalized: number; entry_date: string; }
+interface PriorEhsRow { metric_type: string; source_type: string | null; quantity_normalized: number; entry_date: string; }
 interface Site {
   ownership_percent?: number | null;
   is_controlled?: boolean | null; id: string; name: string; floor_area_sqft: number | null; }
@@ -63,6 +64,7 @@ interface Goal {
   target_year: number;
   target_value: number | null;
   progress_pct: number | null;
+  scope: string | null;
   scope2_accounting_method: string;
 }
 type Project = PipelineProject;
@@ -276,8 +278,9 @@ export function DashboardClient({
     const totalCur   = scope1Cur + scope2Cur;
     const totalPrior = scope1Prior + scope2Prior;
 
-    const waterCur   = curEhs.filter((e) => e.metric_type === 'water').reduce((s, e) => s + e.quantity_normalized, 0);
-    const waterPrior = ehsCmp.prior.filter((e) => e.metric_type === 'water').reduce((s, e) => s + e.quantity_normalized, 0);
+    // Water use is withdrawal: discharges are flows out (lib/water-core.ts).
+    const waterCur   = waterWithdrawal(curEhs);
+    const waterPrior = waterWithdrawal(ehsCmp.prior);
 
     const wasteAll     = curEhs.filter((e) => e.metric_type === 'waste');
     const wasteTotal   = wasteAll.reduce((s, e) => s + e.quantity_normalized, 0);
@@ -424,7 +427,8 @@ export function DashboardClient({
       (sum, e) => sum + (e.scope === 'scope2' ? scope2Kg(e, scope2Method) : e.co2e_kg), 0);
     const ehsPrior = (metric: string) => {
       const rows = priorEhs.filter((e) => e.metric_type === metric);
-      return rows.length === 0 ? null : rows.reduce((sum, e) => sum + e.quantity_normalized, 0);
+      if (rows.length === 0) return null;
+      return metric === 'water' ? waterWithdrawal(rows) : rows.reduce((sum, e) => sum + e.quantity_normalized, 0);
     };
     const hasCur = (metric: string) => curEhs.some((e) => e.metric_type === metric);
     const hasCurGhg = curEmissions.some((e) => e.scope === 'scope1' || e.scope === 'scope2');
@@ -463,10 +467,23 @@ export function DashboardClient({
   const goalsForMetric = activeGoalMetric ? goalsByMetric[activeGoalMetric] : [];
   const selectedGoal = goalsForMetric[Math.min(goalIndex, goalsForMetric.length - 1)];
 
+  // A GHG goal is measured on its own scope and Scope 2 method, from the same
+  // year the headline measurement uses (lib/goal-metrics.ts). Rows are
+  // already boundary-adjusted above.
+  const measuredGhgTotals = useMemo(() => {
+    const m = goalMeasurements.ghg;
+    if (!m) return null;
+    return scopeTotals(m.year === priorYear ? priorEmissions : curEmissions);
+  }, [goalMeasurements.ghg, priorYear, priorEmissions, curEmissions]);
+
   const selectedGoalProgress = useMemo(() => {
     if (!selectedGoal) return null;
-    return computeGoalProgress(selectedGoal, currentByMetric[asGoalMetric(selectedGoal.metric)]);
-  }, [selectedGoal, currentByMetric]);
+    const metric = asGoalMetric(selectedGoal.metric);
+    const current = metric === 'ghg' && measuredGhgTotals
+      ? goalGhgValue(measuredGhgTotals, selectedGoal.scope, selectedGoal.scope2_accounting_method ?? 'market_based')
+      : currentByMetric[metric];
+    return computeGoalProgress(selectedGoal, current);
+  }, [selectedGoal, currentByMetric, measuredGhgTotals]);
 
   // ── Pipeline summaries, one per metric ───────────────────────────────────
   // Savings are annualised rates; a project going live mid-year only delivers
@@ -708,7 +725,7 @@ export function DashboardClient({
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <KpiCard
-          title="Water Consumption"
+          title="Water Withdrawal"
           value={formatWater(kpis.waterCur, units)}
           change={{ ...waterChange, direction: waterChange.direction === 'up' ? 'up' : waterChange.direction === 'down' ? 'down' : 'flat' }}
           comparedTo={kpis.ehsVs}

@@ -49,27 +49,32 @@ export function aggregateMetricValues(
 ): number | null {
   if (values.length === 0) return null;
 
-  if (aggregation === 'sum') {
-    return values.reduce((s, v) => s + v.value, 0);
-  }
-
-  // Latest reading per site. A null site is its own bucket — the organization
-  // -wide figure — so an org-level headcount and three site-level ones do not
-  // silently collapse into each other.
-  const latestPerSite = new Map<string, BusinessMetricValue>();
+  // Bucket by site; a null site is the organization-wide bucket.
+  const buckets = new Map<string, BusinessMetricValue[]>();
   for (const v of values) {
     const key = v.site_id ?? '__org__';
-    const held = latestPerSite.get(key);
-    const heldDate = held?.as_of_date ?? '';
-    const thisDate = v.as_of_date ?? '';
-    if (!held || thisDate > heldDate) latestPerSite.set(key, v);
+    const list = buckets.get(key) ?? [];
+    list.push(v);
+    buckets.set(key, list);
   }
-  const latest = Array.from(latestPerSite.values());
 
-  if (aggregation === 'average') {
-    return latest.reduce((s, v) => s + v.value, 0) / latest.length;
-  }
-  return latest.reduce((s, v) => s + v.value, 0);
+  // One figure per bucket: the latest reading for a point-in-time metric, the
+  // mean of the period's readings for an average (average headcount over the
+  // year, not an average across sites, which means nothing as a denominator).
+  const perBucket = (list: BusinessMetricValue[]): number => {
+    if (aggregation === 'sum') return list.reduce((s, v) => s + v.value, 0);
+    if (aggregation === 'average') return list.reduce((s, v) => s + v.value, 0) / list.length;
+    return list.reduce((latest, v) => ((v.as_of_date ?? '') > (latest.as_of_date ?? '') ? v : latest)).value;
+  };
+
+  // An organization-wide figure (null site, migration 027) IS the total; site
+  // figures are its parts. Adding both counted the organization twice. The stated total wins; the
+  // sum of sites is used only when no organization-wide figure exists.
+  const org = buckets.get('__org__');
+  if (org) return perBucket(org);
+  let total = 0;
+  for (const list of buckets.values()) total += perBucket(list);
+  return total;
 }
 
 export interface ResolvedDenominator {

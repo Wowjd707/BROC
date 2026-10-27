@@ -25,10 +25,10 @@
  * Pure and dependency-free so it is unit-testable.
  */
 
-import type { CustomFactorCategory } from './custom-factors-core';
+import { isSiteKeyed, type CustomFactorCategory } from './custom-factors-core';
 
 export const CUSTOM_FACTOR_CATEGORIES: readonly CustomFactorCategory[] = [
-  'scope1', 'scope2_location', 'refrigerant',
+  'scope1', 'scope2_location', 'scope2_residual', 'scope2_heat', 'refrigerant',
 ] as const;
 
 /**
@@ -38,6 +38,8 @@ export const CUSTOM_FACTOR_CATEGORIES: readonly CustomFactorCategory[] = [
 export const CATEGORY_UNIT: Record<CustomFactorCategory, string> = {
   scope1: 'MMBtu',
   scope2_location: 'kWh',
+  scope2_residual: 'kWh',
+  scope2_heat: 'kWh',
   refrigerant: 'kg',
 };
 
@@ -45,6 +47,8 @@ export const CATEGORY_UNIT: Record<CustomFactorCategory, string> = {
 const CATEGORY_KEY_LABEL: Record<CustomFactorCategory, string> = {
   scope1: 'fuel type',
   scope2_location: 'site name',
+  scope2_residual: 'site name',
+  scope2_heat: 'site name',
   refrigerant: 'refrigerant code',
 };
 
@@ -104,7 +108,7 @@ export interface FactorKeyLookups {
   fuelTypes: ReadonlyMap<string, string>;
   /** refrigerant_code → refrigerant_code, from `refrigerant_factors`. */
   refrigerantCodes: ReadonlyMap<string, string>;
-  /** Site name → site **id**: the stored key for scope2_location is the id. */
+  /** Site name → site **id**: the stored key for every site-keyed category is the id. */
   siteIdByName: ReadonlyMap<string, string>;
 }
 
@@ -221,10 +225,10 @@ function resolveFactorKey(
   raw: string,
   lookups: FactorKeyLookups,
 ): { ok: true; key: string } | { ok: false; error: string } {
-  if (category === 'scope2_location') {
+  if (isSiteKeyed(category)) {
     const siteId = resolveKey(lookups.siteIdByName, raw);
     if (!siteId) {
-      return { ok: false, error: `No active site named "${raw}". Site grid factors are keyed to a site, so the name must match one of your sites.` };
+      return { ok: false, error: `No active site named "${raw}". Site-level Scope 2 factors are keyed to a site, so the name must match one of your sites.` };
     }
     return { ok: true, key: siteId };
   }

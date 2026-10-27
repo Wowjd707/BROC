@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { fmtCO2e, fmtFactor, perUnit, todayLocal } from '@/lib/utils';
 import {
-  METHOD_LABELS, defaultDataQuality, unitsCompatible,
+  METHOD_LABELS, defaultDataQuality, unitsCompatible, activityToFactorUnit,
   type Scope3Method, type DataQuality,
 } from '@/lib/scope3';
 import type { Scope3Category, Scope3Factor } from '@/lib/supabase/types';
@@ -133,8 +133,10 @@ export function Scope3Drawer({
   const unitMismatch = Boolean(
     activityUnit && effectiveFactorUnit && !unitsCompatible(activityUnit, effectiveFactorUnit),
   );
-  const preview = (!isNaN(qty) && effectiveFactorValue != null && !unitMismatch)
-    ? qty * effectiveFactorValue
+  // The same conversion the server applies (tonnes → kg, miles → km).
+  const conversion = activityUnit && effectiveFactorUnit ? activityToFactorUnit(activityUnit, effectiveFactorUnit) : null;
+  const preview = (!isNaN(qty) && effectiveFactorValue != null && !unitMismatch && conversion != null)
+    ? qty * conversion * effectiveFactorValue
     : null;
 
   function validate() {
@@ -403,6 +405,11 @@ export function Scope3Drawer({
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3">
               <p className="text-xs text-emerald-600 font-medium mb-0.5">Estimated CO₂e</p>
               <p className="text-lg font-semibold text-emerald-800">{fmtCO2e(preview)}</p>
+              {conversion != null && conversion !== 1 && (
+                <p className="text-xs text-emerald-600 mt-0.5">
+                  {activityValue} {activityUnit} = {(qty * conversion).toLocaleString('en-US', { maximumFractionDigits: 4 })} {effectiveFactorUnit}
+                </p>
+              )}
               <p className="text-[11px] text-emerald-600/80 mt-1">Final value is calculated and stored on save.</p>
             </div>
           )}

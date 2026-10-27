@@ -18,7 +18,7 @@ import { getUnitsForSource, normalizeEmissionInput } from '@/lib/conversions';
 import { fmtCO2e, fmt, todayLocal } from '@/lib/utils';
 import { Info } from 'lucide-react';
 
-interface Site { id: string; name: string; zip_code: string | null; }
+interface Site { id: string; name: string; zip_code: string | null; country?: string | null; }
 interface RefrigerantFactor { refrigerant_code: string; refrigerant_name: string; gwp_100_year: number; }
 
 interface Props {
@@ -60,40 +60,59 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
 
   const isRefrigerant = sourceType === 'refrigerants';
   const sourceOptions = scope === 'scope1' ? SCOPE1_SOURCE_TYPES : SCOPE2_SOURCE_TYPES;
-  const isElectricity = sourceType === 'electricity' && scope === 'scope2';
+  // Grid electricity, bought on contract or not. Purchased renewables are a
+  // market-based claim, so they always take the contractual path.
+  const isElectricity = scope === 'scope2' && (sourceType === 'electricity' || sourceType === 'renewable_purchased');
+  const isPurchasedRenewable = scope === 'scope2' && sourceType === 'renewable_purchased';
+  const effectiveMethod: 'location_based' | 'market_based' = isPurchasedRenewable ? 'market_based' : accountingMethod;
 
-  // Fetch the location-based factor when a Scope 2 electricity site is chosen.
-  // The fetched value is only USED while that is still the selection (see
-  // `shownLocationFactor`), so nothing has to be reset synchronously here.
+  // Preview the location-based factor for a US site from the reference table:
+  // its ZIP, else the US national average. A site outside the US, or with an
+  // organization grid factor, is priced on save (the server applies custom
+  // factors first). There is deliberately no built-in number here: a
+  // hard-coded fallback drifts from the table it claims to mirror.
+  const selectedSite = sites.find((s) => s.id === siteId);
+  const siteCountry = (selectedSite?.country ?? '').trim().toLowerCase();
+  const siteIsUs = !siteCountry || ['usa', 'us', 'united states', 'united states of america'].includes(siteCountry);
+
   useEffect(() => {
-    if (!isElectricity) return;
+    if (!isElectricity || !siteIsUs) return;
     const site = sites.find((s) => s.id === siteId);
     if (!site) return;
 
     let cancelled = false;
     async function fetchFactor() {
+      const supabase = createClient();
       const zip = site!.zip_code;
       if (zip) {
-        const { data } = await createClient()
+        const { data } = await supabase
           .from('scope2_emission_factors')
-          .select('co2e_factor, factor_source, geographic_identifier')
+          .select('co2e_factor, factor_source')
           .eq('factor_type', 'electricity')
           .eq('geographic_scope', 'zip_code')
           .eq('geographic_identifier', zip)
           .limit(1)
           .maybeSingle();
         if (cancelled) return;
-        if (data) { setLocationFactor(data.co2e_factor); setFactorSource(data.factor_source); return; }
+        if (data) { setLocationFactor(Number(data.co2e_factor)); setFactorSource(`${data.factor_source} (ZIP ${zip})`); return; }
       }
+      const { data: national } = await supabase
+        .from('scope2_emission_factors')
+        .select('co2e_factor, factor_source')
+        .eq('factor_type', 'electricity')
+        .eq('geographic_scope', 'national_average')
+        .eq('geographic_identifier', 'US')
+        .limit(1)
+        .maybeSingle();
       if (cancelled) return;
-      // Fallback national average
-      setLocationFactor(0.386); setFactorSource('eGRID2023 (national average)');
+      if (national) { setLocationFactor(Number(national.co2e_factor)); setFactorSource(`${national.factor_source} (US national average)`); }
+      else { setLocationFactor(null); setFactorSource(''); }
     }
     void fetchFactor();
     return () => { cancelled = true; };
-  }, [siteId, isElectricity, sites]);
+  }, [siteId, isElectricity, siteIsUs, sites]);
 
-  const shownLocationFactor = isElectricity && siteId ? locationFactor : null;
+  const shownLocationFactor = isElectricity && siteId && siteIsUs ? locationFactor : null;
 
   // Changing scope resets the source and everything derived from it; changing
   // the source picks its default unit and pre-selects the likely Scope 1
@@ -124,13 +143,20 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
     try {
       const { quantityNormalized } = normalizeEmissionInput(q, unit, scope, sourceType);
 
+      if (scope === 'scope2' && sourceType === 'renewable_generated') {
+        return { co2e: 0, label: 'Generated and used on site: no Scope 2 emissions' };
+      }
       if (scope === 'scope2' && isElectricity) {
-        const factor = accountingMethod === 'market_based' && supplierFactor
-          ? parseFloat(supplierFactor)
-          : (shownLocationFactor ?? 0.386);
+        // Market-based with a contract: the contractual factor. Otherwise the
+        // location-based figure; the market-based one (residual mix, or grid
+        // average where none exists) is worked out on save.
+        const factor = effectiveMethod === 'market_based'
+          ? (supplierFactor ? parseFloat(supplierFactor) : NaN)
+          : (shownLocationFactor ?? NaN);
         if (isNaN(factor)) return null;
         const co2e = quantityNormalized * factor;
-        return { co2e, label: `${fmt(quantityNormalized)} kWh × ${factor} kg CO₂e/kWh` };
+        const basis = effectiveMethod === 'market_based' ? 'market-based' : 'location-based';
+        return { co2e, label: `${fmt(quantityNormalized)} kWh × ${factor} kg CO₂e/kWh (${basis})` };
       }
       if (isRefrigerant) {
         const rf = refrigerantFactors.find((r) => r.refrigerant_code === refrigerantCode);
@@ -143,7 +169,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
     } catch {
       return null;
     }
-  }, [quantity, unit, sourceType, scope, isElectricity, accountingMethod, supplierFactor, shownLocationFactor, isRefrigerant, refrigerantCode, refrigerantFactors]);
+  }, [quantity, unit, sourceType, scope, isElectricity, effectiveMethod, supplierFactor, shownLocationFactor, isRefrigerant, refrigerantCode, refrigerantFactors]);
 
   function validate() {
     const e: Record<string, string> = {};
@@ -154,6 +180,9 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
     if (!unit)       e.unit       = 'Select a unit.';
     if (!entryDate)  e.entryDate  = 'Select a date.';
     if (isRefrigerant && !refrigerantCode) e.refrigerantCode = 'Select refrigerant type.';
+    if (isElectricity && effectiveMethod === 'market_based' && (supplierFactor === '' || isNaN(parseFloat(supplierFactor)))) {
+      e.supplierFactor = 'Enter the contractual factor (0 for certificates retired on your behalf).';
+    }
     if (scope === 'scope1' && !scope1Category) {
       e.scope1Category = 'Select a source category — frameworks require Scope 1 split by category.';
     }
@@ -180,7 +209,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
         quantity: parseFloat(quantity),
         unit,
         entryDate,
-        accountingMethod,
+        accountingMethod: effectiveMethod,
         instrumentType: instrumentType || undefined,
         supplierFactor: supplierFactor ? parseFloat(supplierFactor) : undefined,
         dataQuality,
@@ -305,8 +334,24 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
             </div>
           )}
 
+          {/* Scope 2 source notes */}
+          {scope === 'scope2' && sourceType === 'renewable_generated' && (
+            <p className="text-xs text-gray-500 flex gap-1">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              Electricity generated and used on site carries no Scope 2 emissions; it is recorded for
+              energy totals. If its certificates were sold, enter it as grid electricity instead.
+            </p>
+          )}
+          {scope === 'scope2' && sourceType === 'district_heating' && (
+            <p className="text-xs text-gray-500 flex gap-1">
+              <Info size={12} className="mt-0.5 shrink-0" />
+              Priced at this site&apos;s heat or steam supplier factor — add it as a &ldquo;Scope 2 heat/steam
+              (site)&rdquo; custom factor on the Emission factors page. An electricity grid factor does not apply.
+            </p>
+          )}
+
           {/* Scope 2 accounting method toggle */}
-          {isElectricity && (
+          {isElectricity && !isPurchasedRenewable && (
             <div>
               <Label>Accounting method</Label>
               <div className="flex gap-2">
@@ -320,17 +365,30 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
                   </button>
                 ))}
               </div>
+              {siteId && !siteIsUs && (
+                <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
+                  <Info size={11} />
+                  Outside the US: priced on save from this site&apos;s grid factor. Add a &ldquo;Scope 2 grid
+                  (site)&rdquo; custom factor on the Emission factors page if it has none.
+                </p>
+              )}
               {shownLocationFactor !== null && (
                 <p className="text-xs text-gray-400 mt-1.5 flex items-center gap-1">
                   <Info size={11} />
                   Location factor: {shownLocationFactor} kg CO₂e/kWh ({factorSource})
                 </p>
               )}
+              {accountingMethod === 'location_based' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Both figures are stored. Without a contract, the market-based figure uses the residual
+                  mix for the site&apos;s market, or the grid average where none exists (disclosed in reports).
+                </p>
+              )}
             </div>
           )}
 
           {/* Market-based instrument + factor */}
-          {isElectricity && accountingMethod === 'market_based' && (
+          {isElectricity && effectiveMethod === 'market_based' && (
             <div className="space-y-3 pl-3 border-l-2 border-emerald-200">
               <div>
                 <Label>Instrument type</Label>
@@ -345,19 +403,24 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
                 </Select>
               </div>
               <div>
-                <Label>Supplier / contractual emission factor (kg CO₂e/kWh)</Label>
+                <Label required>Supplier / contractual emission factor (kg CO₂e/kWh)</Label>
                 <Input
                   type="number"
                   step="0.001"
-                  placeholder="e.g. 0.0 for renewable PPA"
+                  min="0"
+                  placeholder="e.g. 0 for certificates retired on your behalf"
                   value={supplierFactor}
                   onChange={(e) => setSupplierFactor(e.target.value)}
+                  error={errors.supplierFactor}
                 />
-                {!supplierFactor && (
-                  <p className="text-xs text-amber-600 mt-1">
-                    Using US residual mix (0.455 kg CO₂e/kWh) — update when contractual factor is available.
-                  </p>
-                )}
+                {errors.supplierFactor
+                  ? <p className="text-xs text-red-600 mt-1">{errors.supplierFactor}</p>
+                  : (
+                    <p className="text-xs text-gray-400 mt-1">
+                      From the supplier disclosure, PPA or certificate. Note the contract or certificate
+                      reference in Notes so the claim can be traced.
+                    </p>
+                  )}
               </div>
             </div>
           )}
