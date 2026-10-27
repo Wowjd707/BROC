@@ -4,6 +4,7 @@ import { loadEvidenceCounts } from '@/lib/evidence';
 import { reportingYearRange } from '@/lib/utils';
 import { summarisePipeline } from '@/lib/pipeline';
 import { activeOrg } from '@/lib/active-org';
+import { fetchAll } from '@/lib/fetch-all';
 import { goalMeasurement, type GoalMeasurement } from '@/lib/goal-period-core';
 
 export default async function GoalsPage() {
@@ -38,34 +39,34 @@ export default async function GoalsPage() {
       .from('goals')
       .select('*')
       .order('created_at', { ascending: false }),
-    supabase
+    fetchAll((from, to) => supabase
       .from('emission_entries')
       .select('scope, co2e_kg, co2e_kg_location_based, accounting_method')
       .gte('entry_date', curStart)
       .lte('entry_date', curEnd)
-      .is('deleted_at', null),
-    supabase
+      .is('deleted_at', null).order('id').range(from, to)),
+    fetchAll((from, to) => supabase
       .from('ehs_entries')
       .select('metric_type, quantity_normalized')
       .gte('entry_date', curStart)
       .lte('entry_date', curEnd)
-      .is('deleted_at', null),
+      .is('deleted_at', null).order('id').range(from, to)),
     supabase
       .from('projects')
       .select('id, name, status, pipeline_inclusion_status, estimated_co2e_reduction_kg_per_year, actual_co2e_reduction_kg_per_year, estimated_water_reduction_gal_per_year, actual_water_reduction_gal_per_year, estimated_waste_reduction_kg_per_year, actual_waste_reduction_kg_per_year, start_date, completion_date')
       .in('status', ['approved', 'in_progress', 'completed']),
-    supabase
+    fetchAll((from, to) => supabase
       .from('emission_entries')
       .select('scope, co2e_kg, co2e_kg_location_based, accounting_method')
       .gte('entry_date', prevStart)
       .lte('entry_date', prevEnd)
-      .is('deleted_at', null),
-    supabase
+      .is('deleted_at', null).order('id').range(from, to)),
+    fetchAll((from, to) => supabase
       .from('ehs_entries')
       .select('metric_type, quantity_normalized')
       .gte('entry_date', prevStart)
       .lte('entry_date', prevEnd)
-      .is('deleted_at', null),
+      .is('deleted_at', null).order('id').range(from, to)),
   ]);
 
   type EmRow = { scope: string; co2e_kg: number; co2e_kg_location_based: number | null };

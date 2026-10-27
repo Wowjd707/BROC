@@ -5,6 +5,7 @@ import { reportingYearRange } from '@/lib/utils';
 import { summarisePipeline } from '@/lib/pipeline';
 import { asGoalMetric } from '@/lib/goal-metrics';
 import { activeOrg } from '@/lib/active-org';
+import { fetchAll } from '@/lib/fetch-all';
 import { goalMeasurement } from '@/lib/goal-period-core';
 import { evidenceOrganizationId, loadEvidenceCounts } from '@/lib/evidence';
 
@@ -48,12 +49,14 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
     const { startDate, endDate } = reportingYearRange(y, fyStart);
 
     if (metric === 'ghg') {
-      const { data: emRows } = await supabase
+      const { data: emRows } = await fetchAll((from, to) => supabase
         .from('emission_entries')
         .select('scope, co2e_kg, co2e_kg_location_based, accounting_method')
         .gte('entry_date', startDate)
         .lte('entry_date', endDate)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to));
 
       const method = goal.scope2_accounting_method ?? 'market_based';
       const total = (emRows ?? []).reduce((sum: number, r) => {
@@ -70,13 +73,15 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
       // read as "we emitted nothing" rather than "we did not measure".
       yearlyData.push({ year: y, actualValue: emRows && emRows.length > 0 ? total : null });
     } else {
-      const { data: ehsRows } = await supabase
+      const { data: ehsRows } = await fetchAll((from, to) => supabase
         .from('ehs_entries')
         .select('metric_type, quantity_normalized')
         .eq('metric_type', metric)
         .gte('entry_date', startDate)
         .lte('entry_date', endDate)
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .order('id')
+        .range(from, to));
 
       const total = (ehsRows ?? []).reduce((sum, r) => sum + r.quantity_normalized, 0);
       yearlyData.push({ year: y, actualValue: ehsRows && ehsRows.length > 0 ? total : null });

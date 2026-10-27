@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import {
-  CBAM_COMMODITIES, CBAM_COUNTRIES, SECTOR_COLORS, DEFAULT_CERTIFICATE_PRICE_EUR,
+  CBAM_COMMODITIES, CBAM_COUNTRIES, SECTOR_COLORS,
   searchCBAMCommodities, calculateCBAM,
   type CBAMCommodity,
 } from '@/lib/cbam-data';
@@ -245,7 +245,10 @@ export function CBAMCalculatorClient({
   const [massUnit, setMassUnit] = useState<'kg' | 'tonnes'>('tonnes');
   const [factorMode, setFactorMode] = useState<'eu_default' | 'supplier_provided'>('eu_default');
   const [customFactor, setCustomFactor] = useState('');
-  const [certPrice, setCertPrice] = useState(String(DEFAULT_CERTIFICATE_PRICE_EUR));
+  // No default price. A built-in figure goes stale within weeks and then
+  // silently prices every estimate; the user enters the price they are using.
+  const [certPrice, setCertPrice] = useState('');
+  const priceEntered = parseFloat(certPrice) > 0;
 
   // Save calculation extras
   const [calcNotes, setCalcNotes] = useState('');
@@ -275,7 +278,7 @@ export function CBAMCalculatorClient({
   const result = useMemo(() => {
     if (!commodity || !quantity || !country || activeFactor === null) return null;
     const qty = parseFloat(quantity);
-    const price = parseFloat(certPrice) || DEFAULT_CERTIFICATE_PRICE_EUR;
+    const price = parseFloat(certPrice) > 0 ? parseFloat(certPrice) : 0;
     if (isNaN(qty) || qty <= 0) return null;
     return calculateCBAM({
       commodity,
@@ -297,9 +300,10 @@ export function CBAMCalculatorClient({
 
   async function handleSaveCalc() {
     if (!result || !commodity) return;
+    if (!priceEntered) { flash('Enter the certificate price you are using before saving.', true); return; }
     setError('');
     const qty = parseFloat(quantity);
-    const price = parseFloat(certPrice) || DEFAULT_CERTIFICATE_PRICE_EUR;
+    const price = parseFloat(certPrice);
 
     const row: TablesInsert<'cbam_calculations'> = {
       organization_id: organizationId,
@@ -729,14 +733,15 @@ export function CBAMCalculatorClient({
                       step="0.01"
                       value={certPrice}
                       onChange={(e) => setCertPrice(e.target.value)}
-                      placeholder="55.00"
+                      placeholder="Price"
                       className="w-36"
                     />
                     <span className="text-sm text-gray-500">per tCO₂e</span>
                   </div>
                   <p className="text-xs text-gray-400 mt-1.5">
-                    Default €{DEFAULT_CERTIFICATE_PRICE_EUR.toFixed(2)} — update to current ETS spot price
-                    (check{' '}
+                    Enter the CBAM certificate price you are using. Certificates are priced from EU ETS
+                    allowance auction prices published by the European Commission, so check the current
+                    figure (for example on the{' '}
                     <a
                       href="https://ember-climate.org/data/carbon-price-viewer/"
                       target="_blank"
@@ -745,7 +750,7 @@ export function CBAMCalculatorClient({
                     >
                       Ember Carbon Price Viewer
                     </a>
-                    ).
+                    ) before relying on an estimate.
                   </p>
                 </CardContent>
               </Card>
@@ -804,13 +809,27 @@ export function CBAMCalculatorClient({
                         {/* Certificate cost */}
                         <div>
                           <p className="text-xs text-gray-500 mb-0.5">
-                            Estimated CBAM Certificate Cost
+                            Gross certificate cost
                           </p>
-                          <p className="text-2xl font-bold text-emerald-700">
-                            €{fmt(result.estimatedCostEur, 2)}
-                          </p>
-                          <p className="text-xs text-gray-400 mt-0.5">
-                            @ €{fmt(parseFloat(certPrice) || DEFAULT_CERTIFICATE_PRICE_EUR, 2)} / tCO₂e
+                          {priceEntered ? (
+                            <>
+                              <p className="text-2xl font-bold text-emerald-700">
+                                €{fmt(result.estimatedCostEur, 2)}
+                              </p>
+                              <p className="text-xs text-gray-400 mt-0.5">
+                                @ €{fmt(parseFloat(certPrice), 2)} / tCO₂e
+                              </p>
+                            </>
+                          ) : (
+                            <p className="text-sm text-gray-400 mt-1">Enter a certificate price (step 4).</p>
+                          )}
+                          {/* Embedded emissions × price is an upper bound, not the bill: the
+                              certificates owed are reduced for EU ETS free allocation still
+                              being phased out and for carbon price paid at origin. */}
+                          <p className="text-[11px] text-gray-400 mt-1 max-w-xs">
+                            Before the adjustment for EU ETS free allocation and for any carbon price paid in
+                            the country of origin (Regulation (EU) 2023/956, Articles 31 and 9), both of which
+                            reduce the certificates actually owed.
                           </p>
                         </div>
                       </div>
@@ -861,7 +880,7 @@ export function CBAMCalculatorClient({
                             className="w-full"
                             size="sm"
                             onClick={handleSaveCalc}
-                            disabled={isPending}
+                            disabled={isPending || !priceEntered}
                           >
                             <Save size={12} className="mr-1.5" />
                             Save Calculation
@@ -891,9 +910,13 @@ export function CBAMCalculatorClient({
                   </p>
                   <p>
                     {fmt(result.totalTCO2e, 3)} tCO₂e
-                    {' × '}€{fmt(parseFloat(certPrice) || DEFAULT_CERTIFICATE_PRICE_EUR, 2)}
-                    {' = '}
-                    <strong>€{fmt(result.estimatedCostEur, 2)}</strong>
+                    {priceEntered ? (
+                      <>
+                        {' × '}€{fmt(parseFloat(certPrice), 2)}
+                        {' = '}
+                        <strong>€{fmt(result.estimatedCostEur, 2)}</strong> gross
+                      </>
+                    ) : ' × certificate price (not entered)'}
                   </p>
                 </div>
               )}

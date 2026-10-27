@@ -10,11 +10,11 @@ import { createClient } from '@/lib/supabase/client';
 import { fmtCO2e } from '@/lib/utils';
 import { calculateSBTiTarget } from '@/lib/calculations';
 import { gapToTarget } from '@/lib/pipeline';
-import { formatMetric } from '@/lib/units';
+import { formatMetric, convertFromDisplay, unitLabel } from '@/lib/units';
 import { GOAL_SCOPE_LABELS } from '@/lib/goal-import-core';
 import { measurementCaption, type GoalMeasurement } from '@/lib/goal-period-core';
 import {
-  GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY, GOAL_METRIC_BASE_UNIT,
+  GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY,
   GOAL_TYPES_BY_METRIC, asGoalMetric, computeGoalProgress, goalBaseline, goalTargetValue,
   progressColor, type GoalMetric,
 } from '@/lib/goal-metrics';
@@ -161,6 +161,12 @@ export function GoalsClient({
     }));
   }
 
+  /** The base-year figure as typed (display unit) → canonical stored unit. */
+  function baseValueCanonical(typed: string): number {
+    const family = GOAL_METRIC_FAMILY[form.metric];
+    return convertFromDisplay(parseFloat(typed), family, units[family]);
+  }
+
   async function handleCreate() {
     if (!form.name.trim()) { setFormError('Name is required'); return; }
     if (!form.base_year) { setFormError('Base year is required'); return; }
@@ -186,7 +192,8 @@ export function GoalsClient({
     };
 
     if (form.base_year_value) {
-      payload.base_year_value = parseFloat(form.base_year_value);
+      // Typed in the user's display unit (t CO₂e, m³, t…); stored canonically.
+      payload.base_year_value = baseValueCanonical(form.base_year_value);
       // base_year_emissions_kg is the GHG-only predecessor column that reports
       // still read. Written in step for GHG goals so the two can never disagree;
       // left null for water and waste, where it would be a unit lie.
@@ -548,17 +555,16 @@ export function GoalsClient({
               </div>
             </div>
             <div>
-              <Label>Base Year Value ({GOAL_METRIC_BASE_UNIT[form.metric]})</Label>
+              <Label>Base Year Value ({unitLabel(GOAL_METRIC_FAMILY[form.metric], units[GOAL_METRIC_FAMILY[form.metric]])})</Label>
               <Input
                 type="number"
                 value={form.base_year_value}
                 onChange={e => setField('base_year_value', e.target.value)}
-                placeholder="Leave blank to use tracked data"
+                placeholder={`Your ${form.base_year || 'base-year'} total`}
               />
               <p className="text-xs text-gray-500 mt-1">
-                Enter in {GOAL_METRIC_BASE_UNIT[form.metric]} — the unit this metric is stored in.
-                Without it no target can be derived and progress falls back to a manually entered
-                percentage.
+                The measured total for the base year, in the unit shown. Without it no target can be
+                derived, and progress falls back to a manually entered percentage.
               </p>
             </div>
             {form.goal_type === 'absolute' && (
@@ -582,7 +588,7 @@ export function GoalsClient({
                   <strong>
                     {fmtCO2e(
                       calculateSBTiTarget(
-                        parseFloat(form.base_year_value),
+                        baseValueCanonical(form.base_year_value),
                         parseInt(form.base_year),
                         parseInt(form.target_year),
                       ).targetEmissionsKg,
@@ -590,7 +596,7 @@ export function GoalsClient({
                   </strong>
                   {' '}(
                   {calculateSBTiTarget(
-                    parseFloat(form.base_year_value),
+                    baseValueCanonical(form.base_year_value),
                     parseInt(form.base_year),
                     parseInt(form.target_year),
                   ).reductionPct.toFixed(1)}

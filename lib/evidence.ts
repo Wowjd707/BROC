@@ -1,5 +1,6 @@
 import 'server-only';
 import { createServerClient } from './supabase/server';
+import { fetchAll } from './fetch-all';
 import {
   countEvidenceByRecord,
   findOrphanedEvidence,
@@ -60,11 +61,16 @@ export async function loadEvidenceCounts(
   const rows: { record_type: string; record_id: string }[] = [];
 
   for (let i = 0; i < ids.length; i += ID_CHUNK) {
-    const { data, error } = await supabase
+    // Paged within each chunk: 150 records with several documents each can
+    // pass the 1,000-row response cap.
+    const chunk = ids.slice(i, i + ID_CHUNK);
+    const { data, error } = await fetchAll((from, to) => supabase
       .from('evidence_attachments')
       .select('record_type, record_id')
       .eq('record_type', recordType)
-      .in('record_id', ids.slice(i, i + ID_CHUNK));
+      .in('record_id', chunk)
+      .order('id')
+      .range(from, to));
     if (error) return {};
     rows.push(...(data ?? []));
   }
@@ -159,11 +165,15 @@ export async function sweepOrphanedEvidence(): Promise<EvidenceRemoval & { orpha
   const orphans: EvidenceRowRef[] = [];
 
   for (const recordType of EVIDENCE_RECORD_TYPES) {
-    const { data: rows } = await supabase
+    // `.limit(10_000)` was capped to 1,000 by the server, so the sweep only
+    // ever checked the first 1,000 attachments of each type.
+    const { data: rows, error: readError } = await fetchAll((from, to) => supabase
       .from('evidence_attachments')
       .select('id, record_type, record_id, storage_path')
       .eq('record_type', recordType)
-      .limit(10_000);
+      .order('id')
+      .range(from, to));
+    if (readError) throw new Error(`Could not read ${recordType} attachments: ${readError.message}`);
     if (!rows || rows.length === 0) continue;
 
     const ids = [...new Set(rows.map((r) => r.record_id))];
@@ -192,8 +202,8 @@ export async function sweepOrphanedEvidence(): Promise<EvidenceRemoval & { orpha
  */
 export async function removeAllEvidenceFilesInActiveOrg(): Promise<number> {
   const supabase = await createServerClient();
-  const { data: rows } = await supabase
-    .from('evidence_attachments').select('storage_path').limit(10_000);
+  const { data: rows } = await fetchAll((from, to) => supabase
+    .from('evidence_attachments').select('storage_path').order('id').range(from, to));
   const paths = (rows ?? []).map((r) => r.storage_path);
   let removed = 0;
   for (let i = 0; i < paths.length; i += ID_CHUNK) {

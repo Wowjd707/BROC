@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/fetch-all';
 import { getInventoryForYear, getProvenanceForYear } from '@/lib/disclosure-metrics';
 import { pickGatingAssessment } from '@/lib/materiality-linkage-core';
 import { getAiStatus } from '@/lib/ai';
@@ -59,9 +60,14 @@ export default async function DisclosuresPage({
     { data: assessments },
   ] = await Promise.all([
     supabase.from('disclosure_frameworks').select('*').eq('is_active', true).order('sort_order'),
-    supabase.from('disclosure_requirements').select('*').order('framework_code').order('sort_order'),
-    supabase.from('disclosure_responses').select('*').eq('reporting_year', curYear),
-    supabase.from('requirement_topics').select('requirement_id, topic_code'),
+    // Paged: the full ESRS requirement set with DR-level detail passes 1,000
+    // rows, and a cut list would show frameworks with requirements missing.
+    fetchAll((from, to) => supabase.from('disclosure_requirements').select('*')
+      .order('framework_code').order('sort_order').order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('disclosure_responses').select('*').eq('reporting_year', curYear)
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('requirement_topics').select('requirement_id, topic_code')
+      .order('requirement_id').order('topic_code').range(from, to)),
     supabase.from('material_topics').select('*').order('sort_order'),
     supabase.from('materiality_assessments').select('*').eq('reporting_year', curYear),
   ]);

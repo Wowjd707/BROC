@@ -588,5 +588,5 @@ export const SECTOR_COLORS: Record<CBAMSector, string> = {
   'Hydrogen':    'bg-purple-100 text-purple-800',
 };
 
-/** Default ETS certificate price (€/tCO₂e). User can override in the calculator. */
-export const DEFAULT_CERTIFICATE_PRICE_EUR = 55.00;
+// No default certificate price is shipped. A hardcoded figure goes stale and
+// then quietly prices every estimate; the calculator asks for the price used.

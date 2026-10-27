@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fmtCO2e, fmtFactor, perUnit } from '@/lib/utils';
+import { fmtCO2e, fmtFactor, perUnit, todayLocal } from '@/lib/utils';
 import {
   METHOD_LABELS, defaultDataQuality, unitsCompatible,
   type Scope3Method, type DataQuality,
@@ -25,10 +25,11 @@ interface Props {
   presetCategory?: number;
   /** When set, prefills a supplier-specific Category 1 entry from the supplier's own disclosure. */
   presetDeclaration?: SupplierDeclaration;
+  /** This year's entries, to warn before a supplier's purchases are counted twice. */
+  existingEntries?: { supplier_id: string | null; category_number: number; description: string | null; co2e_kg: number }[];
   onSaved: (entry: unknown) => void;
 }
 
-const TODAY = new Date().toISOString().split('T')[0];
 
 const COMMON_UNITS = [
   'USD', 'kg', 'tonnes', 'miles', 'km', 'passenger-mile', 'passenger-km',
@@ -36,7 +37,8 @@ const COMMON_UNITS = [
 ];
 
 export function Scope3Drawer({
-  open, onClose, categories, factors, suppliers, sites, presetCategory, presetDeclaration, onSaved,
+  open, onClose, categories, factors, suppliers, sites, presetCategory, presetDeclaration,
+  existingEntries = [], onSaved,
 }: Props) {
   /** The method a category typically uses, keeping `current` if it is one of them. */
   const methodFor = (category: string, current: Scope3Method): Scope3Method => {
@@ -48,7 +50,7 @@ export function Scope3Drawer({
   const [method, setMethod] = useState<Scope3Method>(() => methodFor('1', 'spend_based'));
   const [activityValue, setActivityValue] = useState('');
   const [activityUnit, setActivityUnit] = useState('USD');
-  const [entryDate, setEntryDate] = useState(TODAY);
+  const [entryDate, setEntryDate] = useState(() => todayLocal());
   const [factorMode, setFactorMode] = useState<'library' | 'manual'>('library');
   const [factorId, setFactorId] = useState('');
   const [factorValue, setFactorValue] = useState('');
@@ -331,6 +333,21 @@ export function Scope3Drawer({
             )}
           </div>
 
+          {/* The same purchases counted twice — once spend-based, once from the
+              supplier's own declaration — is the commonest Category 1 error. */}
+          {categoryNumber === '1' && supplierId && (() => {
+            const clash = existingEntries.filter((e) => e.category_number === 1 && e.supplier_id === supplierId);
+            if (clash.length === 0) return null;
+            return (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                This supplier already has {clash.length === 1 ? 'a Category 1 entry' : `${clash.length} Category 1 entries`} this
+                year ({clash.map((e) => `${e.description || 'untitled'}: ${fmtCO2e(e.co2e_kg)}`).join('; ')}).
+                If this covers the same purchases, edit or delete that entry instead — adding both counts
+                them twice.
+              </div>
+            );
+          })()}
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Supplier (optional)</Label>
@@ -355,7 +372,7 @@ export function Scope3Drawer({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label required>Entry date</Label>
-              <Input type="date" value={entryDate} max={TODAY}
+              <Input type="date" value={entryDate} max={todayLocal()}
                 onChange={(e) => setEntryDate(e.target.value)} error={errors.entryDate} />
             </div>
             <div>

@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/fetch-all';
 import { evidenceOrganizationId, loadEvidenceCounts } from '@/lib/evidence';
 import { groupAnswersByInvitation, type SurveyQuestionRow } from '@/lib/survey-questions-core';
 import { SuppliersClient } from './SuppliersClient';
@@ -19,7 +20,7 @@ export default async function SuppliersPage() {
   const [{ data: suppliers }, { data: surveys }, { data: invitations }] = await Promise.all([
     supabase.from('suppliers').select('*').order('name'),
     supabase.from('supplier_surveys').select('*').order('created_at', { ascending: false }),
-    supabase.from('supplier_survey_invitations').select('*'),
+    fetchAll((from, to) => supabase.from('supplier_survey_invitations').select('*').order('id').range(from, to)),
   ]);
 
   const evidenceCounts = await loadEvidenceCounts('supplier', (suppliers ?? []).map((s) => s.id));
@@ -29,9 +30,12 @@ export default async function SuppliersPage() {
   // were only reachable as a CSV export from Reports — the answers a supplier
   // gave were collected but never shown back in the app that asked for them.
   const [{ data: answerRows }, { data: questionRows }] = await Promise.all([
-    supabase
+    // One row per answer, so this passes 1,000 quickly. See lib/fetch-all.ts.
+    fetchAll((from, to) => supabase
       .from('supplier_survey_question_responses')
-      .select('invitation_id, question_id, answer'),
+      .select('invitation_id, question_id, answer')
+      .order('id')
+      .range(from, to)),
     supabase
       .from('supplier_survey_questions')
       .select(

@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/fetch-all';
 import { MetricsClient } from './MetricsClient';
 import { resolveScope, applyScope } from '@/lib/scope-filter';
 import { activeOrg } from '@/lib/active-org';
@@ -35,12 +36,13 @@ export default async function MetricsPage({
       .select('metric_key, label, description, unit, category, aggregation, is_denominator, display_order, organization_id')
       .eq('is_active', true)
       .order('display_order'),
-    supabase
+    fetchAll((from, to) => supabase
       .from('business_metric_values')
       .select('id, metric_key, reporting_year, site_id, as_of_date, value, notes')
       .eq('reporting_year', year)
       .is('deleted_at', null)
-      .order('as_of_date', { ascending: false }),
+      .order('as_of_date', { ascending: false }).order('id')
+      .range(from, to)),
     applyScope(
       supabase.from('sites').select('id, name').eq('is_active', true).order('name'),
       scope.siteIds, 'id',

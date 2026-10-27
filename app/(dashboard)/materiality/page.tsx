@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/fetch-all';
 import { MaterialityClient } from './MaterialityClient';
 import { activeOrg } from '@/lib/active-org';
 import { evidenceOrganizationId, loadEvidenceCounts } from '@/lib/evidence';
@@ -30,7 +31,9 @@ export default async function MaterialityPage() {
     supabase.from('materiality_assessments').select('*').order('reporting_year', { ascending: false }),
     // What each topic actually gates, so the assessment shows its consequences
     // rather than being a scoring exercise disconnected from the reports.
-    supabase.from('requirement_topics').select('topic_code'),
+    // Paged — the full ESRS mapping passes 1,000 rows. See lib/fetch-all.ts.
+    fetchAll((from, to) => supabase.from('requirement_topics').select('topic_code')
+      .order('requirement_id').order('topic_code').range(from, to)),
   ]);
 
   const gatedByTopic: Record<string, number> = {};

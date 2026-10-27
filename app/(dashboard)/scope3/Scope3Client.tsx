@@ -458,6 +458,7 @@ export function Scope3Client({
         sites={sites}
         presetCategory={presetCategory}
         presetDeclaration={presetDeclaration}
+        existingEntries={entries}
         onSaved={(entry) => { setEntries(prev => [entry as EntryRow, ...prev]); router.refresh(); }}
       />
 

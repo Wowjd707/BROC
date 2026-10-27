@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { fetchAll } from '@/lib/fetch-all';
 import { rowsToCsv } from '@/lib/csv-export';
 import { regulationLabel } from '@/lib/regulations';
 import { createClient } from '@/lib/supabase/client';
@@ -62,13 +63,16 @@ export function ReportsClient({
     const year = parseInt(selectedYear);
     const { startDate, endDate } = reportingYearRange(year, fyStart);
 
-    const { data } = await scoped(supabase
+    // Paged: an export cut at Supabase's 1,000-row default would be an
+    // incomplete inventory with nothing to say so. See lib/fetch-all.ts.
+    const { data } = await fetchAll((from, to) => scoped(supabase
       .from('emission_entries')
       .select('*')
       .gte('entry_date', startDate)
       .lte('entry_date', endDate)
-      .is('deleted_at', null)
-      .order('entry_date'));
+      .is('deleted_at', null))
+      .order('entry_date').order('id')
+      .range(from, to));
 
     if (!data) { setLoadingReport(null); return; }
 
@@ -119,13 +123,14 @@ export function ReportsClient({
     const year = parseInt(selectedYear);
     const { startDate, endDate } = reportingYearRange(year, fyStart);
 
-    const { data } = await scoped(supabase
+    const { data } = await fetchAll((from, to) => scoped(supabase
       .from('ehs_entries')
       .select('*')
       .gte('entry_date', startDate)
       .lte('entry_date', endDate)
-      .is('deleted_at', null)
-      .order('entry_date'));
+      .is('deleted_at', null))
+      .order('entry_date').order('id')
+      .range(from, to));
 
     if (!data) { setLoadingReport(null); return; }
 
@@ -179,14 +184,15 @@ export function ReportsClient({
     const year = parseInt(selectedYear);
     const { startDate, endDate } = reportingYearRange(year, fyStart);
 
-    const { data } = await scoped(supabase
+    const { data } = await fetchAll((from, to) => scoped(supabase
       .from('scope3_entries')
       .select('*, suppliers(name), sites(name)')
       .gte('entry_date', startDate)
       .lte('entry_date', endDate)
-      .is('deleted_at', null)
+      .is('deleted_at', null))
       .order('category_number')
-      .order('entry_date'));
+      .order('entry_date').order('id')
+      .range(from, to));
 
     if (!data) { setLoadingReport(null); return; }
 
@@ -238,14 +244,19 @@ export function ReportsClient({
   async function downloadSupplierResponses() {
     setLoadingReport('supplier');
 
-    const { data: invitations } = await supabase
+    const { data: invitations } = await fetchAll((from, to) => supabase
       .from('supplier_survey_invitations')
       .select('*, supplier_surveys(title, regulation_type, custom_regulation_name)')
-      .order('submitted_at', { ascending: false });
+      .order('submitted_at', { ascending: false }).order('id')
+      .range(from, to));
 
-    const { data: responses } = await supabase
+    // One row per answered question, so this passes 1,000 rows long before
+    // the invitations do.
+    const { data: responses } = await fetchAll((from, to) => supabase
       .from('supplier_survey_question_responses')
-      .select('*');
+      .select('*')
+      .order('id')
+      .range(from, to));
 
     if (!invitations) { setLoadingReport(null); return; }
 
@@ -307,11 +318,13 @@ export function ReportsClient({
   async function downloadAuditTrail() {
     setLoadingReport('audit');
 
-    const { data } = await supabase
+    // `.limit(10000)` was capped to 1,000 by the server, so the assurance
+    // export silently held only the latest 1,000 changes.
+    const { data } = await fetchAll((from, to) => supabase
       .from('audit_log')
       .select('created_at, user_id, table_name, record_id, action, changes')
-      .order('created_at', { ascending: false })
-      .limit(10000);
+      .order('created_at', { ascending: false }).order('id')
+      .range(from, to));
 
     if (!data) { setLoadingReport(null); return; }
 

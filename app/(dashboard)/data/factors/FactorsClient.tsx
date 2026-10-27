@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition } from 'react';
 import { releaseEvidence } from '@/components/evidence/release-evidence';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { formatDate, toTitleCase, fmtFactor, perUnit } from '@/lib/utils';
+import { formatDate, toTitleCase, fmtFactor, perUnit, todayLocal } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -198,7 +198,7 @@ export function FactorsClient({
   }
 
   function isCurrent(f: CustomEmissionFactor): boolean {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayLocal();
     return f.is_active && f.effective_from <= today && (f.effective_to == null || f.effective_to > today);
   }
 

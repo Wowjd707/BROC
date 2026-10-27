@@ -15,7 +15,7 @@ import {
   SCOPE1_CATEGORIES, suggestScope1Category,
 } from '@/lib/emission-factor-types';
 import { getUnitsForSource, normalizeEmissionInput } from '@/lib/conversions';
-import { fmtCO2e, fmt } from '@/lib/utils';
+import { fmtCO2e, fmt, todayLocal } from '@/lib/utils';
 import { Info } from 'lucide-react';
 
 interface Site { id: string; name: string; zip_code: string | null; }
@@ -29,7 +29,6 @@ interface Props {
   onSaved: (entry: unknown) => void;
 }
 
-const TODAY = new Date().toISOString().split('T')[0];
 
 export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSaved }: Props) {
 
@@ -41,7 +40,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
   const [refrigerantCode, setRefrigerantCode] = useState('');
   const [quantity, setQuantity]         = useState('');
   const [unit, setUnit]                 = useState('');
-  const [entryDate, setEntryDate]       = useState(TODAY);
+  const [entryDate, setEntryDate]       = useState(() => todayLocal());
   const [notes, setNotes]               = useState('');
   // Distinguishes a meter read from a gap-filled estimate. Without it the two
   // are indistinguishable in every report and to an assurance provider, and the
@@ -207,7 +206,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
 
   function resetForm() {
     setSiteId(''); setScope('scope2'); setSourceType(''); setScope1Category(''); setRefrigerantCode('');
-    setQuantity(''); setUnit(''); setEntryDate(TODAY); setNotes('');
+    setQuantity(''); setUnit(''); setEntryDate(todayLocal()); setNotes('');
     setAccountingMethod('location_based'); setInstrumentType(''); setSupplierFactor('');
     setErrors({});
   }
@@ -395,7 +394,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
               type="date"
               value={entryDate}
               onChange={(e) => setEntryDate(e.target.value)}
-              max={TODAY}
+              max={todayLocal()}
               error={errors.entryDate}
             />
           </div>

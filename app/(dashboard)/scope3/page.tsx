@@ -1,4 +1,5 @@
 import { createServerClient } from '@/lib/supabase/server';
+import { fetchAll } from '@/lib/fetch-all';
 import { reportingYearRange } from '@/lib/utils';
 import { getSupplierDataOverview } from '@/lib/supplier-data';
 import { resolveScope, applyScope } from '@/lib/scope-filter';
@@ -33,13 +34,15 @@ export default async function Scope3Page({
 
   const [{ data: entries }, { data: categories }, { data: factors }, { data: suppliers }, { data: sites }] =
     await Promise.all([
-      applyScope(supabase
+      // Paged: the category totals are built from these rows. See lib/fetch-all.ts.
+      fetchAll((from, to) => applyScope(supabase
         .from('scope3_entries')
         .select('*, suppliers(name), sites(name)')
         .gte('entry_date', startDate)
         .lte('entry_date', endDate)
-        .is('deleted_at', null)
-        .order('entry_date', { ascending: false }), scope.siteIds),
+        .is('deleted_at', null), scope.siteIds)
+        .order('entry_date', { ascending: false }).order('id')
+        .range(from, to)),
       supabase.from('scope3_categories').select('*').order('category_number'),
       supabase
         .from('scope3_factors')

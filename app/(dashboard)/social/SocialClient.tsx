@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/components/ui/toast';
-import { cn } from '@/lib/utils';
+import { cn, todayLocal } from '@/lib/utils';
 import { Plus, Building2, Info } from 'lucide-react';
 import type { DerivedRate, MetricDefinition } from '@/lib/social-metrics-core';
 import { EvidenceCell } from '@/components/evidence/EvidencePanel';
@@ -44,6 +44,8 @@ interface EntryRow {
 interface Props {
   sites: { id: string; name: string }[];
   entries: EntryRow[];
+  /** All entries in the period; `entries` is the most recent slice shown. */
+  totalEntries: number;
   catalog: CatalogRow[];
   fallbackCatalog: MetricDefinition[];
   rates: DerivedRate[];
@@ -66,7 +68,7 @@ const ORG_LEVEL = '__org__';
 
 export function SocialClient({
   sites, entries, catalog, fallbackCatalog, rates, aggregates,
-  year, periodLabel, userRole, organizationId, evidenceCounts, scopeIsFiltered,
+  year, periodLabel, userRole, organizationId, evidenceCounts, scopeIsFiltered, totalEntries,
 }: Props) {
   const router = useRouter();
   const { toast } = useToast();
@@ -94,7 +96,7 @@ export function SocialClient({
   const [family, setFamily] = useState('safety');
   const [sourceType, setSourceType] = useState('');
   const [siteId, setSiteId] = useState('');
-  const [entryDate, setEntryDate] = useState(new Date().toISOString().slice(0, 10));
+  const [entryDate, setEntryDate] = useState(() => todayLocal());
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -329,7 +331,10 @@ export function SocialClient({
       {/* ── Recent entries ─────────────────────────────────────────────── */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-gray-900">
-          Recent entries <span className="text-gray-400 font-normal">({entries.length})</span>
+          Recent entries{' '}
+          <span className="text-gray-400 font-normal">
+            ({totalEntries > entries.length ? `latest ${entries.length} of ${totalEntries}` : entries.length})
+          </span>
         </h2>
         <Card>
           <div className="overflow-x-auto">

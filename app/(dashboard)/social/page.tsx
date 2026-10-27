@@ -3,6 +3,7 @@ import { SocialClient } from './SocialClient';
 import { resolveScope, applyScope } from '@/lib/scope-filter';
 import { reportingYearRange } from '@/lib/utils';
 import { activeOrg } from '@/lib/active-org';
+import { fetchAll } from '@/lib/fetch-all';
 import { evidenceOrganizationId, loadEvidenceCounts } from '@/lib/evidence';
 import {
   SOCIAL_GOVERNANCE_METRICS, aggregateAll, inputsFromAggregates, deriveRates,
@@ -27,7 +28,12 @@ export default async function SocialPage({
     : { data: null };
 
   const fyStart = activeOrg(userProfile)?.reporting_year_start ?? 1;
-  const year = Number(rawYear) || new Date().getFullYear();
+  // The current REPORTING year by default, as every other page uses. The
+  // calendar year opened an empty, not-yet-started year for anyone whose
+  // fiscal year starts after January.
+  const now = new Date();
+  const currentReportingYear = now.getMonth() + 1 >= fyStart ? now.getFullYear() : now.getFullYear() - 1;
+  const year = Number(rawYear) || currentReportingYear;
   const { startDate, endDate } = reportingYearRange(year, fyStart);
 
   const families = ['safety', 'workforce', 'training', 'governance'];
@@ -40,14 +46,17 @@ export default async function SocialPage({
     // Entity-level rows have a null site_id, so they can never satisfy a site
     // filter. They are fetched unscoped and merged below, because a governance
     // figure belongs to the organization rather than to any site in the scope.
-    supabase
+    // Every row, paged: the rates are computed from these. A `.limit(300)`
+    // here meant a large organization's TRIR and turnover came from its
+    // latest 300 entries only. The on-screen list is capped below instead.
+    fetchAll((from, to) => supabase
       .from('ehs_entries')
       .select('id, site_id, entry_date, metric_type, source_type, quantity, unit, quantity_normalized, unit_normalized, notes, sites(name)')
       .in('metric_type', families)
       .gte('entry_date', startDate).lte('entry_date', endDate)
       .is('deleted_at', null)
-      .order('entry_date', { ascending: false })
-      .limit(300),
+      .order('entry_date', { ascending: false }).order('id')
+      .range(from, to)),
     supabase
       .from('sustainability_metrics')
       .select('metric_type, source_type, label, description, canonical_unit, aggregation, pillar, framework_reference, display_order')
@@ -78,12 +87,15 @@ export default async function SocialPage({
   // Social and governance figures live in ehs_entries, which has always been
   // attachable — this page simply never offered it. A headcount or a recordable
   // count is as much a reported figure as a fuel invoice.
-  const evidenceCounts = await loadEvidenceCounts('ehs_entry', visible.map((e) => e.id));
+  // The list shows the most recent entries; the figures above use all of them.
+  const listed = visible.slice(0, 300);
+  const evidenceCounts = await loadEvidenceCounts('ehs_entry', listed.map((e) => e.id));
 
   return (
     <SocialClient
       sites={sites ?? []}
-      entries={visible}
+      entries={listed}
+      totalEntries={visible.length}
       catalog={catalog ?? []}
       fallbackCatalog={SOCIAL_GOVERNANCE_METRICS}
       rates={rates}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useUnits } from '@/components/layout/UnitPreferences';
+import { todayLocal } from '@/lib/utils';
 import { Dialog, DrawerContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,14 +31,17 @@ const WATER_SOURCES = [
   { value: 'stormwater',             label: 'Stormwater Collection' },
 ];
 
-const TODAY = new Date().toISOString().split('T')[0];
 
 export function WaterDrawer({ open, onClose, sites, onSaved }: Props) {
   const [siteId, setSiteId]         = useState('');
   const [sourceType, setSourceType] = useState('');
   const [quantity, setQuantity]     = useState('');
-  const [unit, setUnit]             = useState('gallons');
-  const [entryDate, setEntryDate]   = useState(TODAY);
+  // Defaults to the unit the user reports in (their unit preference), not
+  // always US gallons.
+  const { units } = useUnits();
+  const preferredUnit = ({ gal: 'gallons', L: 'liters', m3: 'cubic_meters' } as Record<string, string>)[units.water] ?? 'gallons';
+  const [unit, setUnit]             = useState(preferredUnit);
+  const [entryDate, setEntryDate]   = useState(() => todayLocal());
   const [notes, setNotes]           = useState('');
   const [dataQuality, setDataQuality] = useState<EntryDataQuality>('measured');
   const [estimationMethod, setEstimationMethod] = useState('');
@@ -92,8 +97,8 @@ export function WaterDrawer({ open, onClose, sites, onSaved }: Props) {
   }
 
   function resetForm() {
-    setSiteId(''); setSourceType(''); setQuantity(''); setUnit('gallons');
-    setEntryDate(TODAY); setNotes(''); setErrors({});
+    setSiteId(''); setSourceType(''); setQuantity(''); setUnit(preferredUnit);
+    setEntryDate(todayLocal()); setNotes(''); setErrors({});
     setDataQuality('measured'); setEstimationMethod('');
   }
 
@@ -102,7 +107,7 @@ export function WaterDrawer({ open, onClose, sites, onSaved }: Props) {
       <DrawerContent>
         <DialogHeader className="px-6 py-5 border-b border-gray-100">
           <DialogTitle>Log Water Entry</DialogTitle>
-          <p className="text-sm text-gray-500">Volumes are normalized to gallons for reporting.</p>
+          <p className="text-sm text-gray-500">Enter the volume in whichever unit the meter or invoice uses.</p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -147,7 +152,7 @@ export function WaterDrawer({ open, onClose, sites, onSaved }: Props) {
 
           <div>
             <Label required>Entry date</Label>
-            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} max={TODAY} />
+            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} max={todayLocal()} />
           </div>
 
           <DataQualityPicker

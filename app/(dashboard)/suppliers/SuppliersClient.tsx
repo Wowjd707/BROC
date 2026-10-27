@@ -1074,7 +1074,7 @@ export function SuppliersClient({
               <Input
                 value={surveyForm.title}
                 onChange={e => setSurveyForm(f => ({ ...f, title: e.target.value }))}
-                placeholder="e.g. CBAM Q4 2025 Disclosure"
+                placeholder="e.g. 2026 CBAM emissions data request"
               />
             </div>
             <div>

@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import {
-  convertForDisplay, formatMetric, unitLabel, normalizePreferences,
+  convertForDisplay, convertFromDisplay, formatMetric, unitLabel, normalizePreferences,
   DEFAULT_UNITS, UNIT_OPTIONS,
 } from './units';
+
+describe('convertFromDisplay', () => {
+  it('turns a typed display value back into the stored unit', () => {
+    // A goal baseline typed as 4,200 t CO₂e is stored as 4,200,000 kg.
+    expect(convertFromDisplay(4200, 'carbon', 't')).toBeCloseTo(4_200_000, 6);
+    expect(convertFromDisplay(1, 'water', 'm3')).toBeCloseTo(264.172052, 6);
+    expect(convertFromDisplay(convertForDisplay(123.4, 'waste', 'lb'), 'waste', 'lb')).toBeCloseTo(123.4, 9);
+  });
+});
 
 describe('convertForDisplay', () => {
   it('converts carbon from kg', () => {

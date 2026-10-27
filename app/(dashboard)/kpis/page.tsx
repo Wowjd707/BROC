@@ -3,6 +3,7 @@ import { KpisClient } from './KpisClient';
 import { reportingYearRange } from '@/lib/utils';
 import { resolveScope, applyScope } from '@/lib/scope-filter';
 import { activeOrg } from '@/lib/active-org';
+import { fetchAll } from '@/lib/fetch-all';
 import type { ConsolidationApproach } from '@/lib/consolidation-core';
 
 export default async function KpisPage({
@@ -39,30 +40,30 @@ export default async function KpisPage({
     { data: priorEhs },
     { data: sites },
   ] = await Promise.all([
-    applyScope(supabase
+    fetchAll((from, to) => applyScope(supabase
       .from('emission_entries')
       .select('scope, co2e_kg, co2e_kg_location_based, accounting_method, source_type, site_id, entry_date, unit_normalized, quantity_normalized')
       .gte('entry_date', curStart)
       .lte('entry_date', curEnd)
-      .is('deleted_at', null), scope.siteIds),
-    applyScope(supabase
+      .is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase
       .from('emission_entries')
       .select('scope, co2e_kg, co2e_kg_location_based, accounting_method, source_type, site_id, entry_date, unit_normalized, quantity_normalized')
       .gte('entry_date', priorStart)
       .lte('entry_date', priorEnd)
-      .is('deleted_at', null), scope.siteIds),
-    applyScope(supabase
+      .is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase
       .from('ehs_entries')
       .select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
       .gte('entry_date', curStart)
       .lte('entry_date', curEnd)
-      .is('deleted_at', null), scope.siteIds),
-    applyScope(supabase
+      .is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase
       .from('ehs_entries')
       .select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
       .gte('entry_date', priorStart)
       .lte('entry_date', priorEnd)
-      .is('deleted_at', null), scope.siteIds),
+      .is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
     applyScope(supabase
       .from('sites')
       .select('id, name, floor_area_sqft, ownership_percent, is_controlled')

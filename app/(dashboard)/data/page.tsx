@@ -6,11 +6,25 @@ import { evidenceOrganizationId, loadEvidenceCountsFor } from '@/lib/evidence';
 export default async function DataPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; from?: string; to?: string }>;
 }) {
   const supabase = await createServerClient();
-  const { scope: rawScope } = await searchParams;
+  const { scope: rawScope, from: rawFrom, to: rawTo } = await searchParams;
   const scope = await resolveScope(rawScope);
+
+  // The date range is applied in the query, not in the browser. Filtering in
+  // the browser searched only the latest 200 rows, so a range in last year
+  // came back empty while the entries existed.
+  const isDate = (v: string | undefined): v is string => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+  const dateFrom = isDate(rawFrom) ? rawFrom : null;
+  const dateTo = isDate(rawTo) ? rawTo : null;
+  const rowLimit = dateFrom || dateTo ? 1000 : 200;
+  const inRange = <Q extends { gte: (c: string, v: string) => Q; lte: (c: string, v: string) => Q }>(q: Q): Q => {
+    let out = q;
+    if (dateFrom) out = out.gte('entry_date', dateFrom);
+    if (dateTo) out = out.lte('entry_date', dateTo);
+    return out;
+  };
 
   const { data: { user } } = await supabase.auth.getUser();
   const { data: userProfile } = user
@@ -19,16 +33,19 @@ export default async function DataPage({
 
   const [{ data: sites }, { data: emissions }, { data: ehsEntries }, { data: refrigerants }] = await Promise.all([
     applyScope(supabase.from('sites').select('id, name, city, state, zip_code').eq('is_active', true).order('name'), scope.siteIds, 'id'),
-    applyScope(supabase.from('emission_entries')
+    applyScope(inRange(supabase.from('emission_entries')
       .select('*, sites(name)')
-      .is('deleted_at', null)
+      .is('deleted_at', null))
       .order('entry_date', { ascending: false })
-      .limit(200), scope.siteIds),
-    applyScope(supabase.from('ehs_entries')
+      .limit(rowLimit), scope.siteIds),
+    // Water and waste only: this page lists those two. Social and governance
+    // rows share the table and were using up the 200-row window.
+    applyScope(inRange(supabase.from('ehs_entries')
       .select('*, sites(name)')
-      .is('deleted_at', null)
+      .in('metric_type', ['water', 'waste'])
+      .is('deleted_at', null))
       .order('entry_date', { ascending: false })
-      .limit(200), scope.siteIds),
+      .limit(rowLimit), scope.siteIds),
     supabase.from('refrigerant_factors')
       .select('refrigerant_code, refrigerant_name, gwp_100_year')
       .order('refrigerant_code'),
@@ -43,6 +60,11 @@ export default async function DataPage({
 
   return (
     <DataEntryClient
+      // Remount on a new range so the lists start from the new rows.
+      key={`${dateFrom ?? ''}|${dateTo ?? ''}`}
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      rowLimit={rowLimit}
       sites={sites ?? []}
       initialEmissions={emissions ?? []}
       initialEhsEntries={ehsEntries ?? []}

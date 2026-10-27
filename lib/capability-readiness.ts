@@ -1,5 +1,6 @@
 import 'server-only';
 import { createServerClient } from './supabase/server';
+import { fetchAll } from './fetch-all';
 import { reportingYearRange } from './utils';
 import { getInventoryForYear } from './disclosure-metrics';
 import { resolveMetric } from './disclosure-metrics-core';
@@ -41,23 +42,32 @@ export async function getReadinessFacts(
     { data: goals },
   ] = await Promise.all([
     supabase.from('sites').select('id').eq('is_active', true),
-    supabase.from('emission_entries').select('site_id')
-      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
-    supabase.from('scope3_entries').select('category_number')
-      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
+    // List queries are paged (lib/fetch-all.ts): coverage measured on the first
+    // 1,000 rows against an exact count reads as a gap that is not there.
+    fetchAll((from, to) => supabase.from('emission_entries').select('site_id')
+      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('scope3_entries').select('category_number')
+      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+      .order('id').range(from, to)),
     supabase.from('cbam_calculations').select('id', { count: 'exact', head: true }),
     supabase.from('supplier_surveys').select('id, regulation_type'),
-    supabase.from('supplier_survey_invitations').select('survey_id, status'),
+    fetchAll((from, to) => supabase.from('supplier_survey_invitations').select('survey_id, status')
+      .order('id').range(from, to)),
     supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
-    supabase.from('disclosure_requirements')
-      .select('id, metric_key, disclosure_frameworks(code)'),
-    supabase.from('disclosure_responses').select('requirement_id, status')
-      .eq('reporting_year', year),
+    fetchAll((from, to) => supabase.from('disclosure_requirements')
+      .select('id, metric_key, disclosure_frameworks(code)')
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('disclosure_responses').select('requirement_id, status')
+      .eq('reporting_year', year)
+      .order('id').range(from, to)),
     supabase.from('materiality_assessments').select('id, status'),
-    supabase.from('ehs_entries').select('metric_type, source_type')
-      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
-    supabase.from('evidence_attachments').select('record_id')
-      .in('record_type', ['emission_entry', 'ehs_entry', 'scope3_entry']),
+    fetchAll((from, to) => supabase.from('ehs_entries').select('metric_type, source_type')
+      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('evidence_attachments').select('record_id')
+      .in('record_type', ['emission_entry', 'ehs_entry', 'scope3_entry'])
+      .order('id').range(from, to)),
     supabase.from('emission_entries').select('id', { count: 'exact', head: true })
       .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
     supabase.from('goals').select('metric, status').eq('status', 'active'),

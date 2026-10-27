@@ -94,6 +94,19 @@ export function convertForDisplay(
   }
 }
 
+/**
+ * The inverse of convertForDisplay: a value typed in a display unit, back to
+ * the canonical stored unit (kg CO₂e, US gallons, kg, kWh). For forms that let
+ * people enter figures in the unit they think in.
+ */
+export function convertFromDisplay(
+  value: number,
+  family: MetricFamily,
+  unit: string,
+): number {
+  return value / convertForDisplay(1, family, unit);
+}
+
 /** The unit label to render alongside a converted value. */
 export function unitLabel(family: MetricFamily, unit: string): string {
   if (family === 'waste') return UNIT_LABELS[`waste:${unit}`] ?? unit;

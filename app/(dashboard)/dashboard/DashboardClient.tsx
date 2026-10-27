@@ -284,7 +284,9 @@ export function DashboardClient({
     const wasteDiverted = wasteAll
       .filter((e) => isDivertedWaste(e.source_type))
       .reduce((s, e) => s + e.quantity_normalized, 0);
-    const diversionRate = wasteTotal > 0 ? (wasteDiverted / wasteTotal) * 100 : 0;
+    // null, not 0, with no waste recorded: "0% diverted" is a claim about
+    // waste that was never measured.
+    const diversionRate = wasteTotal > 0 ? (wasteDiverted / wasteTotal) * 100 : null;
 
     const wastePriorTotal = ehsCmp.prior.filter((e) => e.metric_type === 'waste').reduce((s, e) => s + e.quantity_normalized, 0);
 
@@ -295,7 +297,7 @@ export function DashboardClient({
     const renewableGenerated = curEmissions
       .filter((e) => isRenewableElectricity(e.source_type))
       .reduce((s, e) => s + e.quantity_normalized, 0);
-    const renewablePct = elecTotal > 0 ? (renewableGenerated / elecTotal) * 100 : 0;
+    const renewablePct = elecTotal > 0 ? (renewableGenerated / elecTotal) * 100 : null;
 
     // Scope 3 is reported alongside, never folded into totalCur: goals and the
     // "Total Scope 1 + 2" card are defined on the operational boundary.
@@ -721,15 +723,15 @@ export function DashboardClient({
         />
         <KpiCard
           title="Waste Diversion Rate"
-          value={`${kpis.diversionRate.toFixed(1)}%`}
-          subValue="recycled + composted"
+          value={kpis.diversionRate == null ? '—' : `${kpis.diversionRate.toFixed(1)}%`}
+          subValue={kpis.diversionRate == null ? 'No waste recorded' : 'recycled + composted'}
           tooltip="Percentage of total waste diverted from landfill."
           href="/kpis"
         />
         <KpiCard
           title="Renewable Energy"
-          value={`${kpis.renewablePct.toFixed(1)}%`}
-          subValue="of total electricity"
+          value={kpis.renewablePct == null ? '—' : `${kpis.renewablePct.toFixed(1)}%`}
+          subValue={kpis.renewablePct == null ? 'No electricity recorded' : 'of total electricity'}
           href="/kpis"
         />
       </div>

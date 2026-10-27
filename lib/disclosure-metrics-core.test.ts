@@ -83,6 +83,31 @@ describe('resolveMetric', () => {
     expect(resolveMetric('targets', inventory({ targets: [] }))!.missing).toBe(true);
   });
 
+  it('reports energy, water and waste in framework units, not storage units', () => {
+    // Regression: water went out in US gallons and energy in kWh, units no
+    // CSRD or GRI reader expects.
+    const e = resolveMetric('energy_consumption', inventory())!;
+    expect(e.unit).toBe('MWh');
+    expect(e.value).toBeCloseTo(1_200, 6);
+    const w = resolveMetric('water_consumption', inventory())!;
+    expect(w.unit).toBe('m³');
+    expect(w.value).toBeCloseTo(45_000 * 0.003785411784, 6);
+    const t = resolveMetric('waste_total', inventory())!;
+    expect(t.unit).toBe('t');
+    expect(t.value).toBe(80);
+  });
+
+  it('lists only targets that have a reduction percentage', () => {
+    const m = resolveMetric('targets', inventory({
+      targets: [
+        { name: 'Cut 42%', targetYear: 2030, targetReductionPct: 42, status: 'active' },
+        { name: 'Absolute value target', targetYear: 2030, targetReductionPct: null, status: 'active' },
+      ],
+    }))!;
+    expect(m.value).toBe(2);
+    expect(m.breakdown!.map((b) => b.label)).toEqual(['Cut 42% (by 2030)']);
+  });
+
   it('returns null for an unknown key', () => {
     expect(resolveMetric('not_a_metric', inventory())).toBeNull();
   });

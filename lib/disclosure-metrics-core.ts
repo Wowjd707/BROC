@@ -129,6 +129,7 @@ export interface InventoryInput {
 }
 
 const KG_PER_TONNE = 1000;
+const M3_PER_US_GALLON = 0.003785411784;
 
 function tonnes(kg: number): number {
   return kg / KG_PER_TONNE;
@@ -255,27 +256,34 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
       };
     }
 
+    // Reported in the units the frameworks specify — ESRS E1-5 asks for MWh,
+    // ESRS E3-4 for m³ (GRI 303 for megalitres), ESRS E5 and GRI 306 for
+    // tonnes — not the platform's storage units (kWh, US gallons, kg). A CSRD
+    // report stating water in US gallons is not comparable with anyone's.
     case 'energy_consumption':
       return {
-        label: 'Energy consumption',
-        value: inv.energyKwh,
-        unit: 'kWh',
+        label: 'Total energy consumption',
+        value: inv.energyKwh / 1000,
+        unit: 'MWh',
         missing: inv.energyKwh === 0,
+        methodologyNote:
+          'Electricity and other purchased energy, plus fuel combusted on site converted at '
+          + '1 MMBtu = 293.07 kWh (higher heating value, as stored).',
       };
 
     case 'water_consumption':
       return {
         label: 'Water consumption',
-        value: inv.waterGallons,
-        unit: 'gallons',
+        value: inv.waterGallons * M3_PER_US_GALLON,
+        unit: 'm³',
         missing: inv.waterGallons === 0,
       };
 
     case 'waste_total':
       return {
         label: 'Total waste generated',
-        value: inv.wasteKg,
-        unit: 'kg',
+        value: tonnes(inv.wasteKg),
+        unit: 't',
         missing: inv.wasteKg === 0,
       };
 

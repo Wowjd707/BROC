@@ -1,5 +1,6 @@
 import 'server-only';
 import { asGoalMetric } from './goal-metrics';
+import { fetchAll } from './fetch-all';
 import { createServerClient } from './supabase/server';
 import { reportingYearRange } from './utils';
 import { totalsByCategory } from './scope3';
@@ -86,15 +87,19 @@ export async function getInventoryForYear(
   const [{ data: emissions }, { data: scope3 }, { data: ehs }, { data: sites }, { data: goals },
     { data: org }, { data: metricDefs }, { data: metricValues }] =
     await Promise.all([
-      supabase
+      // Paged: a report built from the first 1,000 entries would understate
+      // the inventory without a word. See lib/fetch-all.ts.
+      fetchAll((from, to) => supabase
         .from('emission_entries')
         .select('scope, co2e_kg, co2e_kg_location_based, source_type, quantity_normalized, unit_normalized, site_id, data_quality')
-        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
-      supabase
+        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+        .order('id').range(from, to)),
+      fetchAll((from, to) => supabase
         .from('scope3_entries')
         .select('category_number, co2e_kg')
-        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
-      supabase
+        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+        .order('id').range(from, to)),
+      fetchAll((from, to) => supabase
         .from('ehs_entries')
         // source_type and entry_date are needed as well as the quantity: the
         // social families hold several metrics in different units under one
@@ -102,16 +107,18 @@ export async function getInventoryForYear(
         // than summed. Selecting only (metric_type, quantity_normalized) here
         // would make both of those impossible to get right.
         .select('metric_type, source_type, entry_date, quantity_normalized, site_id')
-        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
+        .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+        .order('id').range(from, to)),
       supabase.from('sites').select('id, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true),
       supabase.from('goals').select('name, metric, target_year, target_reduction_pct, status'),
       supabase.from('organizations').select('consolidation_approach, intensity_metric_key').limit(1).maybeSingle(),
       supabase.from('business_metrics')
         .select('metric_key, label, description, unit, category, aggregation, is_denominator, display_order, organization_id')
         .eq('is_active', true),
-      supabase.from('business_metric_values')
+      fetchAll((from, to) => supabase.from('business_metric_values')
         .select('metric_key, reporting_year, site_id, as_of_date, value')
-        .eq('reporting_year', year).is('deleted_at', null),
+        .eq('reporting_year', year).is('deleted_at', null)
+        .order('id').range(from, to)),
     ]);
 
   const rows = emissions ?? [];
@@ -148,11 +155,16 @@ export async function getInventoryForYear(
     .filter((e) => e.scope === 'scope2')
     .reduce((s, e) => s + e.co2e_kg * share(e.site_id), 0);
 
-  // Electricity is stored normalized to kWh; combustion to MMBtu. Only kWh rows
-  // are summed here so the reported energy figure stays in one honest unit.
-  const energyKwh = rows
-    .filter((e) => e.unit_normalized === 'kWh')
-    .reduce((s, e) => s + e.quantity_normalized * share(e.site_id), 0);
+  // Electricity and other purchased energy are stored in kWh; fuel combusted on
+  // site in MMBtu. Both count toward total energy consumption (ESRS E1-5,
+  // GRI 302-1). Summing only the kWh rows reported electricity as if it were
+  // the whole of the organization's energy use.
+  const KWH_PER_MMBTU = 293.07107;
+  const energyKwh = rows.reduce((s, e) => {
+    if (e.unit_normalized === 'kWh') return s + e.quantity_normalized * share(e.site_id);
+    if (e.unit_normalized === 'MMBtu') return s + e.quantity_normalized * KWH_PER_MMBTU * share(e.site_id);
+    return s;
+  }, 0);
 
   const scope3Rows = (scope3 ?? []).map((r) => ({
     category_number: r.category_number,

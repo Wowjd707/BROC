@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
@@ -32,12 +33,20 @@ interface Props {
   organizationId: string | null;
   userRole: string;
   initialEvidenceCounts: Record<string, number>;
+  /** Date range applied by the server query, from the URL. */
+  dateFrom: string | null;
+  dateTo: string | null;
+  /** Most rows the server returned per list: 200 latest, or 1,000 in a range. */
+  rowLimit: number;
 }
 
 export function DataEntryClient({
   sites, initialEmissions, initialEhsEntries, refrigerantFactors,
-  organizationId, userRole, initialEvidenceCounts,
+  organizationId, userRole, initialEvidenceCounts, dateFrom, dateTo, rowLimit,
 }: Props) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const { toast } = useToast();
   const canEdit = userRole === 'admin' || userRole === 'editor';
@@ -60,8 +69,18 @@ export function DataEntryClient({
   // these narrow what is shown within that, so the two compose.
   const [siteFilter, setSiteFilter]   = useState('all');
   const [scopeFilter, setScopeFilter] = useState('all');
-  const [fromDate, setFromDate]       = useState('');
-  const [toDate, setToDate]           = useState('');
+  const fromDate = dateFrom ?? '';
+  const toDate = dateTo ?? '';
+
+  /** Dates go to the server (via the URL), so the query covers the whole range. */
+  function setDateParam(key: 'from' | 'to', value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(key, value); else params.delete(key);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname);
+  }
+  const setFromDate = (v: string) => setDateParam('from', v);
+  const setToDate = (v: string) => setDateParam('to', v);
   const [deleting, setDeleting] = useState(false);
 
   const matchesFilters = (e: { site_id: string | null; entry_date: string }) => {
@@ -69,8 +88,6 @@ export function DataEntryClient({
     // filter. Showing it anyway would attribute an organization-wide figure to
     // one plant — the same misstatement the empty-scope rule guards against.
     if (siteFilter !== 'all' && e.site_id !== siteFilter) return false;
-    if (fromDate && e.entry_date < fromDate) return false;
-    if (toDate && e.entry_date > toDate) return false;
     return true;
   };
 
@@ -86,7 +103,22 @@ export function DataEntryClient({
     siteFilter !== 'all' || scopeFilter !== 'all' || fromDate !== '' || toDate !== '';
 
   function clearFilters() {
-    setSiteFilter('all'); setScopeFilter('all'); setFromDate(''); setToDate('');
+    setSiteFilter('all'); setScopeFilter('all');
+    if (fromDate || toDate) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete('from'); params.delete('to');
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    }
+  }
+
+  /** "118 entries", or says plainly when the list is a window, not everything. */
+  function countLabel(shown: number, loaded: number, windowFull: boolean) {
+    const base = `${shown}${filtersActive && shown !== loaded ? ` of ${loaded}` : ''} entries`;
+    if (!windowFull) return base;
+    return dateFrom || dateTo
+      ? `${base} — the first ${rowLimit.toLocaleString('en-US')} in this range; narrow the dates to see the rest`
+      : `${base} — the latest ${rowLimit}; set a date range to look further back`;
   }
 
   /** Evidence affordance for one row, with its count from the bulk fetch. */
@@ -163,7 +195,7 @@ export function DataEntryClient({
         </div>
       </div>
 
-      {/* Filters — these narrow within whatever the sidebar scope already loaded */}
+      {/* Filters. Dates are sent to the server; site and scope narrow what it returned. */}
       <div className="flex items-end gap-3 flex-wrap mb-5 pb-5 border-b border-gray-100">
         <div>
           <label className="block text-xs text-gray-500 mb-1">Site</label>
@@ -226,7 +258,7 @@ export function DataEntryClient({
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Emission entries</p>
-                <p className="text-xs text-gray-400 mt-0.5">{filteredEmissions.length}{filtersActive ? ` of ${emissions.length}` : ''} entries</p>
+                <p className="text-xs text-gray-400 mt-0.5">{countLabel(filteredEmissions.length, emissions.length, emissions.length >= rowLimit)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => setEmissionDrawerOpen(true)}>
@@ -316,7 +348,7 @@ export function DataEntryClient({
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Water entries</p>
-                <p className="text-xs text-gray-400 mt-0.5">{waterEntries.length} entries</p>
+                <p className="text-xs text-gray-400 mt-0.5">{countLabel(waterEntries.length, ehsEntries.filter((e) => e.metric_type === 'water').length, ehsEntries.length >= rowLimit)}</p>
               </div>
               <Button size="sm" onClick={() => setWaterDrawerOpen(true)}>
                 <Plus size={14} />Add entry
@@ -377,7 +409,7 @@ export function DataEntryClient({
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-gray-900">Waste entries</p>
-                <p className="text-xs text-gray-400 mt-0.5">{wasteEntries.length} entries</p>
+                <p className="text-xs text-gray-400 mt-0.5">{countLabel(wasteEntries.length, ehsEntries.filter((e) => e.metric_type === 'waste').length, ehsEntries.length >= rowLimit)}</p>
               </div>
               <Button size="sm" onClick={() => setWasteDrawerOpen(true)}>
                 <Plus size={14} />Add entry

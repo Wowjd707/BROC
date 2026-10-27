@@ -6,6 +6,21 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Today's date in the user's own time zone, as `YYYY-MM-DD`.
+ *
+ * `new Date().toISOString().slice(0, 10)` is today in UTC: in the evening in
+ * the Americas that is already tomorrow, and in the morning in Asia it is
+ * still yesterday. Used as a form default and a `max`, it defaulted entries to
+ * the next day and stopped some users picking today at all.
+ */
+export function todayLocal(now: Date = new Date()): string {
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
  * Format a date for display. Accepts a calendar date (`YYYY-MM-DD`), a full
  * timestamp (`2026-06-14T12:34:56+00:00`, as Postgres returns timestamptz), or
  * a Date.

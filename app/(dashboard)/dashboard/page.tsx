@@ -3,6 +3,7 @@ import { DashboardClient } from './DashboardClient';
 import { reportingYearRange } from '@/lib/utils';
 import { resolveScope, applyScope } from '@/lib/scope-filter';
 import { activeOrg } from '@/lib/active-org';
+import { fetchAll } from '@/lib/fetch-all';
 import type { ConsolidationApproach } from '@/lib/consolidation-core';
 
 export default async function DashboardPage({
@@ -47,14 +48,14 @@ export default async function DashboardPage({
     { data: curScope3 },
     { data: priorScope3 },
   ] = await Promise.all([
-    applyScope(supabase.from('emission_entries').select('scope, scope1_category, co2e_kg, co2e_kg_location_based, accounting_method, source_type, site_id, entry_date, unit_normalized, quantity_normalized')
-      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('emission_entries').select('scope, co2e_kg, co2e_kg_location_based, accounting_method, site_id, entry_date')
-      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('ehs_entries').select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
-      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('ehs_entries').select('metric_type, quantity_normalized, entry_date')
-      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
+    fetchAll((from, to) => applyScope(supabase.from('emission_entries').select('scope, scope1_category, co2e_kg, co2e_kg_location_based, accounting_method, source_type, site_id, entry_date, unit_normalized, quantity_normalized')
+      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase.from('emission_entries').select('scope, co2e_kg, co2e_kg_location_based, accounting_method, site_id, entry_date')
+      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase.from('ehs_entries').select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
+      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase.from('ehs_entries').select('metric_type, quantity_normalized, entry_date')
+      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
     applyScope(supabase.from('sites').select('id, name, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true), scope.siteIds, 'id'),
     // Every active goal, not just the first: the dashboard now shows progress
     // across all of them, and a single-goal LIMIT silently hid the rest.
@@ -72,11 +73,11 @@ export default async function DashboardPage({
       .gte('next_milestone_date', new Date().toISOString().slice(0, 10))
       .order('next_milestone_date')
       .limit(4),
-    supabase.from('supplier_survey_invitations').select('id, status, survey_id'),
-    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
-      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
-      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
+    fetchAll((from, to) => supabase.from('supplier_survey_invitations').select('id, status, survey_id').order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
+      .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
+      .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds).order('id').range(from, to)),
   ]);
 
   return (

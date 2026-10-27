@@ -1,4 +1,5 @@
 import 'server-only';
+import { fetchAll } from './fetch-all';
 import { createServerClient } from './supabase/server';
 import {
   declarationFromCbamFactor,
@@ -31,12 +32,16 @@ export async function getSupplierDataOverview(currentYear: number): Promise<Supp
         .from('cbam_supplier_factors')
         .select('supplier_id, supplier_name, commodity_name, emission_factor, factor_unit, factor_source, created_at')
         .order('created_at', { ascending: false }),
-      supabase
+      fetchAll((from, to) => supabase
         .from('supplier_survey_invitations')
-        .select('id, supplier_id, supplier_name, status, submitted_at, supplier_surveys(regulation_type)'),
-      supabase
+        .select('id, supplier_id, supplier_name, status, submitted_at, supplier_surveys(regulation_type)')
+        .order('id')
+        .range(from, to)),
+      fetchAll((from, to) => supabase
         .from('supplier_survey_question_responses')
-        .select('invitation_id, question_id, answer'),
+        .select('invitation_id, question_id, answer')
+        .order('id')
+        .range(from, to)),
     ]);
 
   // Group survey answers by invitation

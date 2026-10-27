@@ -1,6 +1,7 @@
 import 'server-only';
 import { createServerClient } from './supabase/server';
 import { applyScope } from './scope-filter';
+import { fetchAll } from './fetch-all';
 import { sourceLabel } from './source-labels';
 import {
   analyzeData,
@@ -108,7 +109,8 @@ export async function buildAnomalyReport(
       scopeSiteIds,
       'id',
     ),
-    applyScope(
+    // Paged — a 24-month window passes 1,000 entries quickly. See lib/fetch-all.ts.
+    fetchAll((from, to) => applyScope(
       supabase
         .from('emission_entries')
         .select('id, site_id, scope, source_type, entry_date, quantity, unit, quantity_normalized, unit_normalized')
@@ -116,8 +118,8 @@ export async function buildAnomalyReport(
         .gte('entry_date', startDate)
         .lt('entry_date', endDate),
       scopeSiteIds,
-    ),
-    applyScope(
+    ).order('id').range(from, to)),
+    fetchAll((from, to) => applyScope(
       supabase
         .from('ehs_entries')
         .select('id, site_id, metric_type, source_type, entry_date, quantity, unit, quantity_normalized, unit_normalized')
@@ -125,7 +127,7 @@ export async function buildAnomalyReport(
         .gte('entry_date', startDate)
         .lt('entry_date', endDate),
       scopeSiteIds,
-    ),
+    ).order('id').range(from, to)),
   ]);
 
   const siteMeta: SiteMeta[] = ((sites ?? []) as unknown as SiteRow[]).map((s) => ({

@@ -21,6 +21,8 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { EvidenceCell } from '@/components/evidence/EvidencePanel';
 import { evidenceCountKey } from '@/lib/evidence-core';
+import { useUnits } from '@/components/layout/UnitPreferences';
+import { convertForDisplay, convertFromDisplay, unitLabel, type MetricFamily } from '@/lib/units';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -110,6 +112,9 @@ const EMPTY_FORM = {
   estimated_co2e_reduction_kg_per_year: '',
   estimated_water_reduction_gal_per_year: '',
   estimated_waste_reduction_kg_per_year: '',
+  actual_co2e_reduction_kg_per_year: '',
+  actual_water_reduction_gal_per_year: '',
+  actual_waste_reduction_kg_per_year: '',
   estimated_cost_usd: '',
   estimated_payback_months: '',
   start_date: '',
@@ -132,6 +137,17 @@ export function ProjectsClient({
   const [editProject, setEditProject] = useState<Project | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ ...EMPTY_FORM });
+  const { units } = useUnits();
+
+  // Savings are typed in the user's units (t CO₂e, m³, t…) and stored
+  // canonically (kg, US gallons, kg). The form used to ask for raw kg/yr and
+  // gal/yr whatever the unit preference.
+  const toForm = (v: number | null, family: MetricFamily) =>
+    v == null ? '' : String(Number(convertForDisplay(v, family, units[family]).toPrecision(10)));
+  const fromForm = (v: string, family: MetricFamily) =>
+    v ? convertFromDisplay(parseFloat(v), family, units[family]) : null;
+  const perYear = (family: MetricFamily) =>
+    `${unitLabel(family, units[family])}/yr`;
   const [formError, setFormError] = useState('');
   const [yearFilter, setYearFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -214,15 +230,12 @@ export function ProjectsClient({
       category: project.category,
       status: project.status as Status,
       site_id: project.site_id ?? '',
-      estimated_co2e_reduction_kg_per_year: project.estimated_co2e_reduction_kg_per_year != null
-        ? String(project.estimated_co2e_reduction_kg_per_year)
-        : '',
-      estimated_water_reduction_gal_per_year: project.estimated_water_reduction_gal_per_year != null
-        ? String(project.estimated_water_reduction_gal_per_year)
-        : '',
-      estimated_waste_reduction_kg_per_year: project.estimated_waste_reduction_kg_per_year != null
-        ? String(project.estimated_waste_reduction_kg_per_year)
-        : '',
+      estimated_co2e_reduction_kg_per_year: toForm(project.estimated_co2e_reduction_kg_per_year, 'carbon'),
+      estimated_water_reduction_gal_per_year: toForm(project.estimated_water_reduction_gal_per_year, 'water'),
+      estimated_waste_reduction_kg_per_year: toForm(project.estimated_waste_reduction_kg_per_year, 'waste'),
+      actual_co2e_reduction_kg_per_year: toForm(project.actual_co2e_reduction_kg_per_year, 'carbon'),
+      actual_water_reduction_gal_per_year: toForm(project.actual_water_reduction_gal_per_year, 'water'),
+      actual_waste_reduction_kg_per_year: toForm(project.actual_waste_reduction_kg_per_year, 'waste'),
       estimated_cost_usd: project.estimated_cost_usd != null ? String(project.estimated_cost_usd) : '',
       estimated_payback_months: project.estimated_payback_months != null
         ? String(project.estimated_payback_months)
@@ -245,15 +258,16 @@ export function ProjectsClient({
       category: form.category,
       status: form.status,
       site_id: form.site_id || null,
-      estimated_co2e_reduction_kg_per_year: form.estimated_co2e_reduction_kg_per_year
-        ? parseFloat(form.estimated_co2e_reduction_kg_per_year)
-        : null,
-      estimated_water_reduction_gal_per_year: form.estimated_water_reduction_gal_per_year
-        ? parseFloat(form.estimated_water_reduction_gal_per_year)
-        : null,
-      estimated_waste_reduction_kg_per_year: form.estimated_waste_reduction_kg_per_year
-        ? parseFloat(form.estimated_waste_reduction_kg_per_year)
-        : null,
+      estimated_co2e_reduction_kg_per_year: fromForm(form.estimated_co2e_reduction_kg_per_year, 'carbon'),
+      estimated_water_reduction_gal_per_year: fromForm(form.estimated_water_reduction_gal_per_year, 'water'),
+      estimated_waste_reduction_kg_per_year: fromForm(form.estimated_waste_reduction_kg_per_year, 'waste'),
+      // Measured savings only mean something once the project is complete.
+      actual_co2e_reduction_kg_per_year: form.status === 'completed'
+        ? fromForm(form.actual_co2e_reduction_kg_per_year, 'carbon') : null,
+      actual_water_reduction_gal_per_year: form.status === 'completed'
+        ? fromForm(form.actual_water_reduction_gal_per_year, 'water') : null,
+      actual_waste_reduction_kg_per_year: form.status === 'completed'
+        ? fromForm(form.actual_waste_reduction_kg_per_year, 'waste') : null,
       estimated_cost_usd: form.estimated_cost_usd ? parseFloat(form.estimated_cost_usd) : null,
       estimated_payback_months: form.estimated_payback_months
         ? parseInt(form.estimated_payback_months)
@@ -686,30 +700,30 @@ export function ProjectsClient({
               </p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <Label>CO₂e (kg/yr)</Label>
+                  <Label>CO₂e ({perYear('carbon')})</Label>
                   <Input
                     type="number"
                     value={form.estimated_co2e_reduction_kg_per_year}
                     onChange={e => setField('estimated_co2e_reduction_kg_per_year', e.target.value)}
-                    placeholder="e.g. 50000"
+                    placeholder="e.g. 50"
                   />
                 </div>
                 <div>
-                  <Label>Water (gal/yr)</Label>
+                  <Label>Water ({perYear('water')})</Label>
                   <Input
                     type="number"
                     value={form.estimated_water_reduction_gal_per_year}
                     onChange={e => setField('estimated_water_reduction_gal_per_year', e.target.value)}
-                    placeholder="e.g. 250000"
+                    placeholder="e.g. 900"
                   />
                 </div>
                 <div>
-                  <Label>Waste (kg/yr)</Label>
+                  <Label>Waste ({perYear('waste')})</Label>
                   <Input
                     type="number"
                     value={form.estimated_waste_reduction_kg_per_year}
                     onChange={e => setField('estimated_waste_reduction_kg_per_year', e.target.value)}
-                    placeholder="e.g. 12000"
+                    placeholder="e.g. 12"
                   />
                 </div>
               </div>
@@ -718,6 +732,36 @@ export function ProjectsClient({
                 zero in that pipeline, not as an unknown.
               </p>
             </div>
+            {/* Measured savings, once delivered. Without these the "actual
+                reduction" figure had nowhere to come from. */}
+            {form.status === 'completed' && (
+              <div>
+                <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
+                  Measured annual savings
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                  {([
+                    ['actual_co2e_reduction_kg_per_year', 'CO₂e', 'carbon'],
+                    ['actual_water_reduction_gal_per_year', 'Water', 'water'],
+                    ['actual_waste_reduction_kg_per_year', 'Waste', 'waste'],
+                  ] as const).map(([field, label, family]) => (
+                    <div key={field}>
+                      <Label>{label} ({perYear(family)})</Label>
+                      <Input
+                        type="number"
+                        value={form[field]}
+                        onChange={e => setField(field, e.target.value)}
+                        placeholder="Measured"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-1.5">
+                  The saving actually achieved, from metering or before-and-after data. Leave blank until
+                  it has been measured; the estimate above is shown until then.
+                </p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>Est. Cost (USD)</Label>

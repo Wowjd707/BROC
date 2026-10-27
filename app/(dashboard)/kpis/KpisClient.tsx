@@ -360,6 +360,9 @@ export function KpisClient({
   const curRenew = useMemo(() => renewablePct(curEmissions), [curEmissions]);
   const priorRenew = useMemo(() => renewablePct(priorEmissions), [priorEmissions]);
   const curKwh = useMemo(() => totalKwh(curEmissions), [curEmissions]);
+  // A ratio with nothing under it is "no data", not 0%.
+  const hasWaste = curEhs.some(r => r.metric_type === 'waste');
+  const hasElectricity = curEmissions.some(r => r.scope === 'scope2' && isElectricitySource(r.source_type));
   const priorKwh = useMemo(() => totalKwh(priorEmissions), [priorEmissions]);
 
   // Total floor area
@@ -465,7 +468,9 @@ export function KpisClient({
             comparedTo={emCmp.label}
           />
           <KpiCard
-            label="Energy Use Intensity"
+            // Electricity only (fuel energy is not in this figure), so it is
+            // named for what it measures.
+            label="Electricity Use Intensity"
             value={curEui != null ? curEui.toFixed(1) : '—'}
             unit={curEui != null ? 'kWh/ft²' : undefined}
             change={
@@ -475,8 +480,8 @@ export function KpisClient({
           />
           <KpiCard
             label="Renewable Energy"
-            value={`${curRenew.toFixed(1)}%`}
-            change={priorRenew > 0 ? pointsChange(curRenew, priorRenew) : undefined}
+            value={hasElectricity ? `${curRenew.toFixed(1)}%` : '—'}
+            change={hasElectricity && priorRenew > 0 ? pointsChange(curRenew, priorRenew) : undefined}
             comparedTo={emCmp.label}
           />
           <KpiCard
@@ -507,8 +512,8 @@ export function KpisClient({
           />
           <KpiCard
             label="Waste Diversion Rate"
-            value={`${curDivRate.toFixed(1)}%`}
-            change={priorDivRate > 0 ? pointsChange(curDivRate, priorDivRate) : undefined}
+            value={hasWaste ? `${curDivRate.toFixed(1)}%` : '—'}
+            change={hasWaste && priorDivRate > 0 ? pointsChange(curDivRate, priorDivRate) : undefined}
             comparedTo={ehsCmp.label}
           />
         </div>

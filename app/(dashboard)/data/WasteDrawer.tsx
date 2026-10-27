@@ -1,6 +1,8 @@
 'use client';
 
 import { useState } from 'react';
+import { useUnits } from '@/components/layout/UnitPreferences';
+import { todayLocal } from '@/lib/utils';
 import { Dialog, DrawerContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,15 +46,18 @@ const DISPOSAL_METHODS: Record<string, { value: string; label: string }[]> = {
   ],
 };
 
-const TODAY = new Date().toISOString().split('T')[0];
 
 export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
   const [siteId, setSiteId]         = useState('');
   const [hazardClass, setHazardClass] = useState('non_hazardous');
   const [sourceType, setSourceType] = useState('');
   const [quantity, setQuantity]     = useState('');
-  const [unit, setUnit]             = useState('kg');
-  const [entryDate, setEntryDate]   = useState(TODAY);
+  // Defaults to the unit the user reports in (their unit preference), not
+  // always US kilograms.
+  const { units } = useUnits();
+  const preferredUnit = ({ kg: 'kg', t: 'metric_tons', lb: 'lbs' } as Record<string, string>)[units.waste] ?? 'kg';
+  const [unit, setUnit]             = useState(preferredUnit);
+  const [entryDate, setEntryDate]   = useState(() => todayLocal());
   const [notes, setNotes]           = useState('');
   const [dataQuality, setDataQuality] = useState<EntryDataQuality>('measured');
   const [estimationMethod, setEstimationMethod] = useState('');
@@ -111,7 +116,7 @@ export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
 
   function resetForm() {
     setSiteId(''); setHazardClass('non_hazardous'); setSourceType('');
-    setQuantity(''); setUnit('kg'); setEntryDate(TODAY); setNotes(''); setErrors({});
+    setQuantity(''); setUnit(preferredUnit); setEntryDate(todayLocal()); setNotes(''); setErrors({});
     setDataQuality('measured'); setEstimationMethod('');
   }
 
@@ -120,7 +125,7 @@ export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
       <DrawerContent>
         <DialogHeader className="px-6 py-5 border-b border-gray-100">
           <DialogTitle>Log Waste Entry</DialogTitle>
-          <p className="text-sm text-gray-500">Quantities are normalized to kg for reporting.</p>
+          <p className="text-sm text-gray-500">Enter the quantity in whichever unit the waste manifest uses.</p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
@@ -180,7 +185,7 @@ export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
 
           <div>
             <Label required>Entry date</Label>
-            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} max={TODAY} />
+            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} max={todayLocal()} />
           </div>
 
           <DataQualityPicker

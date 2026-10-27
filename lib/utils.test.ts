@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt, formatDate, fmtAxis, fmtFigure, fmtFactor, perUnit } from './utils';
+import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt, formatDate, fmtAxis, fmtFigure, fmtFactor, perUnit, todayLocal } from './utils';
 
 describe('reportingYearRange', () => {
   it('covers the full calendar year for a January fiscal start', () => {
@@ -47,6 +47,15 @@ describe('pctChange', () => {
     const r = pctChange(50, 0);
     expect(r.direction).toBe('flat');
     expect(r.label).toBe('—');
+  });
+});
+
+describe('todayLocal', () => {
+  it('uses the local calendar date, not the UTC one', () => {
+    // 9 pm on 26 October in the local zone. toISOString() would read
+    // 27 October anywhere west of UTC.
+    expect(todayLocal(new Date(2026, 9, 26, 21, 30))).toBe('2026-10-26');
+    expect(todayLocal(new Date(2026, 0, 1, 0, 5))).toBe('2026-01-01');
   });
 });
 
