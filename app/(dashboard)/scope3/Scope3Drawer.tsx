@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fmtCO2e } from '@/lib/utils';
+import { fmtCO2e, fmtFactor, perUnit } from '@/lib/utils';
 import {
   METHOD_LABELS, defaultDataQuality, unitsCompatible,
   type Scope3Method, type DataQuality,
@@ -290,7 +290,7 @@ export function Scope3Drawer({
                   <SelectContent>
                     {availableFactors.map(f => (
                       <SelectItem key={f.id} value={f.id}>
-                        {(f.label || f.activity_key)} — {f.factor_value} kg/{f.activity_unit} ({f.factor_source} {f.data_year})
+                        {(f.label || f.activity_key)} — {fmtFactor(f.factor_value)} kg/{perUnit(f.activity_unit)} ({f.factor_source} {f.data_year})
                       </SelectItem>
                     ))}
                   </SelectContent>

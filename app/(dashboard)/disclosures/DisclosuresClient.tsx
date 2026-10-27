@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { fmt } from '@/lib/utils';
+import { fmtFigure } from '@/lib/utils';
 import {
   resolveMetric, requirementState, coveragePercent,
   type InventoryInput, type RequirementState,
@@ -565,7 +565,8 @@ export function DisclosuresClient({
                             <Badge variant={meta.badge}>{meta.label}</Badge>
                             {req.metric_key && (
                               <span className="inline-flex items-center gap-1 text-[11px] text-gray-400">
-                                <Database size={11} />{req.metric_key}
+                                {/* The metric's name, not its database key ("ghg_all_scopes"). */}
+                                <Database size={11} />{metric?.label ?? 'Platform metric'}
                               </span>
                             )}
                           </span>
@@ -590,11 +591,11 @@ export function DisclosuresClient({
                           {metric && !metric.missing && metric.value != null && (
                             <span className="block mt-1.5 text-sm">
                               <span className="font-semibold text-emerald-700">
-                                {fmt(metric.value, metric.value < 100 ? 2 : 0)} {metric.unit}
+                                {fmtFigure(metric.value, metric.unit)}
                               </span>
                               {metric.breakdown && metric.breakdown.length > 0 && (
                                 <span className="block text-xs text-gray-500 mt-0.5">
-                                  {metric.breakdown.map(b => `${b.label}: ${fmt(b.value, b.value < 100 ? 2 : 0)} ${b.unit}`).join(' · ')}
+                                  {metric.breakdown.map(b => `${b.label}: ${fmtFigure(b.value, b.unit)}`).join(' · ')}
                                 </span>
                               )}
                             </span>

@@ -12,6 +12,7 @@ import { calculateSBTiTarget } from '@/lib/calculations';
 import { gapToTarget } from '@/lib/pipeline';
 import { formatMetric } from '@/lib/units';
 import { GOAL_SCOPE_LABELS } from '@/lib/goal-import-core';
+import { measurementCaption, type GoalMeasurement } from '@/lib/goal-period-core';
 import {
   GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY, GOAL_METRIC_BASE_UNIT,
   GOAL_TYPES_BY_METRIC, asGoalMetric, computeGoalProgress, goalBaseline, goalTargetValue,
@@ -60,6 +61,8 @@ interface Props {
   currentLocationKg: number;
   currentWaterGal: number;
   currentWasteKg: number;
+  /** Which year (and whether partial) each metric's current value covers. */
+  measuredIn: Record<'ghg' | 'water' | 'waste', GoalMeasurement | null>;
   pipelineKg: number;
   pipelineCurrentYearKg: number;
   pipelineWaterGal: number;
@@ -123,6 +126,7 @@ export function GoalsClient({
   currentLocationKg,
   currentWaterGal,
   currentWasteKg,
+  measuredIn,
   pipelineKg,
   pipelineCurrentYearKg,
   pipelineWaterGal,
@@ -285,9 +289,13 @@ export function GoalsClient({
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Current Emissions</p>
-            <p className="text-2xl font-bold text-gray-900">{fmtCO2e(currentMarketKg)}</p>
-            <p className="text-xs text-gray-400">market-based, {currentYear}</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Measured Emissions</p>
+            <p className="text-2xl font-bold text-gray-900">{measuredIn.ghg ? fmtCO2e(currentMarketKg) : '—'}</p>
+            <p className="text-xs text-gray-400">
+              {measuredIn.ghg
+                ? `Scope 1+2, market-based, ${measuredIn.ghg.year}${measuredIn.ghg.partial ? ' to date' : ''}`
+                : 'No Scope 1 or 2 data yet'}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -315,6 +323,13 @@ export function GoalsClient({
       {activeGoals.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-700">Path to target</h2>
+          {/* Says which year progress is judged on: an annual target against a
+              part year always looks on track. */}
+          {[...new Set(
+            activeGoals.map((g) => measurementCaption(measuredIn[asGoalMetric(g.metric)])),
+          )].map((caption) => (
+            <p key={caption} className="text-xs text-gray-500">{caption}</p>
+          ))}
           {activeGoals.map(goal => {
             const current = getCurrentValue(goal);
             // Reuse the same target derivation the progress bars use, so the

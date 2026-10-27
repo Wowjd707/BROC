@@ -4,7 +4,7 @@ import { useState, useMemo, useTransition } from 'react';
 import { releaseEvidence } from '@/components/evidence/release-evidence';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { formatDate, toTitleCase } from '@/lib/utils';
+import { formatDate, toTitleCase, fmtFactor, perUnit } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/toast';
@@ -276,7 +276,7 @@ export function FactorsClient({
                       </td>
                       <td className="px-4 py-3 text-gray-900">{keyLabelFor(f)}</td>
                       <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
-                        {f.co2e_factor} <span className="text-gray-400 font-normal">kg/{f.unit}</span>
+                        {fmtFactor(f.co2e_factor)} <span className="text-gray-400 font-normal">kg/{perUnit(f.unit)}</span>
                       </td>
                       <td className="px-4 py-3 text-gray-600">
                         {f.factor_source}
@@ -299,7 +299,7 @@ export function FactorsClient({
                         <EvidenceCell
                           recordType="custom_emission_factor"
                           recordId={f.id}
-                          title={`${meta.label} · ${keyLabelFor(f)} · ${f.co2e_factor} kg/${f.unit}`}
+                          title={`${meta.label} · ${keyLabelFor(f)} · ${fmtFactor(f.co2e_factor)} kg/${perUnit(f.unit)}`}
                           organizationId={organizationId}
                           canEdit={canEdit}
                           initialCount={evidenceCounts[evidenceCountKey('custom_emission_factor', f.id)] ?? 0}

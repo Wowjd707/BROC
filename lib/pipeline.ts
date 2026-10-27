@@ -155,9 +155,14 @@ export interface PipelineSummary {
 }
 
 /**
- * Summarise a pipeline for a reporting year. `cancelled` projects are excluded;
- * `idea`-stage projects are excluded from committed figures by default, since
- * an unapproved idea should not count toward a target.
+ * Summarise a pipeline for a reporting year: the reductions still to come.
+ *
+ * `cancelled` projects are excluded. `idea`-stage projects are excluded by
+ * default, since an unapproved idea should not count toward a target.
+ * `completed` projects are excluded by default too: their savings are already
+ * in the measured emissions, so counting them here as well added them twice —
+ * once in "achieved" (base minus current) and again as "pipeline" — and
+ * overstated how much of a target is covered.
  *
  * `metric` selects which savings column is summed. A project with no figure for
  * the requested metric contributes zero rather than being dropped — the project
@@ -168,14 +173,15 @@ export function summarisePipeline(
   projects: PipelineProject[],
   year: number,
   fyStart: number = 1,
-  options: { includeIdeas?: boolean; metric?: PipelineMetric } = {},
+  options: { includeIdeas?: boolean; includeCompleted?: boolean; metric?: PipelineMetric } = {},
 ): PipelineSummary {
   const metric = options.metric ?? 'ghg';
 
   const eligible = projects.filter(
     (p) =>
       p.status !== 'cancelled' &&
-      (options.includeIdeas ? true : p.status !== 'idea'),
+      (options.includeIdeas ? true : p.status !== 'idea') &&
+      (options.includeCompleted ? true : p.status !== 'completed'),
   );
 
   const prorated = eligible.map((p) => prorateProject(p, year, fyStart, metric));

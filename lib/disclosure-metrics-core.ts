@@ -284,11 +284,15 @@ export function resolveMetric(key: string, inv: InventoryInput): MetricValue | n
         label: 'Climate targets',
         value: inv.targets.length,
         unit: inv.targets.length === 1 ? 'target' : 'targets',
-        breakdown: inv.targets.map((t) => ({
-          label: `${t.name} (by ${t.targetYear})`,
-          value: t.targetReductionPct ?? 0,
-          unit: '% reduction',
-        })),
+        // A target with no reduction percentage (an absolute or intensity
+        // target set as a value) is counted but not given a made-up 0%.
+        breakdown: inv.targets
+          .filter((t) => t.targetReductionPct != null)
+          .map((t) => ({
+            label: `${t.name} (by ${t.targetYear})`,
+            value: t.targetReductionPct as number,
+            unit: '% reduction',
+          })),
         missing: inv.targets.length === 0,
       };
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt, formatDate } from './utils';
+import { reportingYearRange, getReportingYears, pctChange, fmtCO2e, fmt, formatDate, fmtAxis, fmtFigure, fmtFactor, perUnit } from './utils';
 
 describe('reportingYearRange', () => {
   it('covers the full calendar year for a January fiscal start', () => {
@@ -47,6 +47,46 @@ describe('pctChange', () => {
     const r = pctChange(50, 0);
     expect(r.direction).toBe('flat');
     expect(r.label).toBe('—');
+  });
+});
+
+describe('fmtFactor / perUnit', () => {
+  it('formats factors with separators and natural precision', () => {
+    expect(fmtFactor(1842)).toBe('1,842');
+    expect(fmtFactor(0.34)).toBe('0.34');
+    expect(fmtFactor(0.00213)).toBe('0.0021');
+  });
+  it('uses the singular after a per-slash', () => {
+    // Regression: "640 kg/tonnes".
+    expect(perUnit('tonnes')).toBe('tonne');
+    expect(perUnit('passenger-mile')).toBe('passenger-mile');
+    expect(perUnit(null)).toBe('');
+  });
+});
+
+describe('fmtFigure', () => {
+  it('does not pad whole numbers with decimals', () => {
+    // Regression: a count of goals rendered as "2.00 targets".
+    expect(fmtFigure(2, 'targets')).toBe('2 targets');
+    expect(fmtFigure(42, '% reduction')).toBe('42% reduction');
+  });
+  it('keeps up to two decimals on small fractions and none on large values', () => {
+    expect(fmtFigure(0.125, 'tCO₂e per sq ft')).toBe('0.13 tCO₂e per sq ft');
+    expect(fmtFigure(9448.4, 'tCO₂e')).toBe('9,448 tCO₂e');
+  });
+});
+
+describe('fmtAxis', () => {
+  it('keeps neighbouring ticks distinct above a thousand', () => {
+    // Regression: 1,700 and 2,200 both rendered as "2k".
+    expect(fmtAxis(1700)).toBe('1.7k');
+    expect(fmtAxis(2200)).toBe('2.2k');
+    expect(fmtAxis(2000)).toBe('2k');
+  });
+  it('leaves small values as numbers and scales millions', () => {
+    expect(fmtAxis(550)).toBe('550');
+    expect(fmtAxis(0)).toBe('0');
+    expect(fmtAxis(1_500_000)).toBe('1.5M');
   });
 });
 

@@ -49,11 +49,11 @@ export default async function DashboardPage({
   ] = await Promise.all([
     applyScope(supabase.from('emission_entries').select('scope, scope1_category, co2e_kg, co2e_kg_location_based, accounting_method, source_type, site_id, entry_date, unit_normalized, quantity_normalized')
       .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('emission_entries').select('scope, co2e_kg, accounting_method, site_id, entry_date')
+    applyScope(supabase.from('emission_entries').select('scope, co2e_kg, co2e_kg_location_based, accounting_method, site_id, entry_date')
       .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
     applyScope(supabase.from('ehs_entries').select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
       .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('ehs_entries').select('metric_type, quantity_normalized')
+    applyScope(supabase.from('ehs_entries').select('metric_type, quantity_normalized, entry_date')
       .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
     applyScope(supabase.from('sites').select('id, name, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true), scope.siteIds, 'id'),
     // Every active goal, not just the first: the dashboard now shows progress
@@ -73,9 +73,9 @@ export default async function DashboardPage({
       .order('next_milestone_date')
       .limit(4),
     supabase.from('supplier_survey_invitations').select('id, status, survey_id'),
-    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality')
+    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
       .gte('entry_date', curStart).lte('entry_date', curEnd).is('deleted_at', null), scope.siteIds),
-    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality')
+    applyScope(supabase.from('scope3_entries').select('category_number, co2e_kg, data_quality, entry_date')
       .gte('entry_date', priorStart).lte('entry_date', priorEnd).is('deleted_at', null), scope.siteIds),
   ]);
 

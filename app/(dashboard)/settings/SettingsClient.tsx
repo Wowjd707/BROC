@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -101,6 +101,10 @@ export function SettingsClient({
 
   // ── Sites state ──────────────────────────────────────────────────────────
   const [sites, setSites]             = useState<Site[]>(initialSites);
+  // Archived sites stay listed on the Sites tab, but they are out of the
+  // boundary and the reporting hierarchy. Passing every site counted an
+  // archived one as "counted in full" and as "not assigned to a business unit".
+  const activeSites = useMemo(() => sites.filter((s) => s.is_active !== false), [sites]);
   const [siteDrawerOpen, setSiteDrawerOpen] = useState(false);
   const [editingSite, setEditingSite] = useState<Site | null>(null);
   const [archivingSite, setArchivingSite] = useState<Site | null>(null);
@@ -435,7 +439,7 @@ export function SettingsClient({
                 <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Scope 2: eGRID 2023</span>
                 <span className="bg-gray-50 border border-gray-200 rounded px-2 py-1">Refrigerants: IPCC AR6</span>
               </div>
-              <p className="text-xs text-gray-400 mt-1">Factors are pinned per season for auditability and updated on annual releases.</p>
+              <p className="text-xs text-gray-400 mt-1">Each entry keeps the factor version it was calculated with, for auditability. New editions are loaded when publishers release them, usually annually.</p>
             </div>
 
             {isAdmin && (
@@ -462,7 +466,7 @@ export function SettingsClient({
             approach={(organization?.consolidation_approach ?? 'operational_control') as ConsolidationApproach}
             intensityMetricKey={organization?.intensity_metric_key ?? null}
             denominators={denominators}
-            sites={initialSites.map((s2) => ({
+            sites={activeSites.map((s2) => ({
               id: s2.id,
               name: s2.name,
               ownership_percent: s2.ownership_percent ?? 100,
@@ -825,7 +829,7 @@ export function SettingsClient({
           <BusinessUnitsPanel
             canEdit={userProfile?.role === 'admin' || userProfile?.role === 'editor'}
             isAdmin={userProfile?.role === 'admin'}
-            sites={sites}
+            sites={activeSites}
             businessUnits={businessUnits}
             siteGroups={siteGroups}
             groupMembers={groupMembers}
@@ -836,7 +840,7 @@ export function SettingsClient({
           <SiteGroupsPanel
             canEdit={userProfile?.role === 'admin' || userProfile?.role === 'editor'}
             isAdmin={userProfile?.role === 'admin'}
-            sites={sites}
+            sites={activeSites}
             businessUnits={businessUnits}
             siteGroups={siteGroups}
             groupMembers={groupMembers}

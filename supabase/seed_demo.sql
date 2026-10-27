@@ -263,7 +263,7 @@ BEGIN
     commodity_name, emission_factor, factor_unit, factor_source, notes)
   VALUES
     (v_org, v_sup_steel, 'Steelcore Industries', '7208', 'Hot-rolled coil steel',
-     1.842, 'tonne', 'Supplier declaration 2026-02-11, third-party verified', '[DEMO]'),
+     1.842, 'tonne', 'Supplier declaration 2026-02-11', '[DEMO]'),
     (v_org, v_sup_elec, 'ElectroParts Co.', '7601 10', 'Unwrought aluminium',
      12.310, 'tonne', 'Supplier declaration 2026-01-28', '[DEMO]');
 

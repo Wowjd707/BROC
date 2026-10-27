@@ -203,7 +203,8 @@ export function BoundaryPanel({
               <option value="">Floor area (default)</option>
               {options.map((o) => (
                 <option key={o.metric_key} value={o.metric_key}>
-                  {o.label} ({o.unit})
+                  {/* Skip the unit when the label already ends with it — "Headcount (FTE) (FTE)". */}
+                  {o.label.toLowerCase().endsWith(`(${o.unit.toLowerCase()})`) ? o.label : `${o.label} (${o.unit})`}
                 </option>
               ))}
             </select>

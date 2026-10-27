@@ -32,6 +32,9 @@ export const SOURCE_LABELS: Record<string, string> = {
   non_hazardous_recycled_plastics: 'Recycled — plastics',
   non_hazardous_composted: 'Composted', non_hazardous_incinerated: 'Incinerated',
   hazardous: 'Hazardous Waste', hazardous_incinerated: 'Hazardous — incinerated',
+  // Was missing, so data review fell back to the raw key: "hazardous treated".
+  // Wording matches the waste entry form (WasteDrawer).
+  hazardous_treated: 'Hazardous — treated / neutralized',
   other: 'Other',
 
   // Safety — the labels here must match sustainability_metrics.label, for the

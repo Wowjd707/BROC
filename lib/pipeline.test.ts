@@ -121,18 +121,25 @@ describe('summarisePipeline', () => {
               estimated_co2e_reduction_kg_per_year: 900_000 }),
   ];
 
-  it('excludes cancelled and idea-stage projects by default', () => {
+  it('excludes cancelled, idea-stage and completed projects by default', () => {
     const s = summarisePipeline(projects, 2026, 1);
-    expect(s.projects.map(p => p.id).sort()).toEqual(['a', 'b', 'c']);
+    expect(s.projects.map(p => p.id).sort()).toEqual(['b', 'c']);
   });
 
   it('can include ideas when explicitly asked', () => {
     const s = summarisePipeline(projects, 2026, 1, { includeIdeas: true });
-    expect(s.projects.map(p => p.id).sort()).toEqual(['a', 'b', 'c', 'd']);
+    expect(s.projects.map(p => p.id).sort()).toEqual(['b', 'c', 'd']);
+  });
+
+  it('never counts a completed project as pipeline unless asked', () => {
+    // Regression: a completed project's saving is already in measured
+    // emissions ("achieved"); adding it to the pipeline counted it twice.
+    expect(summarisePipeline(projects, 2026, 1).annualisedValue).toBe(400_000);
+    expect(summarisePipeline(projects, 2026, 1, { includeCompleted: true }).annualisedValue).toBe(600_000);
   });
 
   it('separates current-year delivery from annualised run-rate', () => {
-    const s = summarisePipeline(projects, 2026, 1);
+    const s = summarisePipeline(projects, 2026, 1, { includeCompleted: true });
     // a delivers fully (200k), b about half (50k), c nothing yet
     expect(s.currentYearValue).toBeGreaterThan(248_000);
     expect(s.currentYearValue).toBeLessThan(252_000);

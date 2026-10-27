@@ -191,9 +191,14 @@ export function ProjectsClient({
   const totalPipeline = visible
     .filter(p => ['approved', 'in_progress'].includes(p.status))
     .reduce((s, p) => s + (p.estimated_co2e_reduction_kg_per_year ?? 0), 0);
-  const totalActual = visible
-    .filter(p => p.status === 'completed')
-    .reduce((s, p) => s + (p.actual_co2e_reduction_kg_per_year ?? 0), 0);
+  // Measured savings only. A completed project with no measured figure is
+  // "not measured", not zero — summing it as 0 showed "0 kg CO₂e/yr" next to a
+  // completed project. Its estimate is shown separately, labelled as one.
+  const completed = visible.filter(p => p.status === 'completed');
+  const measured = completed.filter(p => p.actual_co2e_reduction_kg_per_year != null);
+  const unmeasured = completed.filter(p => p.actual_co2e_reduction_kg_per_year == null);
+  const totalActual = measured.reduce((s, p) => s + (p.actual_co2e_reduction_kg_per_year ?? 0), 0);
+  const unmeasuredEstimate = unmeasured.reduce((s, p) => s + (p.estimated_co2e_reduction_kg_per_year ?? 0), 0);
 
   // ── CRUD helpers ──────────────────────────────────────────────────────────
   function openCreate() {
@@ -432,7 +437,22 @@ export function ProjectsClient({
         <Card>
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Actual Reduction (completed)</p>
-            <p className="text-2xl font-bold text-gray-900">{fmtCO2e(totalActual)}/yr</p>
+            {completed.length === 0 ? (
+              <p className="text-2xl font-bold text-gray-400">—</p>
+            ) : measured.length === 0 ? (
+              <p className="text-2xl font-bold text-gray-400">Not measured</p>
+            ) : (
+              <p className="text-2xl font-bold text-gray-900">{fmtCO2e(totalActual)}/yr</p>
+            )}
+            {completed.length === 0 && (
+              <p className="text-xs text-gray-400 mt-1">No completed projects yet.</p>
+            )}
+            {unmeasured.length > 0 && (
+              <p className="text-xs text-gray-500 mt-1">
+                {unmeasured.length} completed project{unmeasured.length === 1 ? '' : 's'} without a measured saving
+                {unmeasuredEstimate > 0 && <> (estimated {fmtCO2e(unmeasuredEstimate)}/yr)</>}. Record the measured figure on the project.
+              </p>
+            )}
           </CardContent>
         </Card>
       </div>

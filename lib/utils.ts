@@ -56,6 +56,53 @@ export function fmtCO2e(kg: number | null | undefined): string {
   return `${Math.round(kg).toLocaleString('en-US')} kg CO₂e`;
 }
 
+/**
+ * A disclosure figure with its unit: no forced decimals on whole numbers
+ * ("2 targets", not "2.00 targets"), at most two on small fractional values,
+ * none on large ones, and no space before a percent sign ("42% reduction").
+ */
+export function fmtFigure(value: number, unit: string): string {
+  const digits = Math.abs(value) < 100 && !Number.isInteger(value) ? 2 : 0;
+  const n = value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: digits });
+  if (!unit) return n;
+  return unit.startsWith('%') ? `${n}${unit}` : `${n} ${unit}`;
+}
+
+/**
+ * An emission factor value: thousands separators, and only the precision the
+ * value carries (1,842 · 0.34 · 0.0021) rather than a fixed count.
+ */
+export function fmtFactor(value: number): string {
+  const abs = Math.abs(value);
+  const digits = abs >= 100 ? 0 : abs >= 1 ? 2 : 4;
+  return value.toLocaleString('en-US', { maximumFractionDigits: digits });
+}
+
+const PLURAL_UNITS: Record<string, string> = {
+  tonnes: 'tonne', tons: 'ton', 'metric tons': 'metric ton', miles: 'mile',
+  kilometres: 'kilometre', kilometers: 'kilometer', litres: 'litre', liters: 'liter',
+  gallons: 'gallon', units: 'unit', employees: 'employee', nights: 'night',
+};
+
+/** The unit after a "per" slash, in the singular: "kg/tonne", not "kg/tonnes". */
+export function perUnit(unit: string | null | undefined): string {
+  if (!unit) return '';
+  return PLURAL_UNITS[unit.toLowerCase()] ?? unit;
+}
+
+/**
+ * Compact chart-axis label: 950, 1.7k, 2.2k, 1.5M. Keeps one decimal above a
+ * thousand — rounding to whole thousands labelled the 1,700 and 2,200 ticks
+ * both "2k".
+ */
+export function fmtAxis(v: number): string {
+  const abs = Math.abs(v);
+  const trim = (n: number) => n.toFixed(1).replace(/\.0$/, '');
+  if (abs >= 1_000_000) return `${trim(v / 1_000_000)}M`;
+  if (abs >= 1_000) return `${trim(v / 1_000)}k`;
+  return v.toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
 /** Format gallons */
 export function fmtGallons(gallons: number | null | undefined): string {
   if (gallons == null) return '—';

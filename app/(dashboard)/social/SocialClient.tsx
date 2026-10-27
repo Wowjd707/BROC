@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { sourceLabel } from '@/lib/source-labels';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -396,6 +397,16 @@ export function SocialClient({
 
 // ─── Pieces ──────────────────────────────────────────────────────────────────
 
+/**
+ * "recordable work-related injuries and hours worked" from the rate's input
+ * keys, using the same labels as the entry form — not the raw keys, which
+ * read as "separations voluntary and separations involuntary and headcount".
+ */
+function neededInputs(inputs: string[]): string {
+  const names = inputs.map((i) => sourceLabel(i.split(':')[1] ?? i).toLowerCase());
+  return new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }).format(names);
+}
+
 function RateCard({ rate }: { rate: DerivedRate }) {
   return (
     <Card>
@@ -405,7 +416,7 @@ function RateCard({ rate }: { rate: DerivedRate }) {
           <>
             <p className="text-2xl font-semibold text-gray-300">not measured</p>
             <p className="text-xs text-gray-400">
-              Needs {rate.inputs.map((i) => i.split(':')[1].replace(/_/g, ' ')).join(' and ')}.
+              Needs {neededInputs(rate.inputs)}.
             </p>
           </>
         ) : (

@@ -1,4 +1,5 @@
 import 'server-only';
+import { asGoalMetric } from './goal-metrics';
 import { createServerClient } from './supabase/server';
 import { reportingYearRange } from './utils';
 import { totalsByCategory } from './scope3';
@@ -103,7 +104,7 @@ export async function getInventoryForYear(
         .select('metric_type, source_type, entry_date, quantity_normalized, site_id')
         .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
       supabase.from('sites').select('id, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true),
-      supabase.from('goals').select('name, target_year, target_reduction_pct, target_value, status'),
+      supabase.from('goals').select('name, metric, target_year, target_reduction_pct, status'),
       supabase.from('organizations').select('consolidation_approach, intensity_metric_key').limit(1).maybeSingle(),
       supabase.from('business_metrics')
         .select('metric_key, label, description, unit, category, aggregation, is_denominator, display_order, organization_id')
@@ -236,12 +237,16 @@ export async function getInventoryForYear(
     // GRI 403-9 requires the reporter to state the basis and a report cannot
     // state what the platform never decided.
     hoursBasis: 200_000,
+    // Climate targets only: a water or waste goal answering ESRS E1-4 or the
+    // TCFD targets disclosure is a misstatement. And a reduction percentage or
+    // nothing — target_value is an absolute amount in kg or gallons, and
+    // falling back to it printed "30,283 % reduction".
     targets: (goals ?? [])
-      .filter((g) => g.status === 'active')
+      .filter((g) => g.status === 'active' && asGoalMetric(g.metric) === 'ghg')
       .map((g) => ({
         name: g.name,
         targetYear: g.target_year,
-        targetReductionPct: g.target_reduction_pct ?? g.target_value ?? null,
+        targetReductionPct: g.target_reduction_pct ?? null,
         status: g.status,
       })),
   };

@@ -59,7 +59,7 @@ export default async function KpisPage({
       .is('deleted_at', null), scope.siteIds),
     applyScope(supabase
       .from('ehs_entries')
-      .select('metric_type, source_type, quantity_normalized, unit_normalized, site_id')
+      .select('metric_type, source_type, quantity_normalized, unit_normalized, site_id, entry_date')
       .gte('entry_date', priorStart)
       .lte('entry_date', priorEnd)
       .is('deleted_at', null), scope.siteIds),

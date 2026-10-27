@@ -29,7 +29,7 @@ export const CONSOLIDATION_DESCRIPTIONS: Record<ConsolidationApproach, string> =
   financial_control:
     'All emissions from operations the organization financially controls are accounted for in full; operations it does not control are excluded entirely.',
   operational_control:
-    'All emissions from operations the organization has authority to introduce and implement operating policies at are accounted for in full; others are excluded entirely.',
+    'All emissions from operations over which the organization has the authority to introduce and implement its operating policies are accounted for in full; others are excluded entirely.',
 };
 
 export interface SiteBoundary {

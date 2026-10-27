@@ -5,6 +5,7 @@ import { reportingYearRange } from '@/lib/utils';
 import { summarisePipeline } from '@/lib/pipeline';
 import { asGoalMetric } from '@/lib/goal-metrics';
 import { activeOrg } from '@/lib/active-org';
+import { goalMeasurement } from '@/lib/goal-period-core';
 import { evidenceOrganizationId, loadEvidenceCounts } from '@/lib/evidence';
 
 export default async function GoalDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -90,7 +91,11 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
 
   const pipelineValue = summarisePipeline(projects ?? [], curYear, fyStart, { metric }).annualisedValue;
 
-  const currentValue = yearlyData[yearlyData.length - 1]?.actualValue ?? 0;
+  // Judged on the latest complete reporting year; the year in progress is a
+  // fallback only when no complete year has data. See lib/goal-period-core.ts.
+  const valueFor = (y: number) => yearlyData.find((d) => d.year === y)?.actualValue ?? null;
+  const measurement = goalMeasurement(curYear - 1, valueFor(curYear - 1), curYear, valueFor(curYear));
+  const currentValue = measurement?.value ?? 0;
 
   return (
     <GoalDetailClient
@@ -98,6 +103,7 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
       yearlyData={yearlyData}
       currentYear={curYear}
       currentValue={currentValue}
+      measurement={measurement}
       pipelineValue={pipelineValue}
       userRole={userRole}
       organizationId={evidenceOrganizationId(userProfile)}

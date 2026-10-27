@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { fmtCO2e, formatDate } from '@/lib/utils';
+import { fmtCO2e, formatDate, fmtFactor, perUnit } from '@/lib/utils';
 import { totalsByCategory, primaryDataShare, METHOD_LABELS, type Scope3Method } from '@/lib/scope3';
 import type { Scope3Category, Scope3Entry, Scope3Factor } from '@/lib/supabase/types';
 import { scoreBand, type SupplierDeclaration, type SupplierScore } from '@/lib/supplier-data-core';
@@ -169,7 +169,8 @@ export function Scope3Client({
                           <div className="flex items-start justify-between gap-2 mb-1">
                             <span className="text-[11px] font-semibold text-gray-400">CATEGORY {t.categoryNumber}</span>
                             {t.entryCount > 0 && (
-                              <span className="text-[11px] text-gray-400">{share.toFixed(0)}%</span>
+                              // A category with data never reads "0%" — 22 t of 6,331 t is under 1%, not nothing.
+                              <span className="text-[11px] text-gray-400">{share > 0 && share < 1 ? '<1' : share.toFixed(0)}%</span>
                             )}
                           </div>
                           <p className="text-sm font-medium text-gray-900 leading-snug mb-2">{t.name}</p>
@@ -229,7 +230,10 @@ export function Scope3Client({
                         <td className="px-4 py-3 text-gray-500">{e.category_number}</td>
                         <td className="px-4 py-3 text-gray-900">
                           {e.description || <span className="text-gray-400">—</span>}
-                          {e.suppliers?.name && <span className="text-gray-400"> · {e.suppliers.name}</span>}
+                          {/* Not repeated when the description already names the supplier. */}
+                          {e.suppliers?.name && !(e.description ?? '').includes(e.suppliers.name) && (
+                            <span className="text-gray-400"> · {e.suppliers.name}</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-gray-600 whitespace-nowrap">
                           {METHOD_LABELS[e.calculation_method as Scope3Method] ?? e.calculation_method}
@@ -238,7 +242,7 @@ export function Scope3Client({
                           {e.activity_value.toLocaleString()} <span className="text-gray-400">{e.activity_unit}</span>
                         </td>
                         <td className="px-4 py-3 text-right text-gray-600 whitespace-nowrap" title={e.factor_source}>
-                          {e.factor_value} <span className="text-gray-400">/{e.factor_unit}</span>
+                          {fmtFactor(e.factor_value)} <span className="text-gray-400">kg/{perUnit(e.factor_unit)}</span>
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">{fmtCO2e(e.co2e_kg)}</td>
                         <td className="px-4 py-3">
@@ -303,7 +307,7 @@ export function Scope3Client({
                             <td className="px-4 py-3 text-gray-900">{d.supplierName}</td>
                             <td className="px-4 py-3 text-gray-600">{d.product ?? '—'}</td>
                             <td className="px-4 py-3 text-right text-gray-900 whitespace-nowrap">
-                              {d.intensityKgCo2e.toLocaleString()} <span className="text-gray-400">kg/{d.unit}</span>
+                              {fmtFactor(d.intensityKgCo2e)} <span className="text-gray-400">kg/{perUnit(d.unit)}</span>
                             </td>
                             <td className="px-4 py-3">
                               {d.verified
@@ -429,7 +433,7 @@ export function Scope3Client({
                           {METHOD_LABELS[f.method as Scope3Method] ?? f.method}
                         </td>
                         <td className="px-4 py-3 text-right text-gray-900 whitespace-nowrap">
-                          {f.factor_value} <span className="text-gray-400">kg/{f.activity_unit}</span>
+                          {fmtFactor(f.factor_value)} <span className="text-gray-400">kg/{perUnit(f.activity_unit)}</span>
                         </td>
                         <td className="px-4 py-3 text-gray-600">{f.region ?? '—'}</td>
                         <td className="px-4 py-3 text-gray-600">

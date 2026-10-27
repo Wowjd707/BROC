@@ -15,9 +15,10 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { fmt, pctChange } from '@/lib/utils';
+import { fmt, fmtAxis, pctChange, reportingYearRange } from '@/lib/utils';
+import { latestEntryMonth, samePeriodLastYear } from '@/lib/period-compare-core';
 import { useUnits, UnitToggle } from '@/components/layout/UnitPreferences';
-import { formatCarbon, formatWater, formatWaste, formatEnergy } from '@/lib/units';
+import { formatCarbon, formatWater, formatWaste, formatEnergy, convertForDisplay, unitLabel } from '@/lib/units';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,7 +41,7 @@ interface EhsRow {
   unit_normalized: string | null;
   /** Null for entity-level governance metrics, which belong to no site. */
   site_id: string | null;
-  entry_date?: string;
+  entry_date: string;
 }
 
 interface Site {
@@ -120,23 +121,35 @@ function wasteDiversionRate(rows: EhsRow[]): number {
 }
 
 // Monthly data for the trend chart
+/**
+ * Month index (0–11) of a `YYYY-MM-DD` date, read from the string.
+ * `new Date('2026-03-01').getMonth()` parses as UTC midnight and so returns
+ * February anywhere west of Greenwich, moving every entry dated the 1st into
+ * the previous month.
+ */
+function monthIndexOf(entryDate: string): number {
+  return Number(entryDate.slice(5, 7)) - 1;
+}
+
+/**
+ * Monthly totals in the display unit. A month with no entries is null — a gap
+ * in the line — never zero, which would read as emissions stopping.
+ */
 function buildMonthlyTrend(
   curRows: EmissionRow[],
   priorRows: EmissionRow[],
   fyStart: number,
   method: 'market' | 'location',
-): { month: string; current: number; prior: number }[] {
+  toDisplay: (kg: number) => number,
+): { month: string; current: number | null; prior: number | null }[] {
   const months = Array.from({ length: 12 }, (_, i) => (fyStart - 1 + i) % 12);
-  return months.map((m, idx) => {
-    const label = MONTHS[m];
-    const curTotal = curRows
-      .filter(r => new Date(r.entry_date).getMonth() === m)
-      .reduce((s, r) => s + (r.scope === 'scope1' ? r.co2e_kg : getS2Co2e(r, method)), 0);
-    const priorTotal = priorRows
-      .filter(r => new Date(r.entry_date).getMonth() === m)
-      .reduce((s, r) => s + (r.scope === 'scope1' ? r.co2e_kg : getS2Co2e(r, method)), 0);
-    return { month: label, current: Math.round(curTotal), prior: Math.round(priorTotal) };
-  });
+  const total = (rows: EmissionRow[], m: number) => {
+    const inMonth = rows.filter(r => monthIndexOf(r.entry_date) === m);
+    if (inMonth.length === 0) return null;
+    const kg = inMonth.reduce((s, r) => s + (r.scope === 'scope1' ? r.co2e_kg : getS2Co2e(r, method)), 0);
+    return Math.round(toDisplay(kg) * 100) / 100;
+  };
+  return months.map((m) => ({ month: MONTHS[m], current: total(curRows, m), prior: total(priorRows, m) }));
 }
 
 // Site-level KPI rollup
@@ -181,12 +194,15 @@ function KpiCard({
   value,
   unit,
   change,
+  comparedTo = 'prior year',
   tooltip,
 }: {
   label: string;
   value: string;
   unit?: string;
   change?: { label: string; direction: 'up' | 'down' | 'flat' };
+  /** What the change is measured against, e.g. "Jan–Jul 2025". */
+  comparedTo?: string;
   tooltip?: string;
 }) {
   const changeColor =
@@ -206,7 +222,7 @@ function KpiCard({
         </div>
         {change && (
           <p className={`text-xs mt-1 font-medium ${changeColor}`}>
-            {change.label} vs prior year
+            {change.label} vs {comparedTo}
           </p>
         )}
       </CardContent>
@@ -214,10 +230,41 @@ function KpiCard({
   );
 }
 
-function TrendBadge({ direction, label }: { direction: 'up' | 'down' | 'flat'; label: string }) {
-  if (direction === 'down') return <Badge variant="default" className="text-xs">{label} ↓</Badge>;
-  if (direction === 'up') return <Badge variant="destructive" className="text-xs">{label} ↑</Badge>;
-  return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+/**
+ * A coloured badge. `tone` says whether the figure is good or bad; `arrow`
+ * says which way it moved. They are separate because "higher is better" metrics
+ * (diversion, renewables) used to borrow the emissions convention, so a rising
+ * diversion rate — or a flat one — rendered with a down arrow.
+ */
+function TrendBadge({ tone, arrow = 'none', label }: {
+  tone: 'good' | 'bad' | 'neutral';
+  arrow?: 'up' | 'down' | 'none';
+  label: string;
+}) {
+  const glyph = arrow === 'up' ? ' ↑' : arrow === 'down' ? ' ↓' : '';
+  const variant = tone === 'good' ? 'default' : tone === 'bad' ? 'destructive' : 'secondary';
+  return <Badge variant={variant} className="text-xs">{label}{glyph}</Badge>;
+}
+
+/** Badge props for a percentage change where lower is better (emissions, water, waste). */
+function lowerIsBetter(chg: { label: string; direction: 'up' | 'down' | 'flat' }) {
+  return {
+    label: chg.label,
+    tone: chg.direction === 'down' ? 'good' : chg.direction === 'up' ? 'bad' : 'neutral',
+    arrow: chg.direction === 'flat' ? 'none' : chg.direction,
+  } as const;
+}
+
+/** A change in percentage points where higher is better (diversion, renewables). */
+function pointsChange(cur: number, prior: number) {
+  const d = Math.round((cur - prior) * 10) / 10;
+  return {
+    label: `${d > 0 ? '+' : ''}${d.toFixed(1)} pts`,
+    // KpiCard colours 'down' green; for these metrics an increase is the good direction.
+    direction: (d > 0 ? 'down' : d < 0 ? 'up' : 'flat') as 'up' | 'down' | 'flat',
+    tone: (d > 0 ? 'good' : d < 0 ? 'bad' : 'neutral') as 'good' | 'bad' | 'neutral',
+    arrow: (d > 0 ? 'up' : d < 0 ? 'down' : 'none') as 'up' | 'down' | 'none',
+  };
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -230,7 +277,7 @@ export function KpisClient({
   curEmissions: rawCurEmissions,
   priorEmissions: rawPriorEmissions,
   curEhs,
-  priorEhs,
+  priorEhs: priorEhsFull,
   sites,
   consolidationApproach,
 }: Props) {
@@ -283,7 +330,23 @@ export function KpisClient({
   }, [boundaries, consolidationApproach, boundaryIsWhole]);
 
   const curEmissions = useMemo(() => scaleEmissions(rawCurEmissions), [scaleEmissions, rawCurEmissions]);
-  const priorEmissions = useMemo(() => scaleEmissions(rawPriorEmissions), [scaleEmissions, rawPriorEmissions]);
+  // The whole prior year, for the trend chart's dashed line.
+  const priorEmissionsFull = useMemo(() => scaleEmissions(rawPriorEmissions), [scaleEmissions, rawPriorEmissions]);
+
+  // ── Like-for-like comparison ───────────────────────────────────────────────
+  // Every "vs prior year" figure compares the same span: the prior year cut to
+  // the months the current year has data for. See lib/period-compare-core.ts.
+  const priorRange = useMemo(() => reportingYearRange(priorYear, fyStart), [priorYear, fyStart]);
+  const emCmp = useMemo(
+    () => samePeriodLastYear(priorEmissionsFull, latestEntryMonth(curEmissions), priorRange),
+    [priorEmissionsFull, curEmissions, priorRange],
+  );
+  const ehsCmp = useMemo(
+    () => samePeriodLastYear(priorEhsFull, latestEntryMonth(curEhs), priorRange),
+    [priorEhsFull, curEhs, priorRange],
+  );
+  const priorEmissions = emCmp.prior;
+  const priorEhs = ehsCmp.prior;
 
   // ── Org-level metrics ──────────────────────────────────────────────────────
   const curTotal = useMemo(() => totalEmissions(curEmissions, s2Method), [curEmissions, s2Method]);
@@ -310,10 +373,24 @@ export function KpisClient({
   const curWaterInt = totalSqft > 0 && curWater > 0 ? curWater / totalSqft : null;
   const priorWaterInt = totalSqft > 0 && priorWater > 0 ? priorWater / totalSqft : null;
 
+  // Intensities follow the unit preferences like every other figure on the page
+  // (water intensity was fixed to gallons even with m³ selected).
+  const waterIntUnit = `${unitLabel('water', units.water)}/ft²`;
+  const fmtWaterInt = (galPerSqft: number) => {
+    const v = convertForDisplay(galPerSqft, 'water', units.water);
+    return v >= 1 ? v.toFixed(2) : v.toPrecision(3);
+  };
+  /** Emissions intensity in kg CO₂e per ft². */
+  const fmtEmInt = (kgPerSqft: number) => fmt(kgPerSqft, kgPerSqft >= 10 ? 1 : 2);
+
   // Trend chart
+  const carbonUnit = unitLabel('carbon', units.carbon);
   const trendData = useMemo(
-    () => buildMonthlyTrend(curEmissions, priorEmissions, fyStart, s2Method),
-    [curEmissions, priorEmissions, fyStart, s2Method],
+    () => buildMonthlyTrend(
+      curEmissions, priorEmissionsFull, fyStart, s2Method,
+      (kg) => convertForDisplay(kg, 'carbon', units.carbon),
+    ),
+    [curEmissions, priorEmissionsFull, fyStart, s2Method, units.carbon],
   );
 
   // Site KPIs
@@ -325,7 +402,7 @@ export function KpisClient({
   // Bar chart data: intensity by site
   const siteBarData = siteKpis
     .filter(s => s.emissionsIntensity !== null)
-    .map(s => ({ name: s.name, intensity: parseFloat((s.emissionsIntensity! * 1000).toFixed(2)) }))
+    .map(s => ({ name: s.name, intensity: parseFloat(s.emissionsIntensity!.toFixed(2)) }))
     .sort((a, b) => b.intensity - a.intensity);
 
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
@@ -374,16 +451,18 @@ export function KpisClient({
             label="Total GHG Emissions"
             value={formatCarbon(curTotal, units)}
             change={priorTotal > 0 ? pctChange(curTotal, priorTotal) : undefined}
+            comparedTo={emCmp.label}
           />
           <KpiCard
             label="Emissions Intensity"
-            value={curIntensity != null ? (curIntensity * 1000).toFixed(2) : '—'}
-            unit={curIntensity != null ? 'g CO₂e/ft²' : undefined}
+            value={curIntensity != null ? fmtEmInt(curIntensity) : '—'}
+            unit={curIntensity != null ? 'kg CO₂e/ft²' : undefined}
             change={
               curIntensity != null && priorIntensity != null
                 ? pctChange(curIntensity, priorIntensity)
                 : undefined
             }
+            comparedTo={emCmp.label}
           />
           <KpiCard
             label="Energy Use Intensity"
@@ -392,33 +471,30 @@ export function KpisClient({
             change={
               curEui != null && priorEui != null ? pctChange(curEui, priorEui) : undefined
             }
+            comparedTo={emCmp.label}
           />
           <KpiCard
             label="Renewable Energy"
             value={`${curRenew.toFixed(1)}%`}
-            change={
-              priorRenew > 0
-                ? {
-                    label: `${curRenew >= priorRenew ? '+' : ''}${(curRenew - priorRenew).toFixed(1)} pts`,
-                    direction: curRenew >= priorRenew ? 'down' : 'up',
-                  }
-                : undefined
-            }
+            change={priorRenew > 0 ? pointsChange(curRenew, priorRenew) : undefined}
+            comparedTo={emCmp.label}
           />
           <KpiCard
             label="Total Water Use"
             value={formatWater(curWater, units)}
             change={priorWater > 0 ? pctChange(curWater, priorWater) : undefined}
+            comparedTo={ehsCmp.label}
           />
           <KpiCard
             label="Water Intensity"
-            value={curWaterInt != null ? curWaterInt.toFixed(2) : '—'}
-            unit={curWaterInt != null ? 'gal/ft²' : undefined}
+            value={curWaterInt != null ? fmtWaterInt(curWaterInt) : '—'}
+            unit={curWaterInt != null ? waterIntUnit : undefined}
             change={
               curWaterInt != null && priorWaterInt != null
                 ? pctChange(curWaterInt, priorWaterInt)
                 : undefined
             }
+            comparedTo={ehsCmp.label}
           />
           <KpiCard
             label="Waste Generated"
@@ -427,18 +503,13 @@ export function KpisClient({
             // for anyone whose waste preference is pounds.
             value={formatWaste(curWaste, units)}
             change={priorWaste > 0 ? pctChange(curWaste, priorWaste) : undefined}
+            comparedTo={ehsCmp.label}
           />
           <KpiCard
             label="Waste Diversion Rate"
             value={`${curDivRate.toFixed(1)}%`}
-            change={
-              priorDivRate > 0
-                ? {
-                    label: `${curDivRate >= priorDivRate ? '+' : ''}${(curDivRate - priorDivRate).toFixed(1)} pts`,
-                    direction: curDivRate >= priorDivRate ? 'down' : 'up',
-                  }
-                : undefined
-            }
+            change={priorDivRate > 0 ? pointsChange(curDivRate, priorDivRate) : undefined}
+            comparedTo={ehsCmp.label}
           />
         </div>
       </section>
@@ -448,15 +519,15 @@ export function KpisClient({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Monthly Emissions Trend</CardTitle>
-            <p className="text-xs text-gray-500">kg CO₂e — {currentYear} vs {priorYear}</p>
+            <p className="text-xs text-gray-500">{carbonUnit} — {currentYear} vs {priorYear}</p>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={trendData} margin={{ top: 4, right: 16, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                 <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
-                <Tooltip formatter={(v: number) => [`${v.toLocaleString()} kg`, '']} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => fmtAxis(v)} />
+                <Tooltip formatter={(v: number) => [`${v.toLocaleString('en-US')} ${carbonUnit}`, '']} />
                 <Legend iconSize={10} wrapperStyle={{ fontSize: 12 }} />
                 <Line
                   type="monotone"
@@ -486,7 +557,7 @@ export function KpisClient({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">Emissions Intensity by Site</CardTitle>
-            <p className="text-xs text-gray-500">g CO₂e per sq ft</p>
+            <p className="text-xs text-gray-500">kg CO₂e per sq ft</p>
           </CardHeader>
           <CardContent>
             {siteBarData.length === 0 ? (
@@ -503,7 +574,7 @@ export function KpisClient({
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  <Tooltip formatter={(v: number) => [`${v} g/ft²`, 'Intensity']} />
+                  <Tooltip formatter={(v: number) => [`${v} kg CO₂e/ft²`, 'Intensity']} />
                   <Bar dataKey="intensity" radius={[0, 4, 4, 0]}>
                     {siteBarData.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
@@ -560,7 +631,7 @@ export function KpisClient({
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {s.emissionsIntensity != null
-                          ? `${(s.emissionsIntensity * 1000).toFixed(2)} g/ft²`
+                          ? `${fmtEmInt(s.emissionsIntensity)} kg/ft²`
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
@@ -570,13 +641,13 @@ export function KpisClient({
                       </td>
                       <td className="px-4 py-3 text-right text-gray-600">
                         {s.waterIntensity != null
-                          ? `${s.waterIntensity.toFixed(2)} gal/ft²`
+                          ? `${fmtWaterInt(s.waterIntensity)} ${waterIntUnit}`
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-right">
                         {s.wasteDiversionRate > 0 ? (
                           <TrendBadge
-                            direction={s.wasteDiversionRate >= 50 ? 'down' : 'up'}
+                            tone={s.wasteDiversionRate >= 50 ? 'good' : 'bad'}
                             label={`${s.wasteDiversionRate.toFixed(0)}%`}
                           />
                         ) : (
@@ -586,7 +657,7 @@ export function KpisClient({
                       <td className="px-4 py-3 text-right">
                         {s.renewablePct > 0 ? (
                           <TrendBadge
-                            direction={s.renewablePct >= 50 ? 'down' : 'flat'}
+                            tone={s.renewablePct >= 50 ? 'good' : 'neutral'}
                             label={`${s.renewablePct.toFixed(0)}%`}
                           />
                         ) : (
@@ -609,24 +680,24 @@ export function KpisClient({
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
                       {curIntensity != null
-                        ? `${(curIntensity * 1000).toFixed(2)} g/ft²`
+                        ? `${fmtEmInt(curIntensity)} kg/ft²`
                         : '—'}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
                       {curEui != null ? `${curEui.toFixed(1)} kWh/ft²` : '—'}
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">
-                      {curWaterInt != null ? `${curWaterInt.toFixed(2)} gal/ft²` : '—'}
+                      {curWaterInt != null ? `${fmtWaterInt(curWaterInt)} ${waterIntUnit}` : '—'}
                     </td>
                     <td className="px-4 py-3 text-right">
                       <TrendBadge
-                        direction={curDivRate >= 50 ? 'down' : 'up'}
+                        tone={curDivRate >= 50 ? 'good' : 'bad'}
                         label={`${curDivRate.toFixed(0)}%`}
                       />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <TrendBadge
-                        direction={curRenew >= 50 ? 'down' : 'flat'}
+                        tone={curRenew >= 50 ? 'good' : 'neutral'}
                         label={`${curRenew.toFixed(0)}%`}
                       />
                     </td>
@@ -649,49 +720,43 @@ export function KpisClient({
               label: 'GHG Emissions',
               cur: formatCarbon(curTotal, units),
               prior: formatCarbon(priorTotal, units),
-              chg: priorTotal > 0 ? pctChange(curTotal, priorTotal) : null,
+              chg: priorTotal > 0 ? lowerIsBetter(pctChange(curTotal, priorTotal)) : null,
+              vs: emCmp.label,
             },
             {
               label: 'Energy Use (Electricity)',
               cur: formatEnergy(curKwh, units),
               prior: formatEnergy(priorKwh, units),
-              chg: priorKwh > 0 ? pctChange(curKwh, priorKwh) : null,
+              chg: priorKwh > 0 ? lowerIsBetter(pctChange(curKwh, priorKwh)) : null,
+              vs: emCmp.label,
             },
             {
               label: 'Water Consumption',
               cur: formatWater(curWater, units),
               prior: formatWater(priorWater, units),
-              chg: priorWater > 0 ? pctChange(curWater, priorWater) : null,
+              chg: priorWater > 0 ? lowerIsBetter(pctChange(curWater, priorWater)) : null,
+              vs: ehsCmp.label,
             },
             {
               label: 'Waste Generated',
               cur: formatWaste(curWaste, units),
               prior: formatWaste(priorWaste, units),
-              chg: priorWaste > 0 ? pctChange(curWaste, priorWaste) : null,
+              chg: priorWaste > 0 ? lowerIsBetter(pctChange(curWaste, priorWaste)) : null,
+              vs: ehsCmp.label,
             },
             {
               label: 'Waste Diversion Rate',
               cur: `${curDivRate.toFixed(1)}%`,
               prior: `${priorDivRate.toFixed(1)}%`,
-              chg:
-                priorDivRate > 0
-                  ? {
-                      label: `${curDivRate >= priorDivRate ? '+' : ''}${(curDivRate - priorDivRate).toFixed(1)} pts`,
-                      direction: (curDivRate >= priorDivRate ? 'down' : 'up') as 'up' | 'down',
-                    }
-                  : null,
+              chg: priorDivRate > 0 ? pointsChange(curDivRate, priorDivRate) : null,
+              vs: ehsCmp.label,
             },
             {
               label: 'Renewable Energy %',
               cur: `${curRenew.toFixed(1)}%`,
               prior: `${priorRenew.toFixed(1)}%`,
-              chg:
-                priorRenew > 0
-                  ? {
-                      label: `${curRenew >= priorRenew ? '+' : ''}${(curRenew - priorRenew).toFixed(1)} pts`,
-                      direction: (curRenew >= priorRenew ? 'down' : 'up') as 'up' | 'down',
-                    }
-                  : null,
+              chg: priorRenew > 0 ? pointsChange(curRenew, priorRenew) : null,
+              vs: emCmp.label,
             },
           ].map(row => (
             <Card key={row.label}>
@@ -704,12 +769,12 @@ export function KpisClient({
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-gray-500">{row.prior}</p>
-                    <p className="text-xs text-gray-400">{priorYear}</p>
+                    <p className="text-xs text-gray-400">{row.vs === 'prior year' ? priorYear : row.vs}</p>
                   </div>
                 </div>
                 {row.chg && (
                   <div className="mt-2 pt-2 border-t border-gray-100">
-                    <TrendBadge direction={row.chg.direction} label={row.chg.label} />
+                    <TrendBadge tone={row.chg.tone} arrow={row.chg.arrow} label={row.chg.label} />
                   </div>
                 )}
               </CardContent>

@@ -12,7 +12,9 @@ import { EvidencePanel } from '@/components/evidence/EvidencePanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getSBTiPathway, calculateSBTiTarget, calculateAbsoluteTarget } from '@/lib/calculations';
-import { formatMetric } from '@/lib/units';
+import { formatMetric, convertForDisplay, unitLabel } from '@/lib/units';
+import { fmtAxis } from '@/lib/utils';
+import { measurementCaption, type GoalMeasurement } from '@/lib/goal-period-core';
 import { GOAL_SCOPE_LABELS } from '@/lib/goal-import-core';
 import {
   GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY, asGoalMetric, goalBaseline,
@@ -43,6 +45,8 @@ interface Props {
   yearlyData: Array<{ year: number; actualValue: number | null }>;
   currentYear: number;
   currentValue: number;
+  /** Which year currentValue covers, and whether it is a partial year. */
+  measurement: GoalMeasurement | null;
   pipelineValue: number;
   userRole: string;
   /** Active organization; null only if the profile lookup failed. */
@@ -71,6 +75,7 @@ export function GoalDetailClient({
   yearlyData,
   currentYear,
   currentValue,
+  measurement,
   pipelineValue,
   userRole,
   organizationId,
@@ -89,6 +94,10 @@ export function GoalDetailClient({
   const metric = asGoalMetric(goal.metric);
   const family = GOAL_METRIC_FAMILY[metric];
   const fmtValue = (v: number | null | undefined) => formatMetric(v, family, units[family]);
+  // The chart axis in the same display unit as the figures beside it — it used
+  // to tick in raw kg and gallons (1.5M, 3.0M) next to values in t and m³.
+  const axisUnit = unitLabel(family, units[family]);
+  const fmtTick = (v: number) => fmtAxis(convertForDisplay(v, family, units[family]));
 
   const baseValue = goalBaseline(goal) ?? yearlyData[0]?.actualValue ?? 0;
 
@@ -129,19 +138,26 @@ export function GoalDetailClient({
   const actualMap = new Map(yearlyData.map(d => [d.year, d.actualValue]));
   const pathwayMap = new Map(pathway.map(p => [p.year, p.targetValue]));
 
-  // With-pipeline forecast: current value minus the annualised pipeline
+  // With-pipeline forecast: measured value minus the annualised pipeline,
+  // projected from the year the measurement covers.
   const forecastValue = Math.max(0, currentValue - pipelineValue);
+  const anchorYear = measurement?.year ?? currentYear;
+
+  // The year in progress is left off the actual line unless it is the only
+  // measurement there is: a part year plotted beside whole years reads as a
+  // sudden drop in emissions.
+  const plotYear = (year: number) =>
+    year !== currentYear || (measurement?.partial ?? false);
 
   const chartData = sortedYears.map(year => ({
     year,
-    actual: actualMap.has(year) ? (actualMap.get(year) ?? null) : null,
+    actual: actualMap.has(year) && plotYear(year) ? (actualMap.get(year) ?? null) : null,
     pathway: pathwayMap.get(year) ?? null,
-    // Project forecast from current year to target year
-    forecast: year >= currentYear && year <= goal.target_year
+    forecast: year >= anchorYear && year <= goal.target_year && goal.target_year > anchorYear
       ? Math.round(
           forecastValue +
           (targetValue !== null
-            ? ((targetValue - forecastValue) / (goal.target_year - currentYear)) * (year - currentYear)
+            ? ((targetValue - forecastValue) / (goal.target_year - anchorYear)) * (year - anchorYear)
             : 0),
         )
       : null,
@@ -238,9 +254,11 @@ export function GoalDetailClient({
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Current</p>
-            <p className="text-2xl font-bold text-gray-900">{fmtValue(currentValue)}</p>
-            <p className="text-xs text-gray-400">{currentYear}</p>
+            <p className="text-xs text-gray-500 uppercase tracking-wide font-medium mb-1">Measured</p>
+            <p className="text-2xl font-bold text-gray-900">{measurement ? fmtValue(currentValue) : '—'}</p>
+            <p className="text-xs text-gray-400">
+              {measurement ? `${measurement.year}${measurement.partial ? ' to date (partial)' : ''}` : 'No data yet'}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -273,7 +291,9 @@ export function GoalDetailClient({
             Actual {GOAL_METRIC_LABELS[metric].toLowerCase()} (blue) vs{' '}
             {goal.goal_type === 'sbti_15c' ? 'SBTi 1.5°C pathway' : 'reduction pathway'} (dashed)
             {pipelineValue > 0 && ' · Pipeline forecast (green)'}
+            {' · '}{axisUnit}
           </p>
+          <p className="text-xs text-gray-500">{measurementCaption(measurement)}</p>
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={300}>
@@ -282,7 +302,7 @@ export function GoalDetailClient({
               <XAxis dataKey="year" tick={{ fontSize: 12 }} />
               <YAxis
                 tick={{ fontSize: 11 }}
-                tickFormatter={v => v >= 1000000 ? `${(v/1000000).toFixed(1)}M` : v >= 1000 ? `${(v/1000).toFixed(0)}k` : v}
+                tickFormatter={fmtTick}
               />
               <Tooltip
                 formatter={(value: number, name: string) => [

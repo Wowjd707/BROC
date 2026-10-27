@@ -131,7 +131,7 @@ export const ANOMALY_KIND_LABELS: Record<AnomalyKind, string> = {
   intensity_outlier: 'Intensity unlike peers',
   duplicate_entry: 'Possible duplicate',
   zero_quantity: 'Zero quantity',
-  future_dated: 'Dated in the future',
+  future_dated: 'After the review period',
 };
 
 // ─── Small statistics ────────────────────────────────────────────────────────
@@ -765,14 +765,18 @@ export function detectEntryIssues(observations: Observation[], ctx: Context): Fi
         finding(ctx, obs.siteId, {
           id: `future_dated:${obs.id}`,
           kind: 'future_dated',
-          severity: 'medium',
+          // Low: most are simply entries for the month after the one under
+          // review. Labelled "Dated in the future" at medium severity, it
+          // flagged an entry dated today as an error.
+          severity: 'low',
           stream: obs.stream,
           streamLabel: obs.streamLabel,
           period: monthOf(obs.entryDate),
           headline: `${obs.streamLabel} dated ${obs.entryDate}, after the review period`,
           detail:
-            'A future activity date lands the quantity in a period that has not happened, so it will ' +
-            'be missing from the period it belongs to.',
+            'This entry falls after the month under review, so it is not in these figures. If the ' +
+            'date is right, review a later month. If it was mistyped, correct it: a mis-dated quantity ' +
+            'is missing from the period it belongs to.',
           basis: [
             { label: 'Entry date', value: obs.entryDate },
             { label: 'Review through', value: ctx.asOfMonth },

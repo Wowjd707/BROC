@@ -14,7 +14,9 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { pctChange } from '@/lib/utils';
+import { pctChange, reportingYearRange, fmtAxis } from '@/lib/utils';
+import { latestEntryMonth, samePeriodLastYear } from '@/lib/period-compare-core';
+import { goalMeasurement, type GoalMeasurement } from '@/lib/goal-period-core';
 import { useUnits, UnitToggle } from '@/components/layout/UnitPreferences';
 import {
   formatCarbon, formatWater, formatWaste, formatMetric,
@@ -42,11 +44,11 @@ interface EmissionRow {
   unit_normalized: string;
   quantity_normalized: number;
 }
-interface PriorEmissionRow { scope: string; co2e_kg: number; accounting_method: string; site_id: string; entry_date: string; }
+interface PriorEmissionRow { scope: string; co2e_kg: number; co2e_kg_location_based: number | null; accounting_method: string; site_id: string; entry_date: string; }
 // site_id is nullable: entity-level governance metrics (board composition,
 // confirmed corruption incidents) belong to the organization, not a site.
 interface EhsRow { metric_type: string; source_type: string; quantity_normalized: number; unit_normalized: string; site_id: string | null; entry_date: string; }
-interface PriorEhsRow { metric_type: string; quantity_normalized: number; }
+interface PriorEhsRow { metric_type: string; quantity_normalized: number; entry_date: string; }
 interface Site {
   ownership_percent?: number | null;
   is_controlled?: boolean | null; id: string; name: string; floor_area_sqft: number | null; }
@@ -99,7 +101,39 @@ interface Props {
   priorScope3: Scope3Row[];
 }
 
-interface Scope3Row { category_number: number; co2e_kg: number; data_quality: string | null; }
+interface Scope3Row { category_number: number; co2e_kg: number; data_quality: string | null; entry_date: string; }
+
+/**
+ * Apply the organizational boundary (consolidation approach) to emission rows.
+ * Used for BOTH years: scaling only the current year compared a boundary-
+ * adjusted figure against an unadjusted one whenever a site was partly owned.
+ */
+function applyBoundary<T extends { site_id: string | null; co2e_kg: number; co2e_kg_location_based: number | null; quantity_normalized?: number }>(
+  rows: T[], sites: Site[], approach: ConsolidationApproach,
+): T[] {
+  const shaped = sites.map((x) => ({
+    id: x.id,
+    ownership_percent: Number(x.ownership_percent ?? 100),
+    is_controlled: x.is_controlled ?? true,
+  }));
+  if (isWholeBoundary(shaped, approach)) return rows;
+  const boundaries = boundaryMap(shaped);
+  return rows.map((r) => {
+    const share = shareForEntry(r.site_id ?? null, boundaries, approach);
+    if (share === 1) return r;
+    return {
+      ...r,
+      co2e_kg: (r.co2e_kg ?? 0) * share,
+      co2e_kg_location_based: r.co2e_kg_location_based == null ? r.co2e_kg_location_based : r.co2e_kg_location_based * share,
+      ...(r.quantity_normalized === undefined ? {} : { quantity_normalized: (r.quantity_normalized ?? 0) * share }),
+    };
+  });
+}
+
+/** Scope 2 kg under the chosen accounting method. */
+function scope2Kg(e: { co2e_kg: number; co2e_kg_location_based: number | null }, method: 'location_based' | 'market_based'): number {
+  return method === 'market_based' ? e.co2e_kg : (e.co2e_kg_location_based ?? e.co2e_kg);
+}
 
 // ─── Month abbreviations ─────────────────────────────────────────────────────
 const MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -143,10 +177,12 @@ const CLICKABLE_CARD = 'h-full transition-shadow group-hover:shadow-md group-hov
 
 // ─── KPI card ─────────────────────────────────────────────────────────────────
 function KpiCard({
-  title, value, subValue, change, tooltip, href,
+  title, value, subValue, change, comparedTo = 'prior year', tooltip, href,
 }: {
   title: string; value: string; subValue?: string;
   change?: { value: number; direction: 'up' | 'down' | 'flat'; label: string };
+  /** What the change is measured against, e.g. "Jan–Jul 2025". */
+  comparedTo?: string;
   tooltip?: string;
   /** Where this figure is explained in full. */
   href?: string;
@@ -176,7 +212,7 @@ function KpiCard({
         {change && (
           <div className={`flex items-center gap-1 mt-1.5 text-xs font-medium ${changeColor}`}>
             <ChangeIcon size={12} />
-            {change.label} vs prior year
+            {change.label} vs {comparedTo}
           </div>
         )}
       </CardContent>
@@ -189,7 +225,7 @@ function KpiCard({
 // ─── Main component ──────────────────────────────────────────────────────────
 export function DashboardClient({
   orgName, scopeLabel, scopeIsFiltered, consolidationApproach, currentYear, priorYear, fyStart,
-  curEmissions: rawCurEmissions, priorEmissions, curEhs, priorEhs,
+  curEmissions: rawCurEmissions, priorEmissions: rawPriorEmissions, curEhs, priorEhs,
   sites, goals, projects, activeSurveys, invitations,
   curScope3, priorScope3, regulatoryMilestones,
 }: Props) {
@@ -201,27 +237,14 @@ export function DashboardClient({
   // The same organizational boundary the report and the KPI page apply, done
   // once by scaling the rows so every card below agrees with the filed figure.
   // An identity map under the defaults.
-  const curEmissions = useMemo(() => {
-    const shaped = sites.map((x) => ({
-      id: x.id,
-      ownership_percent: Number(x.ownership_percent ?? 100),
-      is_controlled: x.is_controlled ?? true,
-    }));
-    if (isWholeBoundary(shaped, consolidationApproach)) return rawCurEmissions;
-    const boundaries = boundaryMap(shaped);
-    return rawCurEmissions.map((r) => {
-      const share = shareForEntry(r.site_id ?? null, boundaries, consolidationApproach);
-      if (share === 1) return r;
-      return {
-        ...r,
-        co2e_kg: (r.co2e_kg ?? 0) * share,
-        co2e_kg_location_based: r.co2e_kg_location_based == null
-          ? r.co2e_kg_location_based
-          : r.co2e_kg_location_based * share,
-        quantity_normalized: (r.quantity_normalized ?? 0) * share,
-      };
-    });
-  }, [rawCurEmissions, sites, consolidationApproach]);
+  const curEmissions = useMemo(
+    () => applyBoundary(rawCurEmissions, sites, consolidationApproach),
+    [rawCurEmissions, sites, consolidationApproach],
+  );
+  const priorEmissions = useMemo(
+    () => applyBoundary(rawPriorEmissions, sites, consolidationApproach),
+    [rawPriorEmissions, sites, consolidationApproach],
+  );
   const [pipelineMetric, setPipelineMetric] = useState<PipelineMetric>('ghg');
   const [goalMetric, setGoalMetric] = useState<GoalMetric>('ghg');
   const [goalIndex, setGoalIndex] = useState(0);
@@ -229,7 +252,14 @@ export function DashboardClient({
   // ── Aggregate KPIs ──────────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const scope1Cur   = curEmissions.filter((e) => e.scope === 'scope1').reduce((s, e) => s + e.co2e_kg, 0);
-    const scope1Prior = priorEmissions.filter((e) => e.scope === 'scope1').reduce((s, e) => s + e.co2e_kg, 0);
+    // Like-for-like: the prior year cut to the months the current year has
+    // data for. See lib/period-compare-core.ts.
+    const priorRange = reportingYearRange(priorYear, fyStart);
+    const emCmp = samePeriodLastYear(priorEmissions, latestEntryMonth(curEmissions), priorRange);
+    const ehsCmp = samePeriodLastYear(priorEhs, latestEntryMonth(curEhs), priorRange);
+    const s3Cmp = samePeriodLastYear(priorScope3, latestEntryMonth(curScope3), priorRange);
+
+    const scope1Prior = emCmp.prior.filter((e) => e.scope === 'scope1').reduce((s, e) => s + e.co2e_kg, 0);
 
     const scope2LocationCur = curEmissions
       .filter((e) => e.scope === 'scope2')
@@ -239,13 +269,15 @@ export function DashboardClient({
       .reduce((s, e) => s + e.co2e_kg, 0);
     const scope2Cur = scope2Method === 'market_based' ? scope2MarketCur : scope2LocationCur;
 
-    const scope2Prior = priorEmissions.filter((e) => e.scope === 'scope2').reduce((s, e) => s + e.co2e_kg, 0);
+    // The same accounting method as the current figure — comparing a
+    // location-based year against a market-based one measures the method.
+    const scope2Prior = emCmp.prior.filter((e) => e.scope === 'scope2').reduce((s, e) => s + scope2Kg(e, scope2Method), 0);
 
     const totalCur   = scope1Cur + scope2Cur;
     const totalPrior = scope1Prior + scope2Prior;
 
     const waterCur   = curEhs.filter((e) => e.metric_type === 'water').reduce((s, e) => s + e.quantity_normalized, 0);
-    const waterPrior = priorEhs.filter((e) => e.metric_type === 'water').reduce((s, e) => s + e.quantity_normalized, 0);
+    const waterPrior = ehsCmp.prior.filter((e) => e.metric_type === 'water').reduce((s, e) => s + e.quantity_normalized, 0);
 
     const wasteAll     = curEhs.filter((e) => e.metric_type === 'waste');
     const wasteTotal   = wasteAll.reduce((s, e) => s + e.quantity_normalized, 0);
@@ -254,7 +286,7 @@ export function DashboardClient({
       .reduce((s, e) => s + e.quantity_normalized, 0);
     const diversionRate = wasteTotal > 0 ? (wasteDiverted / wasteTotal) * 100 : 0;
 
-    const wastePriorTotal = priorEhs.filter((e) => e.metric_type === 'waste').reduce((s, e) => s + e.quantity_normalized, 0);
+    const wastePriorTotal = ehsCmp.prior.filter((e) => e.metric_type === 'waste').reduce((s, e) => s + e.quantity_normalized, 0);
 
     // Electricity kWh for renewable % calc
     const elecTotal = curEmissions
@@ -268,7 +300,7 @@ export function DashboardClient({
     // Scope 3 is reported alongside, never folded into totalCur: goals and the
     // "Total Scope 1 + 2" card are defined on the operational boundary.
     const scope3Cur   = curScope3.reduce((s, e) => s + e.co2e_kg, 0);
-    const scope3Prior = priorScope3.reduce((s, e) => s + e.co2e_kg, 0);
+    const scope3Prior = s3Cmp.prior.reduce((s, e) => s + e.co2e_kg, 0);
     const scope3Categories = new Set(curScope3.map((e) => e.category_number)).size;
     const scope3PrimaryKg = curScope3
       .filter((e) => e.data_quality === 'primary')
@@ -281,8 +313,9 @@ export function DashboardClient({
       scope2LocationCur, scope2MarketCur, scope2Cur, scope2Prior,
       scope3Cur, scope3Prior, scope3Categories, scope3PrimaryPct, footprintCur,
       waterCur, waterPrior, wasteTotal, wastePriorTotal, diversionRate, renewablePct,
+      emissionsVs: emCmp.label, ehsVs: ehsCmp.label, scope3Vs: s3Cmp.label,
     };
-  }, [curEmissions, priorEmissions, curEhs, priorEhs, curScope3, priorScope3, scope2Method]);
+  }, [curEmissions, priorEmissions, curEhs, priorEhs, curScope3, priorScope3, scope2Method, priorYear, fyStart]);
 
   // ── Scope 1 by GHG Protocol source category ─────────────────────────────
   // Unclassified entries are shown rather than hidden: the gap is actionable,
@@ -308,7 +341,12 @@ export function DashboardClient({
   const trendData = useMemo(() => {
     const months = Array.from({ length: 12 }, (_, i) => {
       const monthIndex = ((fyStart - 1 + i) % 12);
-      return { month: MONTHS_SHORT[monthIndex], monthIndex, s1Cur: 0, s2Cur: 0, s1Prior: 0, s2Prior: 0 };
+      return {
+        month: MONTHS_SHORT[monthIndex], monthIndex,
+        s1Cur: 0, s2Cur: 0, s1Prior: 0, s2Prior: 0,
+        // Whether any entry exists — a month with none is missing, not zero.
+        has: { s1Cur: false, s2Cur: false, s1Prior: false, s2Prior: false },
+      };
     });
 
     function entryMonthOffset(dateStr: string) {
@@ -320,16 +358,16 @@ export function DashboardClient({
     curEmissions.forEach((e) => {
       const offset = entryMonthOffset(e.entry_date);
       if (offset < 12) {
-        if (e.scope === 'scope1') months[offset].s1Cur += e.co2e_kg;
-        else months[offset].s2Cur += scope2Method === 'market_based' ? e.co2e_kg : (e.co2e_kg_location_based ?? e.co2e_kg);
+        if (e.scope === 'scope1') { months[offset].s1Cur += e.co2e_kg; months[offset].has.s1Cur = true; }
+        else { months[offset].s2Cur += scope2Kg(e, scope2Method); months[offset].has.s2Cur = true; }
       }
     });
 
     priorEmissions.forEach((e) => {
       const offset = entryMonthOffset(e.entry_date);
       if (offset < 12) {
-        if (e.scope === 'scope1') months[offset].s1Prior += e.co2e_kg;
-        else months[offset].s2Prior += e.co2e_kg;
+        if (e.scope === 'scope1') { months[offset].s1Prior += e.co2e_kg; months[offset].has.s1Prior = true; }
+        else { months[offset].s2Prior += scope2Kg(e, scope2Method); months[offset].has.s2Prior = true; }
       }
     });
 
@@ -337,17 +375,20 @@ export function DashboardClient({
     // charts agree with the KPI cards above them. Rounding happens after the
     // conversion; rounding kg first and dividing would lose the decimals that
     // make a small site's month visible at all.
-    const toDisplay = (kg: number) => {
+    // A month with no entries plots as a gap (null), never as zero: drawing
+    // unentered months at zero reads as emissions stopping.
+    const toDisplay = (kg: number, present: boolean) => {
+      if (!present) return null;
       const v = convertForDisplay(kg, 'carbon', units.carbon);
       return Math.round(v * 100) / 100;
     };
 
     return months.map((m) => ({
       month: m.month,
-      'Scope 1 (Current)': toDisplay(m.s1Cur),
-      'Scope 2 (Current)': toDisplay(m.s2Cur),
-      'Scope 1 (Prior)': toDisplay(m.s1Prior),
-      'Scope 2 (Prior)': toDisplay(m.s2Prior),
+      'Scope 1 (Current)': toDisplay(m.s1Cur, m.has.s1Cur),
+      'Scope 2 (Current)': toDisplay(m.s2Cur, m.has.s2Cur),
+      'Scope 1 (Prior)': toDisplay(m.s1Prior, m.has.s1Prior),
+      'Scope 2 (Prior)': toDisplay(m.s2Prior, m.has.s2Prior),
     }));
   }, [curEmissions, priorEmissions, fyStart, scope2Method, units.carbon]);
 
@@ -371,11 +412,32 @@ export function DashboardClient({
   // ── Measured current value per metric, in canonical stored units ─────────
   // Goals and the pipeline are both denominated this way, so all three compare
   // without a conversion step that could drift.
+  // Goals are judged on the latest complete reporting year, falling back to
+  // the year to date (flagged partial) only when that year has no data. See
+  // lib/goal-period-core.ts — a part year against an annual target always
+  // looks on track.
+  const goalMeasurements = useMemo<Record<GoalMetric, GoalMeasurement | null>>(() => {
+    const s12Prior = priorEmissions.filter((e) => e.scope === 'scope1' || e.scope === 'scope2');
+    const ghgPrior = s12Prior.length === 0 ? null : s12Prior.reduce(
+      (sum, e) => sum + (e.scope === 'scope2' ? scope2Kg(e, scope2Method) : e.co2e_kg), 0);
+    const ehsPrior = (metric: string) => {
+      const rows = priorEhs.filter((e) => e.metric_type === metric);
+      return rows.length === 0 ? null : rows.reduce((sum, e) => sum + e.quantity_normalized, 0);
+    };
+    const hasCur = (metric: string) => curEhs.some((e) => e.metric_type === metric);
+    const hasCurGhg = curEmissions.some((e) => e.scope === 'scope1' || e.scope === 'scope2');
+    return {
+      ghg: goalMeasurement(priorYear, ghgPrior, currentYear, hasCurGhg ? kpis.totalCur : null),
+      water: goalMeasurement(priorYear, ehsPrior('water'), currentYear, hasCur('water') ? kpis.waterCur : null),
+      waste: goalMeasurement(priorYear, ehsPrior('waste'), currentYear, hasCur('waste') ? kpis.wasteTotal : null),
+    };
+  }, [priorEmissions, priorEhs, curEmissions, curEhs, scope2Method, priorYear, currentYear, kpis.totalCur, kpis.waterCur, kpis.wasteTotal]);
+
   const currentByMetric = useMemo<Record<GoalMetric, number>>(() => ({
-    ghg: kpis.totalCur,
-    water: kpis.waterCur,
-    waste: kpis.wasteTotal,
-  }), [kpis.totalCur, kpis.waterCur, kpis.wasteTotal]);
+    ghg: goalMeasurements.ghg?.value ?? 0,
+    water: goalMeasurements.water?.value ?? 0,
+    waste: goalMeasurements.waste?.value ?? 0,
+  }), [goalMeasurements]);
 
   // ── Goal progress, grouped by metric ─────────────────────────────────────
   // Every active goal is shown, not just the first. Grouping by metric lets the
@@ -540,6 +602,7 @@ export function DashboardClient({
           value={formatCarbon(kpis.totalCur, units)}
           subValue={scope2Method === 'market_based' ? 'Market-based' : 'Location-based'}
           change={totalChange}
+          comparedTo={kpis.emissionsVs}
           tooltip="Total greenhouse gas emissions for the current reporting year."
           href="/kpis"
         />
@@ -559,7 +622,7 @@ export function DashboardClient({
               const Icon = c.direction === 'down' ? TrendingDown : c.direction === 'up' ? TrendingUp : Minus;
               return (
                 <div className={`flex items-center gap-1 mt-1.5 text-xs font-medium ${color}`}>
-                  <Icon size={12} />{c.label} vs prior year
+                  <Icon size={12} />{c.label} vs {kpis.emissionsVs}
                 </div>
               );
             })()}
@@ -612,6 +675,7 @@ export function DashboardClient({
               : 'No Scope 3 data yet'
           }
           change={kpis.scope3Prior > 0 ? pctChange(kpis.scope3Cur, kpis.scope3Prior) : undefined}
+          comparedTo={kpis.scope3Vs}
           tooltip="Value-chain emissions, reported separately from the Scope 1+2 operational boundary."
           href="/scope3"
         />
@@ -645,12 +709,14 @@ export function DashboardClient({
           title="Water Consumption"
           value={formatWater(kpis.waterCur, units)}
           change={{ ...waterChange, direction: waterChange.direction === 'up' ? 'up' : waterChange.direction === 'down' ? 'down' : 'flat' }}
+          comparedTo={kpis.ehsVs}
           href="/kpis"
         />
         <KpiCard
           title="Total Waste"
           value={formatWaste(kpis.wasteTotal, units)}
           change={wasteChange}
+          comparedTo={kpis.ehsVs}
           href="/kpis"
         />
         <KpiCard
@@ -748,8 +814,14 @@ export function DashboardClient({
                       {fmtMetric(activeGoalMetric, selectedGoalProgress.baseValue)} ({selectedGoal.base_year})
                       {' → '}
                       {fmtMetric(activeGoalMetric, selectedGoalProgress.targetValue)} ({selectedGoal.target_year})
-                      {' · now '}
-                      {fmtMetric(activeGoalMetric, selectedGoalProgress.currentValue)}
+                      {goalMeasurements[activeGoalMetric] && (
+                        <>
+                          {' · '}
+                          {fmtMetric(activeGoalMetric, selectedGoalProgress.currentValue)}
+                          {' in '}{goalMeasurements[activeGoalMetric]!.year}
+                          {goalMeasurements[activeGoalMetric]!.partial ? ' to date (partial year)' : ''}
+                        </>
+                      )}
                     </>
                   ) : (
                     // Says so rather than presenting an entered number as a
@@ -794,7 +866,7 @@ export function DashboardClient({
             <LineChart data={trendData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => fmtAxis(v)} />
               <Tooltip formatter={(v: number) => [`${v.toLocaleString()} ${carbonUnitLabel}`, '']} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
               <Line type="monotone" dataKey="Scope 1 (Current)" stroke="#3b82f6" strokeWidth={2} dot={false} />
@@ -815,7 +887,7 @@ export function DashboardClient({
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={siteData} layout="vertical" margin={{ top: 0, right: 16, left: 8, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f0f0f0" />
-                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}k` : v} />
+                <XAxis type="number" tick={{ fontSize: 10 }} tickFormatter={(v: number) => fmtAxis(v)} />
                 <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={80} />
                 <Tooltip formatter={(v: number) => [`${v.toLocaleString()} ${carbonUnitLabel}`, 'Emissions']} />
                 <Bar dataKey="co2e" radius={[0, 4, 4, 0]}>
@@ -951,7 +1023,9 @@ export function DashboardClient({
                   {surveyStats.submitted}
                   <span className="text-base font-normal text-gray-400"> / {surveyStats.total}</span>
                 </p>
-                <p className="text-xs text-gray-500">suppliers responded</p>
+                {/* Counts invitations, not suppliers: one supplier can be invited
+                    to several surveys, so "suppliers responded" overstated the base. */}
+                <p className="text-xs text-gray-500">survey invitations answered</p>
               </div>
               <div className="text-right">
                 {surveyStats.total > 0 ? (

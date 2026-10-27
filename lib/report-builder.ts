@@ -124,9 +124,11 @@ function renderNarrative(text: string): string {
 }
 
 function formatNumber(n: number): string {
-  const decimals = Math.abs(n) > 0 && Math.abs(n) < 100 ? 2 : 0;
+  // Whole numbers stay whole ("2 targets", not "2.00 targets"); small
+  // fractional values keep up to two decimals.
+  const decimals = Math.abs(n) > 0 && Math.abs(n) < 100 && !Number.isInteger(n) ? 2 : 0;
   return n.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
+    minimumFractionDigits: 0,
     maximumFractionDigits: decimals,
   });
 }
