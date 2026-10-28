@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   median, mad, robustZ, pctChange, deviationFrom,
   monthOf, monthIndex, monthsBetween, shiftMonth,
-  buildSeries, analyzeData,
+  buildSeries, analyzeData, isEventCountStream,
   DEFAULT_ANOMALY_CONFIG,
   type Observation, type SiteMeta, type Finding, type AnomalyKind,
 } from './anomaly-core';
@@ -437,6 +437,36 @@ describe('duplicates', () => {
       '2025-04',
     );
     expect(ofKind(report.findings, 'duplicate_entry')).toHaveLength(0);
+  });
+});
+
+describe('rare-event counts', () => {
+  const injuries = (siteId: string, month: string, n: number): Observation => ({
+    ...obs(siteId, `${month}-28`, n, 'safety:lost_time_incidents'),
+    unit: 'count',
+    eventCount: true,
+  });
+
+  it('knows which streams count rare events', () => {
+    expect(isEventCountStream('safety:lost_time_incidents')).toBe(true);
+    expect(isEventCountStream('safety:hours_worked')).toBe(false);
+    expect(isEventCountStream('workforce:headcount')).toBe(false);
+  });
+
+  it('does not flag a month with zero injuries, or a 2 → 1 swing', () => {
+    // Regression: on the demo data most findings were zero injury counts and
+    // "down 50%" on two recordables.
+    const rows = MONTHS_2025.map((m, i) => injuries('s1', m, [0, 1, 0, 2, 0, 0, 1, 0, 3, 0, 2, 1][i]));
+    const report = analyzeData(rows, [site('s1', 'Austin')], '2025-12');
+    expect(ofKind(report.findings, 'zero_quantity')).toHaveLength(0);
+    expect(ofKind(report.findings, 'variance_mom')).toHaveLength(0);
+    expect(ofKind(report.findings, 'value_outlier')).toHaveLength(0);
+  });
+
+  it('still flags a large jump in an event count', () => {
+    const rows = MONTHS_2025.map((m, i) => injuries('s1', m, i === 11 ? 25 : 1));
+    const report = analyzeData(rows, [site('s1', 'Austin')], '2025-12');
+    expect(ofKind(report.findings, 'variance_mom')).toHaveLength(1);
   });
 });
 

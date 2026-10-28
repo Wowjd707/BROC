@@ -258,7 +258,11 @@ export function DashboardClient({
     // data for. See lib/period-compare-core.ts.
     const priorRange = reportingYearRange(priorYear, fyStart);
     const emCmp = samePeriodLastYear(priorEmissions, latestEntryMonth(curEmissions), priorRange);
-    const ehsCmp = samePeriodLastYear(priorEhs, latestEntryMonth(curEhs), priorRange);
+    // Water and waste only: the EHS table also holds social and governance
+    // readings, often dated at year end, which pushed the window to December
+    // and compared nine months of water against twelve.
+    const isWaterWaste = (e: { metric_type: string }) => e.metric_type === 'water' || e.metric_type === 'waste';
+    const ehsCmp = samePeriodLastYear(priorEhs.filter(isWaterWaste), latestEntryMonth(curEhs.filter(isWaterWaste)), priorRange);
     const s3Cmp = samePeriodLastYear(priorScope3, latestEntryMonth(curScope3), priorRange);
 
     const scope1Prior = emCmp.prior.filter((e) => e.scope === 'scope1').reduce((s, e) => s + e.co2e_kg, 0);

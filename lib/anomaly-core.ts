@@ -46,7 +46,40 @@ export interface Observation {
   /** Quantity in the stream's normalized base unit. */
   quantity: number;
   unit: string;
+  /**
+   * A count of rare events — injuries, separations, grievance reports — where
+   * zero is the normal (and good) reading and a swing from 1 to 2 is chance.
+   * See isEventCountStream.
+   */
+  eventCount?: boolean;
 }
+
+/**
+ * Social and governance streams that count rare events. For these a zero is a
+ * real, usually welcome, answer ("no lost-time injuries this month"), and
+ * small integers swing by chance: 2 → 1 recordables is "down 50%" and means
+ * nothing. Flagging them buried the review in noise — on the demo data, most
+ * findings were zero injuries. Hours worked, headcount, training hours and
+ * board seats are NOT here: a zero or a jump in those is worth a look.
+ */
+const EVENT_COUNT_STREAMS = new Set([
+  'safety:recordable_incidents', 'safety:lost_time_incidents', 'safety:restricted_duty_incidents',
+  'safety:lost_days', 'safety:high_consequence_incidents', 'safety:fatalities', 'safety:near_misses',
+  'workforce:new_hires', 'workforce:separations_voluntary', 'workforce:separations_involuntary',
+  'governance:corruption_incidents_confirmed', 'governance:whistleblower_reports',
+  'governance:whistleblower_reports_substantiated',
+]);
+
+export function isEventCountStream(stream: string): boolean {
+  return EVENT_COUNT_STREAMS.has(stream);
+}
+
+/**
+ * The smallest change in an event count worth a finding. Below this, a swing
+ * or an "unusual" month in a rare-event count is indistinguishable from
+ * chance at the monthly, single-site level the review works at.
+ */
+export const MIN_EVENT_COUNT_CHANGE = 5;
 
 export interface SiteMeta {
   id: string;
@@ -261,6 +294,7 @@ interface StreamSeries {
   stream: string;
   streamLabel: string;
   unit: string;
+  eventCount: boolean;
   /** Monthly totals, keyed `YYYY-MM`. */
   byMonth: Map<string, { total: number; entryIds: string[] }>;
 }
@@ -281,6 +315,7 @@ export function buildSeries(observations: Observation[]): Map<string, StreamSeri
         stream: obs.stream,
         streamLabel: obs.streamLabel,
         unit: obs.unit,
+        eventCount: obs.eventCount === true,
         byMonth: new Map(),
       };
       series.set(key, entry);
@@ -487,6 +522,8 @@ export function detectVariances(
 
       // Immaterial in absolute terms — a large percentage of very little.
       if (absolute < floor) continue;
+      // A rare-event count moving by a handful is chance, not a finding.
+      if (s.eventCount && absolute < MIN_EVENT_COUNT_CHANGE) continue;
 
       if (change === null) {
         // Baseline of zero: a percentage would be Infinity and say nothing.
@@ -567,6 +604,7 @@ export function detectValueOutliers(
       const total = s.byMonth.get(month)!.total;
       const deviation = deviationFrom(total, totals, ctx.config.outlierZ);
       if (!deviation?.exceeds) continue;
+      if (s.eventCount && Math.abs(total - centre) < MIN_EVENT_COUNT_CHANGE) continue;
 
       findings.push(
         finding(ctx, s.siteId, {
@@ -741,7 +779,8 @@ export function detectEntryIssues(observations: Observation[], ctx: Context): Fi
   const horizon = `${shiftMonth(ctx.asOfMonth, 1)}-01`;
 
   for (const obs of observations) {
-    if (obs.quantity === 0) {
+    // A zero injury count is an answer, not a gap.
+    if (obs.quantity === 0 && !obs.eventCount) {
       findings.push(
         finding(ctx, obs.siteId, {
           id: `zero_quantity:${obs.id}`,

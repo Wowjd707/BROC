@@ -448,10 +448,11 @@ export function CBAMCalculatorClient({
       <div className="flex gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-xs text-amber-800">
         <Info size={14} className="flex-shrink-0 mt-0.5" />
         <span>
-          Default emission factors are sourced from EU Implementing Regulation 2023/1773 Annex III.
-          These are fallback values for use when verified supplier data is unavailable.
-          Consult a CBAM compliance advisor before submitting declarations to customs authorities.
-          Certificate price fluctuates with the EU ETS market — update it to reflect current rates.
+          Use the installation&apos;s verified embedded emissions where you have them. Where you do not,
+          enter the EU default value for the CN code from the Commission&apos;s current publication and cite
+          it — none ship with the platform, because defaults are set per period and, for electricity, per
+          country. The result is an estimate: consult a CBAM compliance advisor before submitting a
+          declaration, and update the certificate price to the current rate.
         </span>
       </div>
 

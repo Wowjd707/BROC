@@ -218,7 +218,9 @@ changed, change it knowingly and update this list.
   units error is the reviewer's call. Statistics use median/MAD so one bad entry
   cannot mask itself, `deviationFrom` covers the MAD-zero case rather than
   silently scoring `null`, and a stream with too little history is reported as
-  such instead of scored on noise.
+  such instead of scored on noise. Rare-event counts (injuries, separations,
+  grievance reports) are not flagged for a zero or for a change smaller than
+  five: zero is the normal answer, and 2 → 1 is chance (`isEventCountStream`).
 - **Evidence cannot be silently substituted or silently removed.** Storage
   objects have no UPDATE policy, an attachment row's identity columns are
   immutable via a column-level grant, and deletions land in `audit_log`. A file

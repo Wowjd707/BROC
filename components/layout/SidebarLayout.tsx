@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ScopePicker } from './ScopePicker';
+import { ProfileDialog } from './ProfileDialog';
 import { cn } from '@/lib/utils';
 import { BRANDING } from '@/lib/branding';
 import { activeOrg } from '@/lib/active-org';
@@ -12,7 +13,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Target,
   Wrench, Handshake, ClipboardList, Settings,
   ChevronDown, LogOut, Menu, Network, BookCheck, Grid2x2,
-  Users, Scale, Gauge,
+  Users, Scale, Gauge, UserPen,
 } from 'lucide-react';
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
@@ -125,6 +126,7 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
   const supabase = createClient();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   // Names the workspace the sidebar's data actually came from, so a practice
@@ -251,6 +253,15 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
 
         {userDropdownOpen && (
           <div className="absolute bottom-full left-3 right-3 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+            {userProfile && (
+              <button
+                onClick={() => { setUserDropdownOpen(false); setMobileOpen(false); setProfileOpen(true); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <UserPen size={14} />
+                Edit profile
+              </button>
+            )}
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
@@ -304,6 +315,19 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
             {children}
           </main>
         </div>
+
+        {userProfile && (
+          <ProfileDialog
+            // Remount on open so the fields start from the saved name.
+            key={profileOpen ? 'open' : 'closed'}
+            open={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            userId={userProfile.id}
+            email={userProfile.email}
+            firstName={userProfile.first_name}
+            lastName={userProfile.last_name}
+          />
+        )}
     </div>
   );
 }

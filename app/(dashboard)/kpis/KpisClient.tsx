@@ -345,7 +345,13 @@ export function KpisClient({
     [priorEmissionsFull, curEmissions, priorRange],
   );
   const ehsCmp = useMemo(
-    () => samePeriodLastYear(priorEhsFull, latestEntryMonth(curEhs), priorRange),
+    // Water and waste only: social readings dated at year end would stretch
+    // the window to December.
+    () => samePeriodLastYear(
+      priorEhsFull.filter((e) => e.metric_type === 'water' || e.metric_type === 'waste'),
+      latestEntryMonth(curEhs.filter((e) => e.metric_type === 'water' || e.metric_type === 'waste')),
+      priorRange,
+    ),
     [priorEhsFull, curEhs, priorRange],
   );
   const priorEmissions = emCmp.prior;

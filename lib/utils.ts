@@ -73,12 +73,20 @@ export function fmtCO2e(kg: number | null | undefined): string {
 
 /**
  * A disclosure figure with its unit: no forced decimals on whole numbers
- * ("2 targets", not "2.00 targets"), at most two on small fractional values,
- * none on large ones, and no space before a percent sign ("42% reduction").
+ * ("2 targets", not "2.00 targets"), three significant figures below 1, at
+ * most two decimals up to 100, none above, and no space before a percent sign
+ * ("42% reduction").
  */
 export function fmtFigure(value: number, unit: string): string {
-  const digits = Math.abs(value) < 100 && !Number.isInteger(value) ? 2 : 0;
-  const n = value.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: digits });
+  const abs = Math.abs(value);
+  // Below 1, three significant figures: an intensity of 0.0061 tCO₂e per sq ft
+  // rounded to two decimals read "0.01" for both Scope 2 methods.
+  const n = abs > 0 && abs < 1
+    ? value.toLocaleString('en-US', { maximumSignificantDigits: 3 })
+    : value.toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: abs < 100 && !Number.isInteger(value) ? 2 : 0,
+    });
   if (!unit) return n;
   return unit.startsWith('%') ? `${n}${unit}` : `${n} ${unit}`;
 }

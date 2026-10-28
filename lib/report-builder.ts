@@ -145,9 +145,12 @@ function renderNarrative(text: string): string {
 }
 
 function formatNumber(n: number): string {
-  // Whole numbers stay whole ("2 targets", not "2.00 targets"); small
-  // fractional values keep up to two decimals.
-  const decimals = Math.abs(n) > 0 && Math.abs(n) < 100 && !Number.isInteger(n) ? 2 : 0;
+  // Whole numbers stay whole ("2 targets", not "2.00 targets"); below 1, three
+  // significant figures, so a small intensity is not rounded to "0.01"; up to
+  // 100, two decimals.
+  const abs = Math.abs(n);
+  if (abs > 0 && abs < 1) return n.toLocaleString('en-US', { maximumSignificantDigits: 3 });
+  const decimals = abs < 100 && !Number.isInteger(n) ? 2 : 0;
   return n.toLocaleString('en-US', {
     minimumFractionDigits: 0,
     maximumFractionDigits: decimals,

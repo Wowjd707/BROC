@@ -7,6 +7,7 @@ import {
   analyzeData,
   shiftMonth,
   DEFAULT_ANOMALY_CONFIG,
+  isEventCountStream,
   type Observation,
   type SiteMeta,
   type AnomalyReport,
@@ -153,8 +154,9 @@ export async function buildAnomalyReport(
     // excluded here rather than defaulted.
     if (!row.site_id) continue;
     const label = `${sourceLabel(row.source_type)} (${row.metric_type})`;
-    const obs = toObservation({ ...row, site_id: row.site_id }, `${row.metric_type}:${row.source_type}`, label);
-    if (obs) observations.push(obs);
+    const stream = `${row.metric_type}:${row.source_type}`;
+    const obs = toObservation({ ...row, site_id: row.site_id }, stream, label);
+    if (obs) observations.push({ ...obs, eventCount: isEventCountStream(stream) });
   }
 
   return analyzeData(observations, siteMeta, asOfMonth, config);

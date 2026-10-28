@@ -79,8 +79,11 @@ describe('fmtFigure', () => {
     expect(fmtFigure(2, 'targets')).toBe('2 targets');
     expect(fmtFigure(42, '% reduction')).toBe('42% reduction');
   });
-  it('keeps up to two decimals on small fractions and none on large values', () => {
-    expect(fmtFigure(0.125, 'tCO₂e per sq ft')).toBe('0.13 tCO₂e per sq ft');
+  it('keeps three significant figures below 1, two decimals below 100, none above', () => {
+    // Regression: 0.0061 and 0.0054 tCO₂e per sq ft both printed as "0.01".
+    expect(fmtFigure(0.125, 'tCO₂e per sq ft')).toBe('0.125 tCO₂e per sq ft');
+    expect(fmtFigure(0.006134, 'tCO₂e per sq ft')).toBe('0.00613 tCO₂e per sq ft');
+    expect(fmtFigure(12.345, 'kg')).toBe('12.35 kg');
     expect(fmtFigure(9448.4, 'tCO₂e')).toBe('9,448 tCO₂e');
   });
 });

@@ -249,20 +249,20 @@ BEGIN
 
   -- ── Projects ──────────────────────────────────────────────────────────────
   INSERT INTO projects (organization_id, site_id, goal_id, name, description, category, status,
-    estimated_co2e_reduction_kg_per_year, estimated_cost_usd, estimated_payback_months,
+    estimated_co2e_reduction_kg_per_year, actual_co2e_reduction_kg_per_year, estimated_cost_usd, estimated_payback_months,
     start_date, completion_date, pipeline_inclusion_status, notes, created_by)
   VALUES
     (v_org, v_plant, v_goal, 'Plant LED retrofit', 'Replace high-bay metal halide with LED across production floor.',
-     'energy_efficiency', 'completed', 186000, 240000, 34, DATE '2025-02-01', DATE '2025-08-15',
+     'energy_efficiency', 'completed', 186000, 171000, 240000, 34, DATE '2025-02-01', DATE '2025-08-15',
      'realized', '[DEMO]', v_user),
     (v_org, v_plant, v_goal, 'Compressed air leak program', 'Ultrasonic leak survey and repair on a quarterly cycle.',
-     'energy_efficiency', 'in_progress', 74000, 45000, 9, DATE '2026-01-15', NULL,
+     'energy_efficiency', 'in_progress', 74000, NULL, 45000, 9, DATE '2026-01-15', NULL,
      'forecasted', '[DEMO]', v_user),
     (v_org, v_dc, v_goal, 'Fleet electrification — phase 1', 'Replace 12 diesel delivery vans with EVs.',
-     'fleet', 'approved', 128000, 890000, 96, DATE '2026-09-01', NULL,
+     'fleet', 'approved', 128000, NULL, 890000, 96, DATE '2026-09-01', NULL,
      'forecasted', '[DEMO]', v_user),
     (v_org, v_plant, v_goal, 'Rooftop solar 1.2 MW', 'On-site generation covering ~15% of plant load.',
-     'renewable_energy', 'idea', 640000, 1750000, 108, NULL, NULL,
+     'renewable_energy', 'idea', 640000, NULL, 1750000, 108, NULL, NULL,
      'excluded', '[DEMO]', v_user);
 
   -- ── Suppliers ─────────────────────────────────────────────────────────────
@@ -471,7 +471,10 @@ BEGIN
   -- exactly: hours_worked is 'hours', lost_days is 'days', everything else is
   -- 'count'. A count stored as hours is the trap migration 023 was shaped to
   -- avoid — one family, more than one unit.
-  FOR m IN 0..17 LOOP
+  -- The 18 complete months before this one, each dated at its month end. The
+  -- current month is left out: its month-end date is in the future, and the
+  -- data review rightly flags every such row.
+  FOR m IN 1..18 LOOP
     d := (date_trunc('month', CURRENT_DATE) - (m || ' months')::INTERVAL + INTERVAL '1 month' - INTERVAL '1 day')::DATE;
 
     FOREACH v_site IN ARRAY ARRAY[v_plant, v_dc] LOOP
@@ -481,9 +484,10 @@ BEGIN
       -- recomputed on a different hours basis.
       INSERT INTO ehs_entries (organization_id, site_id, entry_date, metric_type, source_type,
                                quantity, unit, quantity_normalized, unit_normalized, notes, created_by)
-      VALUES (v_org, v_site, d, 'safety', 'hours_worked',
-              32000 + (random() * 6000)::INT, 'hours',
-              32000 + (random() * 6000)::INT, 'hours', '[DEMO]', v_user);
+      -- One random draw per row: two separate calls stored a quantity and a
+      -- normalized quantity that disagreed.
+      SELECT v_org, v_site, d, 'safety', 'hours_worked', h.v, 'hours', h.v, 'hours', '[DEMO]', v_user
+      FROM (SELECT 32000 + (random() * 6000)::INT AS v) AS h;
 
       -- Incidents are small integers and mostly zero on purpose. A demo where
       -- every month carries an injury teaches the wrong shape of the data.
@@ -499,8 +503,8 @@ BEGIN
 
       INSERT INTO ehs_entries (organization_id, site_id, entry_date, metric_type, source_type,
                                quantity, unit, quantity_normalized, unit_normalized, notes, created_by)
-      VALUES (v_org, v_site, d, 'safety', 'lost_days',
-              (random() * 9)::INT, 'days', (random() * 9)::INT, 'days', '[DEMO]', v_user);
+      SELECT v_org, v_site, d, 'safety', 'lost_days', l.v, 'days', l.v, 'days', '[DEMO]', v_user
+      FROM (SELECT (random() * 9)::INT AS v) AS l;
 
       -- Workforce. headcount is point_in_time: these are readings rather than a
       -- flow, and summing twelve of them would report twelve workforces.
@@ -530,7 +534,10 @@ BEGIN
   FOR yr IN (EXTRACT(YEAR FROM CURRENT_DATE)::INT - 1)..(EXTRACT(YEAR FROM CURRENT_DATE)::INT) LOOP
     INSERT INTO ehs_entries (organization_id, site_id, entry_date, metric_type, source_type,
                              quantity, unit, quantity_normalized, unit_normalized, notes, created_by)
-    SELECT v_org, NULL, make_date(yr, 12, 31), 'governance', g.k, g.v, 'count', g.v, 'count', '[DEMO]', v_user
+    -- The current year's reading is as of last month end, never a future date.
+    SELECT v_org, NULL,
+           LEAST(make_date(yr, 12, 31), (date_trunc('month', CURRENT_DATE) - INTERVAL '1 day')::DATE),
+           'governance', g.k, g.v, 'count', g.v, 'count', '[DEMO]', v_user
     FROM (VALUES
       ('board_seats',                         9),
       ('independent_board_seats',             6),
