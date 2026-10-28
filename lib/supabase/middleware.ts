@@ -46,9 +46,10 @@ export async function updateSession(request: NextRequest) {
   //   /auth/callback — an SSO user arrives here before a session exists (that
   //                  is what the route creates), and was bounced to /login
   //                  before the code exchange could run.
+  //   /auth/confirm  — the email-confirmation link, same reason.
   const publicRoutes = [
     '/login', '/signup', '/survey', '/invite',
-    '/api/signup', '/api/survey', '/auth/callback',
+    '/api/signup', '/api/survey', '/auth/callback', '/auth/confirm',
   ];
   const isPublic = publicRoutes.some((r) => pathname === r || pathname.startsWith(r + '/'));
 

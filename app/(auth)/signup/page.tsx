@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { BRANDING } from '@/lib/branding';
+import { BrandWordmark } from '@/components/layout/BrandWordmark';
 import { SIGNUP_CLOSED_MESSAGE } from '@/lib/signup-core';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -18,6 +18,10 @@ export default function SignupPage() {
   const supabase = createClient();
 
   const [step, setStep] = useState<1 | 2>(1);
+  // Set when Supabase requires email confirmation: signUp returns no session,
+  // so the account exists but nobody is signed in until the link is clicked.
+  const [confirmSentTo, setConfirmSentTo] = useState<string | null>(null);
+  const [resent, setResent] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Step 1: Account details
@@ -110,6 +114,14 @@ export default function SignupPage() {
         throw new Error(errorMsg);
       }
 
+      if (!authData.session) {
+        // Email confirmation is on: sending them to the dashboard would only
+        // bounce them to the login page with no word about the email.
+        setConfirmSentTo(email);
+        setLoading(false);
+        return;
+      }
+
       router.push('/dashboard');
       router.refresh();
     } catch (err: unknown) {
@@ -118,13 +130,44 @@ export default function SignupPage() {
     }
   }
 
+  if (confirmSentTo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
+        <div className="w-full max-w-md text-center">
+          <BrandWordmark className="h-9 mx-auto mb-5 text-emerald-600" />
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h1 className="text-lg font-semibold text-gray-900">Check your inbox</h1>
+            <p className="text-sm text-gray-600 mt-2">
+              We sent a confirmation link to <strong>{confirmSentTo}</strong>. Open it to finish
+              setting up your account — it works from any device.
+            </p>
+            <p className="text-xs text-gray-400 mt-4">
+              Nothing there after a few minutes? Check your spam folder, then{' '}
+              <button
+                type="button"
+                onClick={async () => {
+                  const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: confirmSentTo });
+                  setResent(resendError ? resendError.message : 'sent');
+                }}
+                className="text-emerald-700 underline underline-offset-2"
+              >
+                send it again
+              </button>
+              .
+            </p>
+            {resent === 'sent' && <p className="text-xs text-emerald-700 mt-2">Sent again.</p>}
+            {resent && resent !== 'sent' && <p className="text-xs text-red-600 mt-2">{resent}</p>}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-xl mb-4">
-            {BRANDING.mark}
-          </div>
+          <BrandWordmark className="h-9 mx-auto mb-5 text-emerald-600" />
           <h1 className="text-2xl font-semibold text-gray-900">Create your account</h1>
           <p className="text-sm text-gray-500 mt-1">Step {step} of 2</p>
         </div>

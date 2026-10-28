@@ -18,9 +18,12 @@ So these changes mean editing TypeScript, and each one has a specific trap.
 | Vocabulary | Files |
 | --- | --- |
 | Waste streams | `WasteDrawer.tsx` + `lib/source-labels.ts` |
-| Fuels, Scope 1 sources | `EmissionDrawer.tsx` + `lib/conversions.ts` + the factor set |
+| Water sources | `WaterDrawer.tsx` + `lib/water-core.ts` (withdrawal / discharge / recycled) + `lib/source-labels.ts` |
+| Fuels, Scope 1 sources | `EmissionDrawer.tsx` + `lib/emission-factor-types.ts` + `lib/conversions.ts` (heating values) + the factor set + `lib/import-cascade-core.ts` (allowed Scope 1 categories) |
+| Scope 2 sources | `lib/emission-factor-types.ts` + `calculateScope2` in `lib/calculations.ts` |
+| Refrigerants | `refrigerant_factors` rows (data), incl. `is_montreal_protocol` |
 | Units | `lib/conversions.ts`, `lib/units.ts` |
-| Social & governance metrics | Migration 023 + `lib/social-metrics-core.ts` |
+| Social & governance metrics | Migration 023 + `lib/social-metrics-core.ts` (+ `isEventCountStream` in `lib/anomaly-core.ts` for rare-event counts) |
 | Entry data quality | `lib/entry-data-quality.ts` |
 
 ## Trap 1 — a vocabulary often lives in two places
@@ -73,6 +76,27 @@ time. When adding a member, add it to both in the same commit, and derive the
 runtime validator from the union rather than repeating the literal list — a
 duplicated list is a list that will disagree with itself.
 
+## Trap 5 — a source carries accounting rules, not just a label
+
+- **A water source must be classified** in `WATER_SOURCE_CLASS`
+  (`lib/water-core.ts`) as withdrawal, discharge or recycled. Unclassified, it
+  is left out of every total — consumption is withdrawal minus discharge, and
+  adding a discharge as if it were use once reported 1,800 m³ "consumed" for
+  200.
+- **A fuel needs its heating values.** `lib/conversions.ts` holds EPA HHVs per
+  gallon, per short ton and per standard cubic foot, keyed by fuel. A fuel
+  missing from a table refuses that unit with an error rather than borrowing
+  another fuel's value — that is deliberate; add the published HHV and cite it.
+- **Biomass** puts its biogenic CO₂ in `biogenic_co2_factor` (reported outside
+  the scopes) and only CH₄ + N₂O in `co2e_factor`.
+- **A new Scope 2 source** needs a rule in `calculateScope2`: whose factor
+  prices it under each method. Purchased heat is not electricity, and
+  self-generated electricity is not purchased.
+- **A new refrigerant that is an HCFC or CFC** gets `is_montreal_protocol =
+  TRUE`, which reports its leaks outside the scopes.
+- **A new social count of rare events** (incidents, grievances) belongs in
+  `isEventCountStream`, so a month of zero is not flagged in the data review.
+
 ## Checklist
 
 - [ ] Both places updated where a vocabulary is duplicated
@@ -80,5 +104,6 @@ duplicated list is a list that will disagree with itself.
 - [ ] Name does not collide with an existing domain type
 - [ ] Database CHECK and TypeScript union agree
 - [ ] Conversion or factor exists for anything the form now offers
+- [ ] Accounting class set where one applies (water class, Scope 2 rule, biogenic split, Montreal flag)
 - [ ] Test added — these are exactly the rules that break silently
 - [ ] `docs/CUSTOMISING.md` edit-point table still accurate

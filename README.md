@@ -140,6 +140,7 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | [`docs/FACTORS.md`](docs/FACTORS.md) | Which public emission factor sets you can load, and how to build a factor pack. |
 | [`docs/REGULATORY_CONTENT.md`](docs/REGULATORY_CONTENT.md) | Rules for adding and maintaining regulatory tracker content. |
 | [`docs/SSO.md`](docs/SSO.md) · [`docs/SANDBOX.md`](docs/SANDBOX.md) | Single sign-on, and the practice workspace. |
+| [`docs/EMAIL_TEMPLATES.md`](docs/EMAIL_TEMPLATES.md) | Branded sign-up confirmation and invitation emails for Supabase Auth. |
 | [`docs/TESTING.md`](docs/TESTING.md) | Manual smoke-test pass, ordered by risk. Run sections 1–3 before trusting a number. |
 | [`SECURITY.md`](SECURITY.md) | Threat model, tenancy isolation, hardening, and what BROC does **not** defend against. |
 
@@ -291,15 +292,16 @@ Two seeds are provided:
 | `supabase/seed_demo.sql` | **Recommended.** Loads demo data into the organization that already exists — the one you created by signing up. Sign up first, then run it. |
 | `supabase/seed.sql` | Builds a standalone demo org with its own fixed UUIDs; requires you to create matching auth users yourself. |
 
-`seed_demo.sql` populates 19 months of Scope 1/2 activity (so the dashboard
-shows a live year-over-year comparison), water and waste, a science-based
-target with a project pipeline, suppliers with CBAM declarations and survey
+`seed_demo.sql` populates Scope 1/2 activity from January 2024 to last month
+(a base year, a full measured year and the year to date, so the dashboard shows
+a live year-over-year comparison and real goal progress), water and waste, a
+science-based target with a project pipeline, suppliers with CBAM declarations and survey
 responses, Scope 3 entries across several categories, and a few disclosure
 narratives. It is safe to re-run, and carries a commented purge block to strip
 it back out.
 
-Scope 1/2 figures use the **real** seeded reference factors (EPA 2024,
-eGRID2023, IPCC AR6), so those calculations are genuine and traceable. The
+Scope 1/2 figures use the **real** seeded reference factors (EPA Hub 2024 at
+AR6 GWPs, eGRID2023), so those calculations are genuine and traceable. The
 Scope 3 factors are invented and labelled `DEMO DATA — not for reporting` —
 load a licensed library before reporting anything real.
 

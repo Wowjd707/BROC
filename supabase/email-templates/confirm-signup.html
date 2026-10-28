@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+    BROC — "Confirm signup" email for Supabase Auth.
+  
+    Paste into: Supabase Dashboard → Authentication → Email Templates →
+    Confirm signup (message body). Subject: Confirm your BROC account
+  
+    The button links to the app's /auth/confirm route with a token hash, which
+    verifies on the server and so works on any device — not only the browser
+    that signed up. Requires Authentication → URL Configuration → Site URL to be
+    the app's public address (it also hosts the logo image below).
+  
+    Email clients ignore most CSS: layout is tables, styles are inline, fonts
+    are a system stack (web fonts are blocked by most clients), and the logo is
+    a PNG with alt text, because Gmail and Outlook do not render SVG.
+    See docs/EMAIL_TEMPLATES.md.
+  -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Confirm your BROC account</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f3f4f6;">
+  <!-- Preview text shown beside the subject in most inboxes -->
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">
+    One click to confirm your email and finish setting up BROC.
+  </div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f4f6;">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+          <tr>
+            <td style="padding:0 4px 20px 4px;">
+              <img src="{{ .SiteURL }}/brand/broc-wordmark-email.png" width="79" height="28" alt="BROC"
+                   style="display:block;border:0;outline:none;text-decoration:none;height:28px;width:79px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:2px;color:#059669;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background-color:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:36px 32px;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#111827;">
+              <h1 style="margin:0 0 16px 0;font-size:20px;line-height:28px;font-weight:600;color:#111827;">
+                Confirm your email
+              </h1>
+              <p style="margin:0 0 12px 0;font-size:15px;line-height:24px;color:#374151;">
+                {{ if .Data.first_name }}Hi {{ .Data.first_name }},{{ else }}Hi,{{ end }}
+              </p>
+              <p style="margin:0 0 24px 0;font-size:15px;line-height:24px;color:#374151;">
+                Thanks for signing up for BROC. Confirm that <strong style="color:#111827;">{{ .Email }}</strong>
+                is your address to finish setting up your account.
+              </p>
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px 0;">
+                <tr>
+                  <td align="center" bgcolor="#059669" style="border-radius:8px;">
+                    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard"
+                       target="_blank"
+                       style="display:inline-block;padding:12px 24px;font-size:15px;line-height:20px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;background-color:#059669;">
+                      Confirm email address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin:0 0 8px 0;font-size:13px;line-height:20px;color:#6b7280;">
+                The button not working? Copy this link into your browser:
+              </p>
+              <p style="margin:0 0 24px 0;font-size:13px;line-height:20px;word-break:break-all;">
+                <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email&next=/dashboard"
+                   style="color:#047857;text-decoration:underline;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email&amp;next=/dashboard</a>
+              </p>
+              <p style="margin:0;font-size:13px;line-height:20px;color:#6b7280;">
+                The link works once and expires after a while. If it has, sign in and send yourself a new one.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 4px 0 4px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9ca3af;">
+              You are receiving this because someone signed up for BROC with this address.
+              If that was not you, you can ignore this email — no account is created until it is confirmed.
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

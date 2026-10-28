@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { BrandWordmark } from '@/components/layout/BrandWordmark';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BRANDING } from '@/lib/branding';
@@ -102,10 +103,8 @@ export default function AcceptInvitePage() {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-xl mb-4">
-            {BRANDING.mark}
-          </div>
-          <h1 className="text-2xl font-semibold text-gray-900">{BRANDING.productName}</h1>
+          <BrandWordmark className="h-9 mx-auto mb-2 text-emerald-600" />
+          <p className="text-sm text-gray-500">{BRANDING.tagline}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

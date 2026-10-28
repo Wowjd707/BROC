@@ -339,7 +339,10 @@ export function DataEntryClient({
                         </td>
                         <td className="px-4 py-3 text-right font-medium text-gray-900 whitespace-nowrap">
                           {/* Scope 2 rows store both figures; co2e_kg is the market-based one. */}
+                          {/* The market line only when it differs: under grid
+                              average the two are the same number. */}
                           {e.scope === 'scope2' && e.co2e_kg_location_based != null
+                            && Math.abs(Number(e.co2e_kg) - Number(e.co2e_kg_location_based)) > 0.005
                             ? (
                               <>
                                 {fmtCO2e(e.co2e_kg_location_based)}
@@ -348,7 +351,7 @@ export function DataEntryClient({
                                 </span>
                               </>
                             )
-                            : fmtCO2e(e.co2e_kg)}
+                            : fmtCO2e(e.scope === 'scope2' ? (e.co2e_kg_location_based ?? e.co2e_kg) : e.co2e_kg)}
                           {Number(e.co2e_kg_outside_scopes ?? 0) > 0 && (
                             <span className="block text-[11px] font-normal text-gray-400">
                               +{fmtCO2e(Number(e.co2e_kg_outside_scopes))} outside scopes

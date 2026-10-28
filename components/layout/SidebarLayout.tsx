@@ -1,13 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { BrandWordmark } from '@/components/layout/BrandWordmark';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { ScopePicker } from './ScopePicker';
 import { ProfileDialog } from './ProfileDialog';
 import { cn } from '@/lib/utils';
-import { BRANDING } from '@/lib/branding';
 import { activeOrg } from '@/lib/active-org';
 import {
   LayoutDashboard, FileText, BarChart3, Target,
@@ -154,31 +154,10 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
     <div className="flex flex-col h-full">
       {/* Logo + Org */}
       <div className="px-4 py-5 border-b border-gray-200">
-        <div className="flex items-center gap-3">
-          {/* The artwork carries its own background, so it replaces the tile
-              rather than sitting inside it. Falls back to the letter when a
-              deployment has supplied no logo of its own. */}
-          {BRANDING.markSrc ? (
-            /* eslint-disable-next-line @next/next/no-img-element --
-               next/image does not optimise SVG and would add a loader for a
-               file measured in hundreds of bytes. A plain img is correct here. */
-            <img
-              src={BRANDING.markSrc}
-              alt=""
-              width={32}
-              height={32}
-              className="w-8 h-8 rounded-lg flex-shrink-0"
-            />
-          ) : (
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white font-bold text-sm">{BRANDING.mark}</span>
-            </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900 truncate">{orgName}</p>
-            <p className="text-xs text-gray-400">{BRANDING.shortName}</p>
-          </div>
-        </div>
+        {/* The product wordmark, then the workspace it is showing. The square
+            mark stays for the browser tab, where a wordmark cannot fit. */}
+        <BrandWordmark className="h-5 text-emerald-600" />
+        <p className="mt-3 text-sm font-semibold text-gray-900 truncate" title={orgName}>{orgName}</p>
 
         {/* Reporting scope — writes to the URL so server components can filter */}
         <ScopePicker sites={sites} units={businessUnits} groups={siteGroups} />

@@ -32,7 +32,7 @@ If you can do it as data, do it as data.
 
 | What you want to change | Where | Shape |
 | --- | --- | --- |
-| Emission factors, any vintage | `/factors` CSV import, or `custom_emission_factors` | Data |
+| Emission factors, any vintage | `/data/factors` CSV import, or `custom_emission_factors` | Data |
 | Regulatory tracker content | `regulatory_items` / `regulatory_frameworks`, see `REGULATORY_CONTENT.md` | Data |
 | How two regimes interact | `regulatory_relationships` (migration 033) | Data |
 | Tracker glossary and acronyms | `regulatory_glossary` (migration 033) | Data |
@@ -42,8 +42,10 @@ If you can do it as data, do it as data.
 | Disclosure requirements | Requirement importer CSV | Data |
 | Consolidation approach, ownership | `organizations`, `sites` (migration 028) | Data |
 | Product name and mark | `lib/branding.ts`, env-overridable | Data |
+| Site grid, residual-mix and heat/steam factors | Emission factors page, per site (`scope2_location`, `scope2_residual`, `scope2_heat`) | Data |
 | **Waste streams** | `WasteDrawer.tsx` + `source-labels.ts` | Code |
-| **Fuels and Scope 1 sources** | `EmissionDrawer.tsx` + `conversions.ts` + factors | Code |
+| **Water sources** | `WaterDrawer.tsx` + `water-core.ts` (withdrawal, discharge or recycled) | Code |
+| **Fuels and Scope 1 sources** | `EmissionDrawer.tsx` + `conversions.ts` (heating values) + factors | Code |
 | **Social & governance metrics** | Migration 023 + `social-metrics-core.ts` | Both |
 | **Units** | `lib/conversions.ts`, `lib/units.ts` | Code |
 | **What your AI assistant knows** | `.claude/skills/` | Code |

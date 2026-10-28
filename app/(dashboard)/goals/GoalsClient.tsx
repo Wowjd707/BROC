@@ -314,7 +314,7 @@ export function GoalsClient({
         </Card>
         <Card>
           <CardContent className="pt-4 pb-4">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Achieved</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Goals achieved</p>
             <p className="text-2xl font-bold text-gray-900">
               {goals.filter(g => g.status === 'achieved').length}
             </p>

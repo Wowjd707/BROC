@@ -41,6 +41,14 @@ convenience.
 **Never report a missing metric as 0.** Missing and zero are different facts. An
 intensity with no denominator reports as missing, not as a number.
 
+**Never put biogenic CO₂ or HCFC leaks in a scope total, or add water
+discharges to withdrawals.** They have their own columns and classes
+(`co2e_kg_outside_scopes`, `lib/water-core.ts`) precisely so a sum of
+`co2e_kg` or of withdrawals is right without a filter.
+
+**On a Scope 2 row, `co2e_kg` is market-based** and `co2e_kg_location_based` is
+location-based. Choose the column for the method, never assume.
+
 **Never edit an applied migration.** Add a new numbered one. See
 `broc-migration`.
 

@@ -18,7 +18,7 @@ check by hand.
 - [ ] Confirm the working tree is clean and on the commit you mean to test.
 - [ ] `bash deploy/preflight.sh` — expect zero problems. It will name any
       environment variable the code reads that `.env` is missing.
-- [ ] `npm test` — 1,143+ tests should pass.
+- [ ] `npm test` — 1,230+ tests should pass.
 - [ ] `npx tsc --noEmit` — silent.
 - [ ] `npm run build` — the same build the Docker image uses.
       ✅ `.next/standalone/server.js` exists afterwards.
@@ -71,6 +71,50 @@ business unit at 10% of target could read 100%.
 - ✅ Progress is **withheld** under a scope filter, with a note saying why.
 - 🚩 A progress percentage that changes with the filter — especially one that
       jumps toward 100%.
+
+### 1.5 Scope 2: both figures on every row — `/data`
+
+Before migration 039 a row without a contract stored only the grid average,
+and every market-based total silently used it.
+
+- [ ] Log electricity at a US site, location-based, no contract.
+- ✅ The row's Basis reads **Grid average** (no US residual mix ships) and one
+      figure shows. Add a **Scope 2 residual mix (site)** factor on the
+      Emission factors page, log again: Basis reads **Residual mix** and a
+      separate market figure appears.
+- [ ] Log rooftop solar (Renewable, on-site generated).
+- ✅ Zero CO₂e. 🚩 Anything priced at the grid rate.
+- [ ] Log district heating with no heat factor for the site.
+- ✅ Refused, with a message naming the factor to add.
+
+### 1.6 Water consumption — `/disclosures`, `/kpis`
+
+- [ ] Enter a withdrawal (e.g. municipal supply 1,000 m³) and a discharge
+      (municipal sewer 800 m³) at one site.
+- ✅ Disclosed water consumption is **200 m³**; KPIs and the dashboard show
+      **withdrawal** (1,000 m³).
+- 🚩 1,800 m³ anywhere — discharges added to withdrawals.
+
+### 1.7 Scope 3 units — `/scope3`
+
+- [ ] Enter 10 tonnes against a factor per kg (e.g. 2 kg CO₂e/kg).
+- ✅ 20,000 kg CO₂e, and the preview shows "10 tonnes = 10,000 kg".
+- 🚩 20 kg — the activity was not converted.
+- [ ] Enter EUR spend against a per-USD factor.
+- ✅ Refused, asking for the spend in USD.
+
+### 1.8 SBTi pathway and goal scope — `/goals`
+
+- [ ] Create an SBTi 1.5 °C goal, 2020 → 2030.
+- ✅ The target is **42%** below base (linear 4.2%/yr). 🚩 34.9% (compounded).
+- [ ] Create a Scope 1-only goal.
+- ✅ Its "Now" figure is Scope 1 alone. 🚩 Scope 1 + 2.
+
+### 1.9 Outside the scopes — `/data`
+
+- [ ] Log an R-22 top-up.
+- ✅ The row reads "0 kg CO₂e" with "+… outside scopes" and Basis
+      **Montreal gas**; Scope 1 on the dashboard does not move.
 
 ---
 

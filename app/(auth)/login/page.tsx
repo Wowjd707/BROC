@@ -1,6 +1,8 @@
 'use client';
 
 import { Suspense, useState } from 'react';
+import { confirmMessage } from '@/lib/auth-confirm-core';
+import { BrandWordmark } from '@/components/layout/BrandWordmark';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BRANDING } from '@/lib/branding';
@@ -54,6 +56,17 @@ function LoginForm() {
   // a sentence rather than leaving the person on a login page with no
   // explanation for why they were just signed out.
   const ssoError = searchParams.get('sso_error');
+  // The email-confirmation route (app/auth/confirm) lands here as ?confirm=<code>.
+  const confirmCode = searchParams.get('confirm');
+  const confirmNotice = confirmCode ? confirmMessage(confirmCode) : null;
+  const [resendState, setResendState] = useState<'idle' | 'sending' | 'sent' | string>('idle');
+
+  async function resendConfirmation() {
+    if (!email.trim()) { setResendState('Enter your email address above first.'); return; }
+    setResendState('sending');
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email: email.trim() });
+    setResendState(resendError ? resendError.message : 'sent');
+  }
 
   async function handlePasswordLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -118,31 +131,42 @@ function LoginForm() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          {BRANDING.wordmarkSrc ? (
-            /* The wordmark replaces the name rather than sitting above it —
-               two renderings of the same word is a lockup, not a header. The
-               name stays as the accessible label. */
-            /* eslint-disable-next-line @next/next/no-img-element --
-               next/image does not optimise SVG and would add a loader for a
-               file measured in hundreds of bytes. A plain img is correct here. */
-            <img
-              src={BRANDING.wordmarkSrc}
-              alt={BRANDING.productName}
-              className="h-9 w-auto mx-auto mb-3 text-emerald-600"
-            />
-          ) : (
-            <>
-              <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-emerald-600 text-white font-bold text-xl mb-4">
-                {BRANDING.mark}
-              </div>
-              <h1 className="text-2xl font-semibold text-gray-900">{BRANDING.productName}</h1>
-            </>
-          )}
+          {/* The wordmark replaces the name rather than sitting above it — two
+              renderings of the same word is a lockup, not a header. */}
+          <BrandWordmark className="h-9 mx-auto mb-3 text-emerald-600" />
           <p className="text-sm text-gray-500 mt-1">{BRANDING.tagline}</p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-6">Sign in to your account</h2>
+
+          {confirmNotice && (
+            <div className={`mb-6 rounded-lg border px-3.5 py-3 ${confirmNotice.tone === 'ok'
+              ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+              <p className={`text-sm ${confirmNotice.tone === 'ok' ? 'text-emerald-900' : 'text-amber-900'}`}>
+                {confirmNotice.text}
+              </p>
+              {confirmCode === 'expired' && (
+                <div className="mt-2 text-sm">
+                  {resendState === 'sent' ? (
+                    <span className="text-emerald-800">A new link is on its way, if that email has an unconfirmed account.</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={resendConfirmation}
+                      disabled={resendState === 'sending'}
+                      className="font-medium text-amber-900 underline underline-offset-2"
+                    >
+                      {resendState === 'sending' ? 'Sending…' : 'Send a new confirmation link'}
+                    </button>
+                  )}
+                  {resendState !== 'idle' && resendState !== 'sending' && resendState !== 'sent' && (
+                    <p className="text-red-700 mt-1">{resendState}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {ssoError && (
             <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3">

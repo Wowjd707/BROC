@@ -66,9 +66,18 @@ the three scaffolded packs do.
 
 | Route | When |
 | --- | --- |
-| `/factors` CSV import | A prepared pack, or an organization's own factors |
-| `custom_emission_factors` | Organization-specific, supplier-specific |
-| Reference seed migration | Factors shipped with the platform |
+| `/data/factors` CSV import | A prepared pack, or an organization's own factors |
+| `custom_emission_factors` | Organization-specific, supplier-specific. Categories: `scope1` (by fuel), `refrigerant` (by code), and per site `scope2_location` (grid), `scope2_residual` (residual mix, e.g. Green-e by eGRID subregion) and `scope2_heat` (heat or steam supplier) |
+| Reference seed migration | Factors shipped with the platform. To correct one, add a new migration (as 038 did); never edit 003 |
+
+There are **no built-in fallback numbers** in the engine. A missing factor
+refuses the entry with a message saying what to add. Do not add a hard-coded
+default to make an entry save: the last two (0.386 and 0.455 kg/kWh) matched
+nothing they claimed to mirror.
+
+Correcting a reference factor does not recalculate stored entries; each entry
+keeps the factor it was saved with. Say so to the user, and point them to the
+recalculation query in `docs/FACTORS.md`.
 
 The importer (`lib/custom-factor-import-core.ts`) validates structure at load
 time and shows a plan before writing. Unknown units and unparseable numbers are
