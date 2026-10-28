@@ -47,7 +47,7 @@ export default async function GoalDetailPage({ params }: { params: Promise<{ id:
   const metric = asGoalMetric(goal.metric);
 
   // Same boundary as the report and the Goals page.
-  const { data: sites } = await supabase.from('sites').select('id, ownership_percent, is_controlled');
+  const { data: sites } = await supabase.from('sites').select('id, ownership_percent, is_controlled').eq('is_active', true);
   const approach = (org?.consolidation_approach ?? 'operational_control') as ConsolidationApproach;
   const boundaries = boundaryMap((sites ?? []).map((x) => ({
     id: x.id as string,

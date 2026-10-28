@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–039). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–040). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -354,6 +354,14 @@ checks(sort_key, check_name, status, detail) AS (
     ) THEN 'PASS' ELSE 'FAIL' END,
     'Residual mix or disclosed grid average for every Scope 2 row, both factors stored, and biogenic '
       || 'CO2 and Montreal gases kept outside the scopes. Re-apply 039 if this fails.'
+
+  UNION ALL SELECT 33, 'Pipeline — projects count unless marked not counted',
+    CASE WHEN (
+      SELECT column_default FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='projects' AND column_name='pipeline_inclusion_status'
+    ) LIKE '%forecasted%' THEN 'PASS' ELSE 'FAIL' END,
+    'Without 040, every project created in the app is stored as excluded and the pipeline '
+      || 'now honours that, so coverage reads zero. Re-apply 040.'
 )
 
 SELECT

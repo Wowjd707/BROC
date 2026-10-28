@@ -94,10 +94,9 @@ const SCOPE1_CATEGORIES_BY_SOURCE: Record<string, Scope1Category[]> = {
   // Leaks, not combustion. The only fuel-like source with one honest answer.
   refrigerants: ['fugitive_emissions'],
 
-  other_combustion: [
-    'stationary_combustion', 'mobile_combustion',
-    'process_emissions', 'fugitive_emissions',
-  ],
+  // Combustion by name: burned, not leaked. (A leak is a refrigerant or an
+  // organization-added source, which stays unconstrained below.)
+  other_combustion: ['stationary_combustion', 'mobile_combustion', 'process_emissions'],
 };
 
 /** Scope 2 sources take no Scope 1 category at all. */

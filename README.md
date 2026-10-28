@@ -26,6 +26,31 @@ It is **not** a managed service. Nobody runs it for you, and there is no
 vendor support line. If that is what you need, a commercial platform is the
 better fit.
 
+## A starting point, not a finished product
+
+Think of BROC as a house with the framing, plumbing and wiring in, and the
+walls left open. The parts every sustainability team needs and nobody should
+rebuild — the data model, the calculation engine, the audit trail, the
+disclosure mapping — are done and tested. The layout is yours: your sites,
+your fuels and waste streams, your factor sets, your internal systems, your
+reporting rhythm. Move the rooms around to fit how your organization actually
+works.
+
+What that means in practice:
+
+- **The numbers are the part held to the highest standard.** The shipped
+  reference factors (EPA, eGRID, AIB, IPCC AR6) were checked line by line
+  against their publications, and the calculation engine was independently
+  reviewed against the GHG Protocol, ESRS, GRI and SBTi rules. Where a
+  methodology choice is still open, it is written down rather than hidden
+  ([`docs/DECISIONS.md`](docs/DECISIONS.md), Known limitations).
+- **No figure is invented to fill a gap.** No Scope 3 factor library, CBAM
+  default value or carbon price ships with it; a missing factor stops an entry
+  with a message saying what to add, rather than a plausible guess.
+- **Your factor sets, your licences.** You load the factor libraries you are
+  licensed to use; [`docs/FACTORS.md`](docs/FACTORS.md) says which public ones
+  can be bundled and how.
+
 ## What it replaces
 
 | Today you might use | BROC gives you |
@@ -78,9 +103,11 @@ calculator, and supplier figures feed Scope 3 Category 1.
 - **A Supabase project** (the free tier is enough to evaluate) and Node.js 20,
   or Docker. Use Supabase Cloud, or self-host Supabase — in front of your own
   PostgreSQL 15+ if you already run one ([`docs/DEPLOY.md`](docs/DEPLOY.md)).
-- **An afternoon** from clone to first login, following
-  [`docs/INSTALL.md`](docs/INSTALL.md). Demo data loads with one script, and
-  there is a [practice workspace](docs/SANDBOX.md) for trying things safely.
+- **Someone comfortable following a technical guide.**
+  [`docs/INSTALL.md`](docs/INSTALL.md) goes from an empty database to first
+  login step by step, with a script that checks the result. Demo data loads
+  with one script, and there is a [practice workspace](docs/SANDBOX.md) for
+  trying things safely.
 - **Optional AI**, bring your own: Claude, OpenAI, or a self-hosted model. Off
   by default, and nothing depends on it.
 - **Built to be changed with an AI coding assistant.**
@@ -230,7 +257,7 @@ The `send-survey-email` Edge Function additionally needs `RESEND_API_KEY`,
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–039**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–040**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -374,7 +401,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–039, numbered SQL (source of truth for schema)
+  migrations/            001–040, numbered SQL (source of truth for schema)
   functions/             Deno Edge Functions (send-survey-email)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)

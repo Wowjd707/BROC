@@ -76,6 +76,9 @@ export function ReportsClient({
 
     if (!data) { setLoadingReport(null); return; }
 
+    // Both Scope 2 figures with the factor behind each, how the market-based
+    // one was derived, and anything reported outside the scopes — so every
+    // column an assurance provider needs to re-derive a row is in the file.
     const headers = [
       'Date',
       'Site',
@@ -85,13 +88,17 @@ export function ReportsClient({
       'Source Detail',
       'Quantity',
       'Unit (normalized)',
-      'Accounting Method',
       'Instrument Type',
-      'Emission Factor (kg CO₂e/unit)',
+      'Scope 2 Market-Based Basis',
+      'Emission Factor (kg CO₂e/unit; market-based for Scope 2)',
       'Emission Factor Source',
+      'Location-Based Factor (kg CO₂e/kWh)',
+      'Location-Based Factor Source',
       'Supplier Emission Factor',
-      'CO₂e kg (market-based)',
+      'CO₂e kg (Scope 1, or Scope 2 market-based)',
       'CO₂e kg (location-based)',
+      'CO₂e kg outside the scopes',
+      'Outside-Scopes Basis',
       'Notes',
     ];
 
@@ -104,13 +111,17 @@ export function ReportsClient({
       r.source_detail ?? '',
       r.quantity_normalized,
       r.unit_normalized,
-      r.accounting_method ?? 'location_based',
       r.instrument_type ?? '',
+      r.scope === 'scope2' ? (r.scope2_market_basis ?? 'legacy') : '',
       r.emission_factor_used ?? '',
       r.emission_factor_source ?? '',
+      r.location_factor_used ?? '',
+      r.location_factor_source ?? '',
       r.supplier_emission_factor ?? '',
       r.co2e_kg,
       r.co2e_kg_location_based ?? r.co2e_kg,
+      r.co2e_kg_outside_scopes ?? 0,
+      r.outside_scopes_basis ?? '',
       r.notes ?? '',
     ]);
 

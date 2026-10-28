@@ -150,6 +150,9 @@ export interface ScopeTotals {
   scope1: number;
   scope2Market: number;
   scope2Location: number;
+  /** Whether any rows fed each scope. Absent means "not measured", not 0. */
+  hasScope1?: boolean;
+  hasScope2?: boolean;
 }
 
 /**
@@ -165,11 +168,12 @@ export function scopeTotals(
 ): ScopeTotals | null {
   const s12 = (rows ?? []).filter((r) => r.scope === 'scope1' || r.scope === 'scope2');
   if (s12.length === 0) return null;
-  const t: ScopeTotals = { scope1: 0, scope2Market: 0, scope2Location: 0 };
+  const t: ScopeTotals = { scope1: 0, scope2Market: 0, scope2Location: 0, hasScope1: false, hasScope2: false };
   for (const r of s12) {
     const k = share(r.site_id ?? null);
-    if (r.scope === 'scope1') t.scope1 += Number(r.co2e_kg) * k;
+    if (r.scope === 'scope1') { t.scope1 += Number(r.co2e_kg) * k; t.hasScope1 = true; }
     else {
+      t.hasScope2 = true;
       t.scope2Market += Number(r.co2e_kg) * k;
       t.scope2Location += Number(r.co2e_kg_location_based ?? r.co2e_kg) * k;
     }
@@ -177,12 +181,23 @@ export function scopeTotals(
   return t;
 }
 
-/** A GHG goal's current value: its scope, under its Scope 2 method. */
+/**
+ * A GHG goal's current value: its scope, under its Scope 2 method. Null when
+ * the scope the goal covers has no rows in the period — a Scope 2 goal in a
+ * year where only Scope 1 has been entered is not measured, and reading it as
+ * 0 showed 100% progress. A Scope 1 + 2 goal needs both.
+ */
 export function goalGhgValue(
-  totals: ScopeTotals,
+  totals: ScopeTotals | null | undefined,
   scope: string | null | undefined,
   scope2Method: string | null | undefined,
-): number {
+): number | null {
+  if (!totals) return null;
+  const has1 = totals.hasScope1 ?? true;
+  const has2 = totals.hasScope2 ?? true;
+  if (scope === 'scope1' && !has1) return null;
+  if (scope === 'scope2' && !has2) return null;
+  if (scope !== 'scope1' && scope !== 'scope2' && (!has1 || !has2)) return null;
   const s2 = scope2Method === 'location_based' ? totals.scope2Location : totals.scope2Market;
   return goalScopeEmissions(scope, totals.scope1, s2);
 }
@@ -200,6 +215,8 @@ export interface GoalProgress {
   progressPct: number;
   /** True when the target is derivable; false means the bar is not meaningful. */
   isComputable: boolean;
+  /** False when the period has no data for what the goal measures. */
+  measured: boolean;
 }
 
 /**
@@ -213,10 +230,21 @@ export interface GoalProgress {
  * as a fallback and `isComputable` reports false so the UI can say the number
  * is entered rather than calculated.
  */
-export function computeGoalProgress(goal: GoalLike, currentValue: number): GoalProgress {
+export function computeGoalProgress(goal: GoalLike, measuredValue: number | null): GoalProgress {
   const metric = asGoalMetric(goal.metric);
   const baseValue = goalBaseline(goal);
   const targetValue = goalTargetValue(goal);
+
+  // Not measured: no progress claimed, and no fallback to an entered figure
+  // either — the bar shows nothing rather than a number from nowhere.
+  if (measuredValue == null) {
+    return {
+      metric, baseValue, targetValue, currentValue: 0,
+      requiredReduction: 0, achievedReduction: 0, progressPct: 0,
+      isComputable: false, measured: false,
+    };
+  }
+  const currentValue = measuredValue;
 
   if (baseValue == null || targetValue == null) {
     return {
@@ -228,6 +256,7 @@ export function computeGoalProgress(goal: GoalLike, currentValue: number): GoalP
       achievedReduction: 0,
       progressPct: goal.progress_pct ?? 0,
       isComputable: false,
+      measured: true,
     };
   }
 
@@ -247,6 +276,7 @@ export function computeGoalProgress(goal: GoalLike, currentValue: number): GoalP
     achievedReduction,
     progressPct,
     isComputable: true,
+    measured: true,
   };
 }
 

@@ -1,10 +1,11 @@
 import 'server-only';
 import { asGoalMetric } from './goal-metrics';
+import { calculateSBTiTarget } from './calculations';
 import { fetchAll } from './fetch-all';
 import { createServerClient } from './supabase/server';
 import { reportingYearRange } from './utils';
 import { totalsByCategory } from './scope3';
-import type { InventoryInput } from './disclosure-metrics-core';
+import { provenanceSourceName, type InventoryInput } from './disclosure-metrics-core';
 import {
   isSocialGovernanceFamily,
   aggregateAll,
@@ -40,19 +41,29 @@ export async function getProvenanceForYear(
   const { startDate, endDate } = reportingYearRange(year, fyStart);
 
   const [{ data: emissions }, { data: scope3 }] = await Promise.all([
-    supabase
+    // Paged: the provenance list must cover every row the figures cover.
+    fetchAll((from, to) => supabase
       .from('emission_entries')
-      .select('emission_factor_source')
-      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
-    supabase
+      .select('emission_factor_source, location_factor_source')
+      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase
       .from('scope3_entries')
       .select('factor_source, category_number, co2e_kg, data_quality')
-      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
+      .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
+      .order('id').range(from, to)),
   ]);
 
+  // Both factors behind a Scope 2 row are listed — the market-based one in
+  // emission_factor_source, the location-based one in location_factor_source.
+  // The per-entry basis in parentheses ("(ZIP 28202)") and the grid-average
+  // note are stripped, so the list names documents, one line each.
   const sources = new Set<string>();
   for (const e of emissions ?? []) {
-    if (e.emission_factor_source) sources.add(e.emission_factor_source);
+    for (const src of [e.emission_factor_source, e.location_factor_source]) {
+      const clean = provenanceSourceName(src);
+      if (clean) sources.add(clean);
+    }
   }
   for (const s of scope3 ?? []) {
     if (s.factor_source) sources.add(s.factor_source);
@@ -112,7 +123,7 @@ export async function getInventoryForYear(
         .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null)
         .order('id').range(from, to)),
       supabase.from('sites').select('id, floor_area_sqft, ownership_percent, is_controlled').eq('is_active', true),
-      supabase.from('goals').select('name, metric, goal_type, target_year, target_value, target_unit, target_reduction_pct, status'),
+      supabase.from('goals').select('name, metric, goal_type, base_year, target_year, target_value, target_unit, target_reduction_pct, status'),
       supabase.from('organizations').select('consolidation_approach, intensity_metric_key').limit(1).maybeSingle(),
       supabase.from('business_metrics')
         .select('metric_key, label, description, unit, category, aggregation, is_denominator, display_order, organization_id')
@@ -299,9 +310,14 @@ export async function getInventoryForYear(
       .map((g) => ({
         name: g.name,
         targetYear: g.target_year,
-        targetReductionPct: g.target_unit === 'pct_reduction' && g.target_value != null
-          ? Number(g.target_value)
-          : g.goal_type === 'net_zero' ? null : (g.target_reduction_pct ?? null),
+        // An SBTi target is derived from its years, never read: the same
+        // linear rule the Goals page applies, so the disclosure cannot print a
+        // stored figure the page no longer shows.
+        targetReductionPct: g.goal_type === 'sbti_15c'
+          ? calculateSBTiTarget(1, g.base_year, g.target_year).reductionPct
+          : g.target_unit === 'pct_reduction' && g.target_value != null
+            ? Number(g.target_value)
+            : g.goal_type === 'net_zero' ? null : (g.target_reduction_pct ?? null),
         status: g.status,
         goalType: g.goal_type ?? undefined,
       })),

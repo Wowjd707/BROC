@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–039** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–040** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–039 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–039 apply clean, 038 and 039 re-apply, and all 32 checks in `verify_install.sql` pass. |
+| 008–040 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -175,7 +175,8 @@ changed, change it knowingly and update this list.
   waste, where populating it would be a unit lie.
 - **SBTi and net-zero targets are GHG-only.** The 1.5 °C pathway's 4.2 %/yr
   (of base-year emissions, linear — not compounded) is defined on greenhouse
-  gases. Applying it to a water volume would fabricate a
+  gases. An SBTi target is always derived from its base and target years,
+  never read from the stored percentage. Applying it to a water volume would fabricate a
   methodology under a name an assurance provider recognises, so no target is
   derived at all rather than a plausible-looking wrong one.
 - **Goal progress is delivered reduction over required reduction**, never
@@ -185,8 +186,11 @@ changed, change it knowingly and update this list.
   measured on its own scope (`scope1`, `scope2`, `scope1_2`) and Scope 2
   method, with the consolidation boundary applied as in the report.
 - **`pipeline_inclusion_status = 'excluded'` keeps a project out of the
-  pipeline**; the project form sets it ("Reduction pipeline"). Ideas and
-  cancelled projects never count whatever it says.
+  pipeline**; the project form sets it ("Reduction pipeline") and the default
+  is `forecasted` (040). Ideas and cancelled projects never count whatever it
+  says. Migration 040 moved every pre-existing excluded project into the
+  pipeline once, because the pipeline ignored the flag until then; mark any
+  that should not count "Not counted".
 - **A project with no saving for a metric counts as zero, not as excluded** from
   that pipeline. The project count and the savings total answer different
   questions, and dropping it would hide that its water saving was never

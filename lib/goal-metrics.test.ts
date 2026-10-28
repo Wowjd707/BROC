@@ -164,7 +164,7 @@ describe('scopeTotals / goalGhgValue', () => {
     // Regression: the Goals page summed raw co2e_kg, so a 50% joint venture
     // counted in full toward goal progress and at half in the report.
     const t = scopeTotals(rows, (id) => (id === 'jv' ? 0.5 : 1))!;
-    expect(t).toEqual({ scope1: 1000, scope2Market: 700, scope2Location: 600 });
+    expect(t).toMatchObject({ scope1: 1000, scope2Market: 700, scope2Location: 600, hasScope1: true, hasScope2: true });
   });
   it('picks the goal\'s scope and Scope 2 method', () => {
     const t = scopeTotals(rows)!;
@@ -174,5 +174,23 @@ describe('scopeTotals / goalGhgValue', () => {
   });
   it('is null, not zero, for a period with no Scope 1 or 2 rows', () => {
     expect(scopeTotals([])).toBeNull();
+  });
+});
+
+describe('unmeasured goal scopes', () => {
+  it('is null, not zero, when the goal\'s own scope has no rows', () => {
+    // Regression: a Scope 2 goal in a year with only Scope 1 entered was
+    // measured at 0 kg and showed 100% progress.
+    const onlyScope1 = scopeTotals([{ scope: 'scope1', co2e_kg: 800, co2e_kg_location_based: 800 }])!;
+    expect(goalGhgValue(onlyScope1, 'scope2', 'market_based')).toBeNull();
+    expect(goalGhgValue(onlyScope1, 'scope1_2', 'market_based')).toBeNull();
+    expect(goalGhgValue(onlyScope1, 'scope1', 'market_based')).toBe(800);
+    expect(goalGhgValue(null, 'scope1', 'market_based')).toBeNull();
+  });
+  it('claims no progress for an unmeasured goal', () => {
+    const p = computeGoalProgress(goal({ base_year_value: 1000, target_value: 50, progress_pct: 80 }), null);
+    expect(p.measured).toBe(false);
+    expect(p.isComputable).toBe(false);
+    expect(p.progressPct).toBe(0);
   });
 });

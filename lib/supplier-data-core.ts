@@ -105,12 +105,14 @@ export function declarationFromSurveyAnswers(
     supplierId,
     supplierName,
     source: 'survey_response',
-    // CBAM embedded emissions stop at the installation gate plus precursors:
-    // narrower than the cradle-to-gate boundary a Scope 3 Category 1 factor
-    // assumes. Said in the label so the figure is never read as full scope.
+    // The survey asks for DIRECT intensity: narrower than the cradle-to-gate
+    // boundary a Scope 3 Category 1 factor assumes (the supplier's purchased
+    // energy and inputs are missing). Said in the label so the figure is never
+    // read as full scope. The reference is clipped so the label fits
+    // scope3_entries.factor_source (VARCHAR 255).
     sourceLabel: verified && verificationRef
-      ? `Supplier CBAM survey response (third-party verified: ${verificationRef}; CBAM embedded-emissions boundary, partial cradle-to-gate)`
-      : 'Supplier CBAM survey response (self-declared; CBAM embedded-emissions boundary, partial cradle-to-gate)',
+      ? `Supplier CBAM survey response (third-party verified: ${verificationRef.slice(0, 120)}; direct emissions only, partial cradle-to-gate)`
+      : 'Supplier CBAM survey response (self-declared; direct emissions only, partial cradle-to-gate)',
     intensityKgCo2e: intensity,
     unit,
     product: (answers.q1 ?? '').trim() || null,

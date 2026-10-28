@@ -57,10 +57,11 @@ interface Goal {
 
 interface Props {
   goals: Goal[];
-  /** Boundary-adjusted Scope 1 and both Scope 2 totals for the measured year. */
-  currentGhg: ScopeTotals;
-  currentWaterGal: number;
-  currentWasteKg: number;
+  /** Boundary-adjusted Scope 1 and both Scope 2 totals for the measured year; null when none. */
+  currentGhg: ScopeTotals | null;
+  /** Withdrawal and waste in the measured year; null when nothing was recorded. */
+  currentWaterGal: number | null;
+  currentWasteKg: number | null;
   /** Which year (and whether partial) each metric's current value covers. */
   measuredIn: Record<'ghg' | 'water' | 'waste', GoalMeasurement | null>;
   pipelineKg: number;
@@ -232,7 +233,7 @@ export function GoalsClient({
    * canonical unit. For GHG the accounting method still decides which Scope 2
    * total applies; water and waste have no such split.
    */
-  function getCurrentValue(goal: Goal): number {
+  function getCurrentValue(goal: Goal): number | null {
     switch (asGoalMetric(goal.metric)) {
       case 'water': return currentWaterGal;
       case 'waste': return currentWasteKg;
@@ -294,7 +295,7 @@ export function GoalsClient({
         <Card>
           <CardContent className="pt-4 pb-4">
             <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Measured Emissions</p>
-            <p className="text-2xl font-bold text-gray-900">{measuredIn.ghg ? fmtCO2e(currentGhg.scope1 + currentGhg.scope2Market) : '—'}</p>
+            <p className="text-2xl font-bold text-gray-900">{measuredIn.ghg && currentGhg ? fmtCO2e(currentGhg.scope1 + currentGhg.scope2Market) : '—'}</p>
             <p className="text-xs text-gray-400">
               {measuredIn.ghg
                 ? `Scope 1+2, market-based, ${measuredIn.ghg.year}${measuredIn.ghg.partial ? ' to date' : ''}`
@@ -340,7 +341,7 @@ export function GoalsClient({
             // two views can never disagree about what the target is.
             const base = goalBaseline(goal);
             const target = goalTargetValue(goal);
-            if (base == null || target == null) return null;
+            if (base == null || target == null || current == null) return null;
             const gap = gapToTarget(base, target, current, getPipelineValue(goal));
             const f = (v: number) => fmtForGoal(goal, v);
             return (
@@ -644,7 +645,8 @@ function GoalCard({
 }: {
   goal: Goal;
   progressPct: number;
-  currentValue: number;
+  /** Null when the measured year has no data for what this goal covers. */
+  currentValue: number | null;
   targetValue: number | null;
   /** Formats a value in this goal's own metric family and display unit. */
   format: (value: number) => string;
@@ -679,7 +681,7 @@ function GoalCard({
               </p>
             </div>
             <div className="text-right shrink-0">
-              <p className="text-2xl font-bold text-gray-900">{pct}%</p>
+              <p className="text-2xl font-bold text-gray-900">{currentValue == null ? '—' : `${pct}%`}</p>
               <p className="text-xs text-gray-400">{yearsLeft > 0 ? `${yearsLeft} yr left` : yearsLeft === 0 ? 'Target year' : 'Overdue'}</p>
             </div>
           </div>
@@ -704,7 +706,7 @@ function GoalCard({
             )}
             <span>
               <span className="text-gray-400">Now:</span>{' '}
-              <span className="font-medium">{format(currentValue)}</span>
+              <span className="font-medium">{currentValue == null ? 'not measured' : format(currentValue)}</span>
             </span>
             {targetValue !== null && (
               <span>

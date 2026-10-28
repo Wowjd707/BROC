@@ -558,3 +558,23 @@ export function coveragePercent(states: RequirementState[]): number {
   ).length;
   return (covered / applicable.length) * 100;
 }
+
+// ─── Provenance ──────────────────────────────────────────────────────────────
+
+/**
+ * The document a stored factor source names, for the report's list of factor
+ * sources. Entry-level detail is stripped — the site's grid basis
+ * ("eGRID2023 (ZIP 28202)") and the grid-average note on a market-based
+ * figure — so the list carries one line per document, not per ZIP. Notes that
+ * describe the factor itself ("AIB_2023 (direct CO2)") are kept. Returns null
+ * for nothing, and for a location source that was never recorded (rows saved
+ * before migration 039 carry a "derived:" placeholder).
+ */
+export function provenanceSourceName(source: string | null | undefined): string | null {
+  if (!source) return null;
+  let s = source.trim();
+  if (!s || s.startsWith('derived:')) return null;
+  s = s.replace(/\s+—\s+grid average used for market-based:.*$/, '');
+  s = s.replace(/\s+\((ZIP |eGRID subregion |US national average|country )[^)]*\)\s*$/, '');
+  return s.trim() || null;
+}

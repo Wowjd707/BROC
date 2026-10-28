@@ -43,6 +43,7 @@ DECLARE
   trend        NUMERIC;
   kwh          NUMERIC;
   therms       NUMERIC;
+  v_base_kg    NUMERIC;
   gal          NUMERIC;
   v_site       UUID;
   v_assess     UUID;
@@ -72,7 +73,7 @@ BEGIN
   -- ── Organization defaults ─────────────────────────────────────────────────
   UPDATE organizations
      SET industry = COALESCE(industry, 'Manufacturing'),
-         base_year = COALESCE(base_year, 2025)
+         base_year = COALESCE(base_year, 2024)
    WHERE id = v_org;
 
   -- ── Sites ─────────────────────────────────────────────────────────────────
@@ -98,17 +99,20 @@ BEGIN
     RETURNING id INTO v_dc;
   END IF;
 
-  -- ── Emission + EHS entries: Jan 2025 → Jul 2026 ───────────────────────────
-  -- 2025 is a full prior year; 2026 runs to the current month so the dashboard
-  -- shows a live year-over-year comparison.
+  -- ── Emission + EHS entries: Jan 2024 → last month ─────────────────────────
+  -- 2024 is the goal's base year and 2025 a full measured year, so the goal
+  -- shows real progress; the current year runs to last month (never into the
+  -- future) so the dashboard shows a live like-for-like comparison.
   FOR d IN
-    SELECT generate_series(DATE '2025-01-01', DATE '2026-07-01', INTERVAL '1 month')::date
+    SELECT generate_series(DATE '2024-01-01',
+                           (date_trunc('month', CURRENT_DATE) - INTERVAL '1 month')::date,
+                           INTERVAL '1 month')::date
   LOOP
     m  := EXTRACT(MONTH FROM d);
     yr := EXTRACT(YEAR  FROM d);
     -- Heating/cooling seasonality, and a gentle downward trend year over year.
     seasonal := 1 + 0.18 * COS(2 * PI() * (m - 1) / 12.0);
-    trend    := CASE WHEN yr = 2026 THEN 0.94 ELSE 1.0 END;
+    trend    := POWER(0.95, GREATEST(0, yr - 2024));
 
     -- ── Electricity (Scope 2, location-based) ──
     -- HQ Office · Charlotte 28202 → SRVC 0.2705 kg/kWh (eGRID2023, migration 038)
@@ -225,13 +229,21 @@ BEGIN
     AND notes LIKE '[DEMO]%' AND scope2_market_basis IS NULL;
 
   -- ── Goal ──────────────────────────────────────────────────────────────────
-  -- target_emissions_kg is set explicitly (4,200,000 × 58%) so the dashboard
-  -- goal-progress card has both endpoints it needs to plot.
+  -- The baseline is the demo's own 2024 Scope 1 + 2 (location-based, the
+  -- goal's method), so base, target and progress are consistent with the
+  -- entries. SBTi 1.5 °C: 4.2% of base-year emissions per year, linear,
+  -- 2024 → 2030 = 25.2%.
+  SELECT COALESCE(SUM(co2e_kg_location_based), 0) INTO v_base_kg
+  FROM emission_entries
+  WHERE organization_id = v_org AND notes LIKE '[DEMO]%' AND deleted_at IS NULL
+    AND scope IN ('scope1', 'scope2')
+    AND entry_date BETWEEN DATE '2024-01-01' AND DATE '2024-12-31';
+
   INSERT INTO goals (organization_id, name, goal_type, scope, scope_coverage, base_year,
-    base_year_emissions_kg, target_year, target_emissions_kg, target_value, target_unit,
+    base_year_emissions_kg, base_year_value, target_year, target_emissions_kg, target_value, target_unit,
     target_reduction_pct, scope2_accounting_method, status, notes)
-  VALUES (v_org, 'Cut Scope 1+2 42% by 2030 (SBTi 1.5°C)', 'sbti_15c', 'scope1_2',
-    '{scope1,scope2}', 2025, 4200000, 2030, 2436000, 42, 'pct_reduction', 42,
+  VALUES (v_org, 'SBTi 1.5°C pathway: Scope 1+2 by 2030', 'sbti_15c', 'scope1_2',
+    '{scope1,scope2}', 2024, v_base_kg, v_base_kg, 2030, ROUND(v_base_kg * (1 - 0.252)), 25.2, 'pct_reduction', 25.2,
     'location_based', 'active', '[DEMO]')
   RETURNING id INTO v_goal;
 

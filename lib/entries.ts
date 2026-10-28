@@ -18,6 +18,7 @@ import {
 import { getCustomFactor } from './custom-factors';
 import { calculateScope3, type Scope3Method, type DataQuality as Scope3DataQuality } from './scope3';
 import { isEntryDataQuality, type EntryDataQuality } from './entry-data-quality';
+import { SCOPE1_SOURCE_TYPES } from './emission-factor-types';
 
 /**
  * Server-side creation of emission and EHS entries.
@@ -88,6 +89,11 @@ export interface Scope3EntryInput {
   dataQuality?: Scope3DataQuality;
   notes?: string;
 }
+
+const SHIPPED_FUELS = new Set<string>([
+  ...SCOPE1_SOURCE_TYPES.map((t) => t.value).filter((v) => v !== 'refrigerants'),
+  'coal_subbituminous', 'coal_lignite',
+]);
 
 const VALID_SCOPE1_CATEGORIES = [
   'stationary_combustion', 'mobile_combustion', 'process_emissions', 'fugitive_emissions',
@@ -179,7 +185,9 @@ export async function createEmissionEntry(
     if (input.sourceType === 'refrigerants' && input.scope1Category !== 'fugitive_emissions') {
       return { ok: false, status: 400, error: 'Refrigerant losses are fugitive emissions. Set the Scope 1 category to fugitive_emissions.' };
     }
-    if (input.sourceType !== 'refrigerants' && input.scope1Category === 'fugitive_emissions') {
+    // Only the fuels the platform ships: an organization-added source (SF₆
+    // from switchgear, say) may genuinely be fugitive.
+    if (SHIPPED_FUELS.has(input.sourceType) && input.scope1Category === 'fugitive_emissions') {
       return { ok: false, status: 400, error: `Fuel burned (${input.sourceType}) is combustion, not a fugitive emission. Choose stationary_combustion or mobile_combustion.` };
     }
   }
@@ -262,14 +270,18 @@ export async function createEmissionEntry(
       emissionFactorSource = custom ? custom.source : rf!.source;
     } else {
       const custom = await getCustomFactor('scope1', input.sourceType, input.entryDate);
+      const f = await getScope1Factor(input.sourceType);
+      // Biogenic CO2 is a property of the fuel, so it comes from the reference
+      // table even when the CH4 + N2O factor is the organization's own. A
+      // custom biomass factor must therefore exclude biogenic CO2
+      // (docs/FACTORS.md), or it would be counted in Scope 1 as well.
+      biogenicCo2Factor = f?.biogenicCo2Factor ?? undefined;
       if (custom) {
         scope1Factor = custom.factor;
         emissionFactorSource = custom.source;
       } else {
-        const f = await getScope1Factor(input.sourceType);
         if (!f) return { ok: false, status: 400, error: `No emission factor for fuel: ${input.sourceType}` };
         scope1Factor = f.factor;
-        biogenicCo2Factor = f.biogenicCo2Factor ?? undefined;
         emissionFactorSource = f.source;
       }
     }

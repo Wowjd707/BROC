@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   resolveMetric,
+  provenanceSourceName,
   requirementState,
   coveragePercent,
   type InventoryInput,
@@ -241,5 +242,20 @@ describe('coveragePercent', () => {
 
   it('returns 0 for an empty framework', () => {
     expect(coveragePercent([])).toBe(0);
+  });
+});
+
+describe('provenanceSourceName', () => {
+  it('names the document, not the entry-level basis', () => {
+    expect(provenanceSourceName('eGRID2023 (ZIP 28202)')).toBe('eGRID2023');
+    expect(provenanceSourceName('eGRID2023 (US national average)')).toBe('eGRID2023');
+    expect(provenanceSourceName('eGRID2023 (ZIP 60601) — grid average used for market-based: no residual mix for this market'))
+      .toBe('eGRID2023');
+    expect(provenanceSourceName('AIB_2023 (direct CO2)')).toBe('AIB_2023 (direct CO2)');
+    expect(provenanceSourceName('City Heat Co 2025 disclosure')).toBe('City Heat Co 2025 disclosure');
+  });
+  it('drops unrecorded legacy location sources', () => {
+    expect(provenanceSourceName('derived: co2e_kg_location_based / quantity_normalized (source not recorded before migration 039)')).toBeNull();
+    expect(provenanceSourceName(null)).toBeNull();
   });
 });

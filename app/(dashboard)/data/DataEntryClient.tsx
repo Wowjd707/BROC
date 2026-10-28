@@ -22,7 +22,7 @@ import { Plus, Trash2, FileText, Droplets, Recycle, Upload, Stethoscope, Sliders
 import type { EmissionEntry, EhsEntry } from '@/lib/supabase/types';
 
 interface Site { id: string; name: string; city: string | null; state: string | null; zip_code: string | null; }
-interface RefrigerantFactor { refrigerant_code: string; refrigerant_name: string; gwp_100_year: number; }
+interface RefrigerantFactor { refrigerant_code: string; refrigerant_name: string; gwp_100_year: number; is_montreal_protocol?: boolean; }
 
 interface Props {
   sites: Site[];

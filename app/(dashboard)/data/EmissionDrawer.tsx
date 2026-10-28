@@ -17,9 +17,10 @@ import {
 import { getUnitsForSource, normalizeEmissionInput } from '@/lib/conversions';
 import { fmtCO2e, fmt, todayLocal } from '@/lib/utils';
 import { Info } from 'lucide-react';
+import { isUsSite } from '@/lib/country-core';
 
 interface Site { id: string; name: string; zip_code: string | null; country?: string | null; }
-interface RefrigerantFactor { refrigerant_code: string; refrigerant_name: string; gwp_100_year: number; }
+interface RefrigerantFactor { refrigerant_code: string; refrigerant_name: string; gwp_100_year: number; is_montreal_protocol?: boolean; }
 
 interface Props {
   open: boolean;
@@ -72,8 +73,8 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
   // factors first). There is deliberately no built-in number here: a
   // hard-coded fallback drifts from the table it claims to mirror.
   const selectedSite = sites.find((s) => s.id === siteId);
-  const siteCountry = (selectedSite?.country ?? '').trim().toLowerCase();
-  const siteIsUs = !siteCountry || ['usa', 'us', 'united states', 'united states of america'].includes(siteCountry);
+  // The same rule the server prices by (lib/country-core.ts).
+  const siteIsUs = isUsSite(selectedSite?.country);
 
   useEffect(() => {
     if (!isElectricity || !siteIsUs) return;
@@ -135,7 +136,7 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
   }
 
   // Live CO2e preview, derived from the form rather than stored.
-  const preview = useMemo((): { co2e: number; label: string } | null => {
+  const preview = useMemo((): { co2e: number; label: string; outsideScopes?: boolean } | null => {
     if (!quantity || !unit || !sourceType) return null;
     const q = parseFloat(quantity);
     if (isNaN(q) || q <= 0) return null;
@@ -162,7 +163,13 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
         const rf = refrigerantFactors.find((r) => r.refrigerant_code === refrigerantCode);
         if (!rf) return null;
         const co2e = quantityNormalized * rf.gwp_100_year;
-        return { co2e, label: `${fmt(quantityNormalized, 2)} kg × GWP ${rf.gwp_100_year}` };
+        // HCFCs are reported outside the scopes, so the preview says so
+        // rather than showing a Scope 1 figure the saved row will not carry.
+        return {
+          co2e,
+          label: `${fmt(quantityNormalized, 2)} kg × GWP ${rf.gwp_100_year} (reference GWP; a custom GWP applies on save)`,
+          outsideScopes: rf.is_montreal_protocol === true,
+        };
       }
       // Other sources need the server-side factor lookup; shown after save.
       return null;
@@ -300,9 +307,12 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
                   <SelectValue placeholder="Select category…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SCOPE1_CATEGORIES.map((c) => (
-                    <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
-                  ))}
+                  {/* A refrigerant loss is fugitive; a fuel burned is not. */}
+                  {SCOPE1_CATEGORIES
+                    .filter((c) => (isRefrigerant ? c.value === 'fugitive_emissions' : c.value !== 'fugitive_emissions'))
+                    .map((c) => (
+                      <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
               {errors.scope1Category
@@ -483,7 +493,9 @@ export function EmissionDrawer({ open, onClose, sites, refrigerantFactors, onSav
           {/* CO2e preview */}
           {preview && (
             <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-4 py-3">
-              <p className="text-xs text-emerald-600 font-medium mb-0.5">Estimated CO₂e</p>
+              <p className="text-xs text-emerald-600 font-medium mb-0.5">
+                {preview.outsideScopes ? 'Estimated CO₂e — outside the scopes (Montreal Protocol gas)' : 'Estimated CO₂e'}
+              </p>
               <p className="text-lg font-semibold text-emerald-800">{fmtCO2e(preview.co2e)}</p>
               <p className="text-xs text-emerald-600 mt-0.5">{preview.label}</p>
               <p className="text-[11px] text-emerald-600/80 mt-1">Final value is calculated and stored on save.</p>

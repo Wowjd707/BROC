@@ -354,7 +354,7 @@ export function renderMethodology(basis: BasisOfPreparation | null | undefined):
 
     <h3>Methodology</h3>
     <ul>
-      <li>Global warming potentials: IPCC Sixth Assessment Report (AR6), 100-year values, in the reference factors. Any organization-specific factor is listed with its own source below.</li>
+      <li>Global warming potentials: IPCC Sixth Assessment Report (AR6), 100-year values, in the reference factors. Each entry keeps the factor it was calculated with, so entries saved before the reference factors were corrected (October 2026) may carry earlier values; any organization-specific factor is listed with its own source below.</li>
       <li>Scope 2 market-based figures were derived, by electricity consumed, from: ${
         scope2Lines.length ? escapeHtml(scope2Lines.join('; ')) : 'no Scope 2 consumption recorded'}.</li>
       ${basis.estimatedPercent != null

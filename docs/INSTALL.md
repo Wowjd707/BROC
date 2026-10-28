@@ -54,6 +54,7 @@ order**, paste the whole file and run it. Do not skip any, and do not reorder.
                                        037_release_hardening.sql
                                        038_reference_factor_corrections.sql
                                        039_scope2_hierarchy_and_outside_scopes.sql
+                                       040_pipeline_default_and_sbti_targets.sql
 ```
 
 There is no 034; the numbering gap is intentional.
@@ -64,7 +65,7 @@ There is no 034; the numbering gap is intentional.
 columns, so a second run fails or does damage. If one of them errors halfway,
 do not re-run it — go to *If something fails* below.
 
-**008–039 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
+**008–040 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
 `DROP … IF EXISTS` and `ON CONFLICT`, so re-running one is safe and is the
 correct fix for a script that half-applied. This has been verified, not just
 intended — see *What has actually been verified* below.
@@ -182,18 +183,18 @@ than one that admits a gap.
 **Verified offline.** Migrations 001–037 (there is no 034) apply in order to a
 virgin **PostgreSQL 17.5** database with `supabase/pg_harness.sql` loaded first,
 and 008–037 then re-apply cleanly, with the single exception of 024 described
-under *The one thing that matters here*. Migrations 038 and 039 were then
-verified on **PostgreSQL 16.15**: 001–039 apply in order through
-`deploy/migrate.sh`, 038 and 039 re-apply cleanly, 039's backfill of rows saved
-before it behaves as documented, and all thirty-two checks in
-`verify_install.sql` pass.
+under *The one thing that matters here*. Migrations 038–040 were then
+verified on **PostgreSQL 16.15**: 001–040 apply in order through
+`deploy/migrate.sh`, 038–040 re-apply cleanly, 039's backfill and 040's
+one-time pipeline move behave as documented (a re-run does not undo a later
+exclusion), and all thirty-three checks in `verify_install.sql` pass.
 
 `supabase/pg_harness.sql` stands in for the Supabase platform objects the
 migrations touch — `auth.uid()`, `auth.users`, `storage.buckets`,
 `storage.objects`, and the `anon` / `authenticated` / `service_role` roles — so
 you can reproduce that verification on any machine without a Supabase account.
 
-`npm test` also applies 001–039 to an empty in-process Postgres (PGlite) on
+`npm test` also applies 001–040 to an empty in-process Postgres (PGlite) on
 every run and exercises the RLS policies against it: tenancy, practice mode,
 deactivation, the audit trail and evidence record types (`tests/*.test.ts`).
 

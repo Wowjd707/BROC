@@ -47,7 +47,7 @@ export default async function DataPage({
       .order('entry_date', { ascending: false })
       .limit(rowLimit), scope.siteIds),
     supabase.from('refrigerant_factors')
-      .select('refrigerant_code, refrigerant_name, gwp_100_year')
+      .select('refrigerant_code, refrigerant_name, gwp_100_year, is_montreal_protocol')
       .order('refrigerant_code'),
   ]);
 

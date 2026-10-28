@@ -8,7 +8,7 @@ import { fetchAll } from '@/lib/fetch-all';
 import { goalMeasurement, type GoalMeasurement } from '@/lib/goal-period-core';
 import { scopeTotals, type ScopeTotals } from '@/lib/goal-metrics';
 import { boundaryMap, shareForEntry, type ConsolidationApproach } from '@/lib/consolidation-core';
-import { waterWithdrawal } from '@/lib/water-core';
+import { waterWithdrawal, waterClassOf } from '@/lib/water-core';
 
 export default async function GoalsPage() {
   const supabase = await createServerClient();
@@ -70,7 +70,7 @@ export default async function GoalsPage() {
       .gte('entry_date', prevStart)
       .lte('entry_date', prevEnd)
       .is('deleted_at', null).order('id').range(from, to)),
-    supabase.from('sites').select('id, ownership_percent, is_controlled'),
+    supabase.from('sites').select('id, ownership_percent, is_controlled').eq('is_active', true),
   ]);
 
   // The organizational boundary, applied exactly as the report and dashboard
@@ -90,7 +90,10 @@ export default async function GoalsPage() {
   const ehsTotal = (rows: EhsRow[] | null, metric: 'water' | 'waste'): number | null => {
     const m = (rows ?? []).filter((r) => r.metric_type === metric);
     if (m.length === 0) return null;
-    return metric === 'water' ? waterWithdrawal(m) : m.reduce((sum, r) => sum + r.quantity_normalized, 0);
+    if (metric === 'waste') return m.reduce((sum, r) => sum + r.quantity_normalized, 0);
+    // Only discharge or reuse recorded: withdrawal is not measured, not 0.
+    if (!m.some((r) => waterClassOf(r.source_type) === 'withdrawal')) return null;
+    return waterWithdrawal(m);
   };
   const measure = (complete: number | null, ytd: number | null): GoalMeasurement | null =>
     goalMeasurement(completeYear, complete, curYear, ytd);
@@ -119,9 +122,9 @@ export default async function GoalsPage() {
   return (
     <GoalsClient
       goals={goals ?? []}
-      currentGhg={ghgTotals ?? { scope1: 0, scope2Market: 0, scope2Location: 0 }}
-      currentWaterGal={water?.value ?? 0}
-      currentWasteKg={waste?.value ?? 0}
+      currentGhg={ghgTotals}
+      currentWaterGal={water?.value ?? null}
+      currentWasteKg={waste?.value ?? null}
       measuredIn={{ ghg, water, waste }}
       pipelineKg={ghgPipeline.annualisedValue}
       pipelineCurrentYearKg={ghgPipeline.currentYearValue}

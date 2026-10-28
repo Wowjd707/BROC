@@ -111,6 +111,13 @@ residual mix" that has no source (`emission_factor_source =
 'M-RETS_Greene_2023'`); re-save those first. Reports state the legacy share in
 the basis of preparation.
 
+### Biomass and custom factors
+
+The biogenic CO₂ of burning wood (EPA: 93.80 kg/MMBtu) is reported outside the
+scopes and always comes from the reference table, because it is a property of
+the fuel. A custom `scope1` factor for `wood_biomass` must therefore carry CH₄
+and N₂O only; one that includes the biogenic CO₂ counts it in Scope 1 too.
+
 ### Scope 2: the market-based hierarchy
 
 Every Scope 2 row stores both figures. The market-based one comes from, in

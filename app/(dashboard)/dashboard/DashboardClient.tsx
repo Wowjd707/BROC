@@ -6,7 +6,7 @@ import {
   type ConsolidationApproach,
 } from '@/lib/consolidation-core';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -27,7 +27,7 @@ import {
   GOAL_METRICS, GOAL_METRIC_LABELS, GOAL_METRIC_FAMILY,
   asGoalMetric, computeGoalProgress, progressColor, scopeTotals, goalGhgValue, type GoalMetric,
 } from '@/lib/goal-metrics';
-import { waterWithdrawal } from '@/lib/water-core';
+import { waterWithdrawal, waterClassOf } from '@/lib/water-core';
 import { SCOPE1_CATEGORY_LABELS } from '@/lib/emission-factor-types';
 import { TrendingDown, TrendingUp, Minus, Info, ArrowUpRight } from 'lucide-react';
 
@@ -402,8 +402,10 @@ export function DashboardClient({
   // ── Emissions by site ────────────────────────────────────────────────────
   const siteData = useMemo(() => {
     const bySite: Record<string, number> = {};
+    // Scope 2 under the toggle's method, so the bars add up to the total card.
     curEmissions.forEach((e) => {
-      bySite[e.site_id] = (bySite[e.site_id] ?? 0) + e.co2e_kg;
+      const kg = e.scope === 'scope2' ? scope2Kg(e, scope2Method) : e.co2e_kg;
+      bySite[e.site_id] = (bySite[e.site_id] ?? 0) + kg;
     });
     return sites
       .map((s) => ({
@@ -412,7 +414,7 @@ export function DashboardClient({
       }))
       .filter((s) => s.co2e > 0)
       .sort((a, b) => b.co2e - a.co2e);
-  }, [curEmissions, sites, units.carbon]);
+  }, [curEmissions, sites, units.carbon, scope2Method]);
 
   // ── Measured current value per metric, in canonical stored units ─────────
   // Goals and the pipeline are both denominated this way, so all three compare
@@ -425,12 +427,16 @@ export function DashboardClient({
     const s12Prior = priorEmissions.filter((e) => e.scope === 'scope1' || e.scope === 'scope2');
     const ghgPrior = s12Prior.length === 0 ? null : s12Prior.reduce(
       (sum, e) => sum + (e.scope === 'scope2' ? scope2Kg(e, scope2Method) : e.co2e_kg), 0);
+    // Water goals measure withdrawal: a year with only discharge or reuse
+    // recorded has no withdrawal figure, which is "not measured", not 0.
+    const counts = (e: { metric_type: string; source_type: string | null }, metric: string) =>
+      e.metric_type === metric && (metric !== 'water' || waterClassOf(e.source_type) === 'withdrawal');
     const ehsPrior = (metric: string) => {
-      const rows = priorEhs.filter((e) => e.metric_type === metric);
+      const rows = priorEhs.filter((e) => counts(e, metric));
       if (rows.length === 0) return null;
-      return metric === 'water' ? waterWithdrawal(rows) : rows.reduce((sum, e) => sum + e.quantity_normalized, 0);
+      return rows.reduce((sum, e) => sum + e.quantity_normalized, 0);
     };
-    const hasCur = (metric: string) => curEhs.some((e) => e.metric_type === metric);
+    const hasCur = (metric: string) => curEhs.some((e) => counts(e, metric));
     const hasCurGhg = curEmissions.some((e) => e.scope === 'scope1' || e.scope === 'scope2');
     return {
       ghg: goalMeasurement(priorYear, ghgPrior, currentYear, hasCurGhg ? kpis.totalCur : null),
@@ -439,11 +445,6 @@ export function DashboardClient({
     };
   }, [priorEmissions, priorEhs, curEmissions, curEhs, scope2Method, priorYear, currentYear, kpis.totalCur, kpis.waterCur, kpis.wasteTotal]);
 
-  const currentByMetric = useMemo<Record<GoalMetric, number>>(() => ({
-    ghg: goalMeasurements.ghg?.value ?? 0,
-    water: goalMeasurements.water?.value ?? 0,
-    waste: goalMeasurements.waste?.value ?? 0,
-  }), [goalMeasurements]);
 
   // ── Goal progress, grouped by metric ─────────────────────────────────────
   // Every active goal is shown, not just the first. Grouping by metric lets the
@@ -476,14 +477,20 @@ export function DashboardClient({
     return scopeTotals(m.year === priorYear ? priorEmissions : curEmissions);
   }, [goalMeasurements.ghg, priorYear, priorEmissions, curEmissions]);
 
+  // One measured value per goal, shared by the progress card and the pipeline
+  // gap so the two cannot disagree. Null when the goal's scope is not measured.
+  const goalCurrent = useCallback((goal: Goal): number | null => {
+    const metric = asGoalMetric(goal.metric);
+    if (metric === 'ghg') {
+      return goalGhgValue(measuredGhgTotals, goal.scope, goal.scope2_accounting_method ?? 'market_based');
+    }
+    return goalMeasurements[metric]?.value ?? null;
+  }, [measuredGhgTotals, goalMeasurements]);
+
   const selectedGoalProgress = useMemo(() => {
     if (!selectedGoal) return null;
-    const metric = asGoalMetric(selectedGoal.metric);
-    const current = metric === 'ghg' && measuredGhgTotals
-      ? goalGhgValue(measuredGhgTotals, selectedGoal.scope, selectedGoal.scope2_accounting_method ?? 'market_based')
-      : currentByMetric[metric];
-    return computeGoalProgress(selectedGoal, current);
-  }, [selectedGoal, currentByMetric, measuredGhgTotals]);
+    return computeGoalProgress(selectedGoal, goalCurrent(selectedGoal));
+  }, [selectedGoal, goalCurrent]);
 
   // ── Pipeline summaries, one per metric ───────────────────────────────────
   // Savings are annualised rates; a project going live mid-year only delivers
@@ -492,7 +499,11 @@ export function DashboardClient({
   // up front so the toggle is instant and the counts stay consistent.
   const pipelines = useMemo(() => {
     const build = (metric: PipelineMetric) => {
-      const summary = summarisePipeline(projects, currentYear, fyStart, { metric });
+      // Same rule as the Goals page: a project completed after the measured
+      // year stays in the pipeline until a measured year reflects it.
+      const summary = summarisePipeline(projects, currentYear, fyStart, {
+        metric, completedAfter: reportingYearRange(priorYear, fyStart).endDate,
+      });
       return {
         activeCount: summary.projects.filter((p) => p.status !== 'completed').length,
         currentYear: summary.currentYearValue,
@@ -501,7 +512,7 @@ export function DashboardClient({
       };
     };
     return { ghg: build('ghg'), water: build('water'), waste: build('waste') };
-  }, [projects, currentYear, fyStart]);
+  }, [projects, currentYear, fyStart, priorYear]);
 
   const pipeline = pipelines[pipelineMetric];
 
@@ -514,7 +525,7 @@ export function DashboardClient({
     const metricGoals = goalsByMetric[pipelineMetric as GoalMetric] ?? [];
     const goal = metricGoals[0];
     if (!goal) return null;
-    const progress = computeGoalProgress(goal, currentByMetric[pipelineMetric as GoalMetric]);
+    const progress = computeGoalProgress(goal, goalCurrent(goal));
     if (!progress.isComputable || progress.targetValue == null || progress.baseValue == null) return null;
     return {
       goal,
@@ -525,7 +536,7 @@ export function DashboardClient({
         pipelines[pipelineMetric].annualised,
       ),
     };
-  }, [goalsByMetric, pipelineMetric, currentByMetric, pipelines]);
+  }, [goalsByMetric, pipelineMetric, goalCurrent, pipelines]);
 
   /** Format a value in the family a metric belongs to, at the user's unit. */
   function fmtMetric(metric: GoalMetric, value: number | null | undefined): string {
@@ -846,14 +857,16 @@ export function DashboardClient({
                     // Says so rather than presenting an entered number as a
                     // calculated one: no baseline means no derivable target.
                     <span className="text-amber-600">
-                      No base year value recorded — progress is the manually entered figure, not calculated
+                      {!selectedGoalProgress.measured
+                        ? 'Not measured yet: no data for what this goal covers in the measured year'
+                        : 'No base year value recorded — progress is the manually entered figure, not calculated'}
                     </span>
                   )}
                 </p>
               </div>
               <div className="text-right">
                 <p className="text-3xl font-bold text-gray-900">
-                  {selectedGoalProgress.progressPct.toFixed(0)}%
+                  {selectedGoalProgress.measured ? `${selectedGoalProgress.progressPct.toFixed(0)}%` : '—'}
                 </p>
                 <p className="text-xs text-gray-400">
                   {selectedGoal.target_year - currentYear > 0

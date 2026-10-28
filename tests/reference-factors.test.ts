@@ -5,6 +5,8 @@
  * from it); the migration comments carry the arithmetic.
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
 import { bootDatabase, type Harness } from './rls-harness';
 
 let h: Harness;
@@ -83,5 +85,41 @@ describe('migration 039: schema', () => {
       `SELECT pg_get_constraintdef(oid) AS d FROM pg_constraint WHERE conname = 'emission_entries_scope2_market_basis_allowed'`);
     expect(def.d).toContain('grid_average');
     expect(def.d).toContain('residual_mix');
+  });
+});
+
+describe('migration 040: pipeline default and SBTi targets', () => {
+  const sql = fs.readFileSync(
+    path.resolve(__dirname, '..', 'supabase', 'migrations', '040_pipeline_default_and_sbti_targets.sql'), 'utf8');
+
+  it('defaults new projects into the pipeline', async () => {
+    const d = await one<{ column_default: string }>(
+      `SELECT column_default FROM information_schema.columns
+       WHERE table_name = 'projects' AND column_name = 'pipeline_inclusion_status'`);
+    expect(d.column_default).toContain('forecasted');
+  });
+
+  it('never undoes an exclusion made after its first run', async () => {
+    const org = (await h.db.query<{ id: string }>(`INSERT INTO organizations (name) VALUES ('P Co') RETURNING id`)).rows[0].id;
+    await h.db.query(
+      `INSERT INTO projects (organization_id, name, category, status, pipeline_inclusion_status)
+       VALUES ($1, 'Deliberately excluded', 'energy_efficiency', 'approved', 'excluded')`, [org]);
+    await h.db.exec(sql);
+    const r = await one<{ pipeline_inclusion_status: string }>(
+      `SELECT pipeline_inclusion_status FROM projects WHERE name = 'Deliberately excluded'`);
+    expect(r.pipeline_inclusion_status).toBe('excluded');
+  });
+
+  it('restates a compounded SBTi target linearly from its years', async () => {
+    const org = (await h.db.query<{ id: string }>(`INSERT INTO organizations (name) VALUES ('S Co') RETURNING id`)).rows[0].id;
+    await h.db.query(
+      `INSERT INTO goals (organization_id, name, goal_type, base_year, base_year_emissions_kg, target_year,
+         target_emissions_kg, target_value, target_unit, target_reduction_pct, status)
+       VALUES ($1, 'Old SBTi', 'sbti_15c', 2020, 1000000, 2030, 651100, 34.89, 'pct_reduction', 34.89, 'active')`, [org]);
+    await h.db.exec(sql);
+    const g = await one<{ target_value: string; target_emissions_kg: string }>(
+      `SELECT target_value, target_emissions_kg FROM goals WHERE name = 'Old SBTi'`);
+    expect(Number(g.target_value)).toBe(42);
+    expect(Number(g.target_emissions_kg)).toBe(580000);
   });
 });
