@@ -7,5 +7,9 @@ Deployed by a separate Vercel project whose Root Directory is `website/`, with
 the framework preset set to "Other". Edit `index.html`, push, and Vercel
 redeploys it.
 
-The screenshots in `img/` are cropped copies of `docs/screenshots/` with the
-app sidebar removed. When those are retaken, refresh these too.
+The screenshots in `img/` are copies of `docs/screenshots/` with the app
+sidebar cropped off, saved as lossless WebP so small text stays sharp, plus a
+JPEG of the dashboard for link previews (`og-dashboard.jpg`). Capture at the
+screen's full resolution and without lossy compression: a screenshot saved as
+JPEG and then compressed again blurs every label. When the README screenshots
+are retaken, refresh these too.

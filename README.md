@@ -7,7 +7,7 @@ so the budget goes to reduction projects, not platform subscriptions.
 Free and open source (Apache-2.0). No licence fee, no per-seat pricing, no
 vendor holding your data.
 
-![The BROC dashboard: upcoming regulatory deadlines, then Scope 1 + 2, Scope 1 by source category, Scope 2 location- and market-based, and Scope 3](docs/screenshots/dashboard.jpg)
+![The BROC dashboard: upcoming regulatory deadlines, then Scope 1 + 2, Scope 1 by source category, Scope 2 location- and market-based, and Scope 3](docs/screenshots/dashboard.png)
 
 ## Who it's for
 
@@ -67,20 +67,20 @@ What that means in practice:
 California climate laws read from the same inventory. Metrics answer
 themselves; narrative is written once.
 
-![Disclosures: framework tabs with coverage, and each requirement's status](docs/screenshots/disclosures.jpg)
+![Disclosures: framework tabs with coverage, and each requirement's status](docs/screenshots/disclosures.png)
 
 **Every figure carries its evidence.** Activity data is entered once,
 calculated with a cited factor, and can have the invoice or meter reading that
 backs it attached — so an assurance provider can follow any number back to
 its source.
 
-![Environmental data entry: emissions by site and scope, with a supporting-document control on each row](docs/screenshots/data-entry.jpg)
+![Environmental data entry: emissions by site and scope, with a supporting-document control on each row](docs/screenshots/data-entry.png)
 
 **Targets measured against the projects that will hit them.** Set absolute,
 intensity or SBTi 1.5 °C goals, then see how much of the required reduction
 is already achieved and how much your project pipeline covers.
 
-![Goals: current emissions, pipeline reduction, and each target's path showing achieved versus pipeline](docs/screenshots/goals.jpg)
+![Goals: current emissions, pipeline reduction, and each target's path showing achieved versus pipeline](docs/screenshots/goals.png)
 
 <table>
 <tr>
