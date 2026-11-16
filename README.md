@@ -140,7 +140,7 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 | [`docs/FACTORS.md`](docs/FACTORS.md) | Which public emission factor sets you can load, and how to build a factor pack. |
 | [`docs/REGULATORY_CONTENT.md`](docs/REGULATORY_CONTENT.md) | Rules for adding and maintaining regulatory tracker content. |
 | [`docs/SSO.md`](docs/SSO.md) · [`docs/SANDBOX.md`](docs/SANDBOX.md) | Single sign-on, and the practice workspace. |
-| [`docs/EMAIL_TEMPLATES.md`](docs/EMAIL_TEMPLATES.md) | Branded sign-up confirmation and invitation emails for Supabase Auth. |
+| [`docs/EMAIL_TEMPLATES.md`](docs/EMAIL_TEMPLATES.md) | Branded sign-up confirmation, invitation and password-reset emails for Supabase Auth, and the order to set them up in. |
 | [`docs/TESTING.md`](docs/TESTING.md) | Manual smoke-test pass, ordered by risk. Run sections 1–3 before trusting a number. |
 | [`SECURITY.md`](SECURITY.md) | Threat model, tenancy isolation, hardening, and what BROC does **not** defend against. |
 

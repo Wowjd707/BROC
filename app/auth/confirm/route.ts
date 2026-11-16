@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@/lib/supabase/server';
-import { asConfirmType, safeNextPath } from '@/lib/auth-confirm-core';
+import { asConfirmType, isRecoveryLink, safeNextPath, RESET_PASSWORD_PATH } from '@/lib/auth-confirm-core';
 
 /**
  * Where the confirmation email's button lands:
  *   /auth/confirm?token_hash={{ .TokenHash }}&type=signup&next=/dashboard
+ * and the password-reset email's:
+ *   /auth/confirm?token_hash={{ .TokenHash }}&type=recovery
  *
  * Verifies the token server-side (lib/auth-confirm-core.ts says why that beats
  * the code flow), which also signs the user in, then continues to `next`. On
@@ -23,6 +25,25 @@ export async function GET(request: NextRequest) {
     url.searchParams.set('confirm', code);
     return NextResponse.redirect(url);
   };
+
+  // A reset link signs the person in, so it goes only to the page that sets a
+  // new password, never to `next`. A failure goes back to the request form,
+  // where asking for another link is one step.
+  if (isRecoveryLink(searchParams.get('type'))) {
+    const toForgot = (code: string) => {
+      const url = new URL('/forgot-password', request.url);
+      url.searchParams.set('reset', code);
+      return NextResponse.redirect(url);
+    };
+    if (!tokenHash) return toForgot('invalid');
+    const supabase = await createServerClient();
+    const { error } = await supabase.auth.verifyOtp({ type: 'recovery', token_hash: tokenHash });
+    if (error) {
+      console.warn('[auth/confirm] reset link failed:', error.message);
+      return toForgot('expired');
+    }
+    return NextResponse.redirect(new URL(RESET_PASSWORD_PATH, request.url));
+  }
 
   if (!tokenHash || !type) return toLogin('invalid');
 

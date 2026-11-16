@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -90,6 +91,12 @@ export function ProfileDialog({ open, onClose, userId, email, firstName, lastNam
             <Label>Email</Label>
             <p className="text-sm text-gray-600">{email}</p>
             <p className="text-xs text-gray-400 mt-0.5">Your sign-in email is managed by your administrator.</p>
+          </div>
+          <div>
+            <Label>Password</Label>
+            <Link href="/reset-password" onClick={onClose} className="text-sm font-medium text-emerald-700 hover:underline">
+              Change your password
+            </Link>
           </div>
           <p className="text-xs text-gray-400">
             Shown in the sidebar, on the team list and against changes you make. A role title

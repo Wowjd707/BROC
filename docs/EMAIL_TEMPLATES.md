@@ -1,13 +1,14 @@
-# Branded sign-up and invitation emails
+# Branded account emails
 
-Supabase sends the account emails — the sign-up confirmation and the team
-invitation — from its own default templates unless you replace them. Two
-branded templates ship in `supabase/email-templates/`:
+Supabase sends the account emails — the sign-up confirmation, the team
+invitation and the password reset — from its own default templates unless you
+replace them. Three branded templates ship in `supabase/email-templates/`:
 
 | File | Supabase template | Subject line |
 | --- | --- | --- |
 | `confirm-signup.html` | **Confirm signup** | `Confirm your BROC account` |
 | `invite-user.html` | **Invite user** | `You've been invited to BROC` |
+| `reset-password.html` | **Reset password** | `Reset your BROC password` |
 
 Both use the BROC wordmark, the app's green, and a layout built for email
 clients: tables, inline styles, a system font stack (most clients block web
@@ -50,7 +51,8 @@ never receive anything. The sender comes first.
    every invitation point there, wherever it was sent from.)
 3. **Authentication → Emails → Templates → Confirm sign up.** Paste the subject
    from the table above and the whole of `confirm-signup.html` as the body. Save.
-4. **Templates → Invite user.** Same, with `invite-user.html`. Check both subject
+4. **Templates → Invite user** and **Templates → Reset password.** Same, with
+   `invite-user.html` and `reset-password.html`. Check both subject
    lines: Supabase's defaults ("Confirm your email address", "You have been
    invited") stay until you replace them.
 5. **Authentication → Sign In / Providers → Email.** Make sure **Confirm
@@ -88,10 +90,16 @@ rebrand (`lib/branding.ts`), replace `public/brand/broc-wordmark-email.png` with
 your own logo at about 3× its display size, and change the product name in the
 text.
 
-## Not yet built
+## Password reset
 
-There is no "forgot password" flow in the app yet, so the **Reset password**
-template is not used, and someone who forgets their password has no way back in
-from the login page. It is the next account email worth building: a request
-form on the login page, a branded reset template linking to `/auth/confirm`
-with `type=recovery`, and a page to choose the new password.
+"Forgot your password?" on the sign-in page goes to `/forgot-password`, which
+asks Supabase to send the **Reset password** email. That page says the same
+thing whether or not an account exists, so it cannot be used to find out who
+has one. The email's link goes to `/auth/confirm?type=recovery`, which verifies
+the token on the server, signs the person in, and always continues to
+`/reset-password`, whatever else the link says. Signed-in users reach the same
+page from **Change your password** in the profile menu.
+
+Paste the branded template before relying on this. Supabase's default reset
+email does not link through `/auth/confirm`, so the person is never taken to
+the page that asks for a new password.
