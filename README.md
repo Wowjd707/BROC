@@ -7,7 +7,7 @@ so the budget goes to reduction projects, not platform subscriptions.
 Free and open source (Apache-2.0). No licence fee, no per-seat pricing, no
 vendor holding your data.
 
-![The BROC dashboard: Scope 1, 2 and 3 totals, water, waste and goal progress](docs/screenshots/dashboard.jpg)
+![The BROC dashboard: upcoming regulatory deadlines, then Scope 1 + 2, Scope 1 by source category, Scope 2 location- and market-based, and Scope 3](docs/screenshots/dashboard.jpg)
 
 ## Who it's for
 
