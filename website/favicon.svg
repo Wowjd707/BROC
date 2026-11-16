@@ -1,0 +1,27 @@
+<!--
+  BROC square mark — the sidebar tile and the browser tab.
+
+  Self-contained on purpose: it carries its own background, so an organization
+  white-labelling the platform can point NEXT_PUBLIC_PRODUCT_MARK_SRC at any
+  square logo of their own without also having to match a tile colour set in
+  CSS somewhere else.
+
+  The B is the wordmark's B at 0.32 scale, so the two are the same letter
+  rather than two drawings that resemble each other.
+
+  Stroke weight is deliberately heavier here than a straight scale-down would
+  give. Below about 32px a hairline monoline fills in and greys out, and this
+  is the size the mark is seen at most.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="BROC">
+  <title>BROC</title>
+  <rect width="64" height="64" rx="14" fill="#059669"/>
+  <g transform="translate(21.4,9.6) scale(0.32)">
+    <g fill="none" stroke="#ffffff" stroke-width="17"
+       stroke-linecap="round" stroke-linejoin="round">
+      <path d="M7,20 L7,120"/>
+      <path d="M7,20 A52,25 0 0,1 7,70"/>
+      <path d="M7,70 A52,25 0 0,1 7,120"/>
+    </g>
+  </g>
+</svg>
