@@ -100,12 +100,16 @@ calculator, and supplier figures feed Scope 3 Category 1.
 
 ## What it takes to run
 
-- **A Supabase project** (the free tier is enough to evaluate) and Node.js 20,
-  or Docker. Use Supabase Cloud, or self-host Supabase — in front of your own
-  PostgreSQL 15+ if you already run one ([`docs/DEPLOY.md`](docs/DEPLOY.md)).
+- **A PostgreSQL 15+ database wherever your IT team prefers**, for example
+  Supabase, Azure Database for PostgreSQL, AWS RDS or a server you already run,
+  and somewhere to run a Node.js 20 app or a container. Sign-in and the data
+  API come from Supabase's open-source services, used as a managed service or
+  run alongside your own database. [`docs/DEPLOY.md`](docs/DEPLOY.md) lays out
+  the routes; none of them is required.
 - **Someone comfortable following a technical guide.**
-  [`docs/INSTALL.md`](docs/INSTALL.md) goes from an empty database to first
-  login step by step, with a script that checks the result. Demo data loads
+  [`docs/INSTALL.md`](docs/INSTALL.md) walks one example route (Supabase Cloud)
+  from an empty database to first login, with a script that checks the result.
+  The other routes use the same scripts. Demo data loads
   with one script, and there is a [practice workspace](docs/SANDBOX.md) for
   trying things safely.
 - **Optional AI**, bring your own: Claude, OpenAI, or a self-hosted model. Off
