@@ -1,7 +1,13 @@
 # gobroc.com
 
-The public landing page for BROC: one static HTML page, its screenshots and the
-favicon. No build step and no framework.
+The public site for BROC: five static HTML pages (`index`, `features`,
+`approach`, `start`, `help`) sharing one stylesheet (`site.css`), plus the
+screenshots and favicon. No build step and no framework. Each page carries the
+same header, so a new page needs adding to the nav on every page, and the
+Previous and Next buttons at the bottom follow the nav order.
+
+`vercel.json` turns on clean URLs, so `gobroc.com/features` serves
+`features.html`.
 
 Deployed by a separate Vercel project whose Root Directory is `website/`, with
 the framework preset set to "Other". Edit `index.html`, push, and Vercel
