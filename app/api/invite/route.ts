@@ -59,8 +59,18 @@ export async function POST(request: NextRequest) {
   });
 
   if (error || !invited?.user) {
-    // Supabase's message is specific and safe to show ("already registered").
-    return NextResponse.json({ error: error?.message ?? 'The invitation could not be sent.' }, { status: 400 });
+    // Supabase's message is usually specific and safe to show ("already
+    // registered"). When its mailer fails, though (custom SMTP rejecting the
+    // sender, an unverified sending domain), it returns a 500 with no usable
+    // message and supabase-js surfaces the literal text "{}". Say what to
+    // check instead, and log the detail for whoever reads the server logs.
+    const raw = error?.message?.trim() ?? '';
+    const unusable = raw === '' || raw === '{}' || (error?.status ?? 0) >= 500;
+    if (unusable) console.error('[invite] Supabase could not send the invitation:', error?.status, raw);
+    const message = unusable
+      ? 'Supabase could not send the invitation email. Check Authentication → Emails → SMTP Settings in Supabase, and the Auth logs (or your email provider\'s logs) for the reason.'
+      : raw || 'The invitation could not be sent.';
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
   const { error: profileError } = await service.from('users').insert({

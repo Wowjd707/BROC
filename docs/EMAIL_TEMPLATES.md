@@ -15,20 +15,51 @@ fonts) and a PNG logo with alt text (Gmail and Outlook do not render SVG).
 
 ## Setting them up (Supabase Cloud)
 
-1. **Authentication → URL Configuration.** Set **Site URL** to your app's public
-   address, e.g. `https://esg-tan.vercel.app`. The templates use it for the
-   confirmation link and to load the logo
-   (`/brand/broc-wordmark-email.png`). Under **Redirect URLs**, add
-   `https://<your-domain>/**`.
-2. **Authentication → Email Templates → Confirm signup.** Paste the subject
-   above and the whole of `confirm-signup.html` as the message body. Save.
-3. **Authentication → Email Templates → Invite user.** Same, with
-   `invite-user.html`.
-4. **Authentication → Sign In / Providers → Email.** Make sure **Confirm
+Do these in order. Supabase locks the template editor until a project has its
+own email sender, and its built-in mailer only delivers to members of your
+Supabase organisation, a few emails an hour, so the people you invite would
+never receive anything. The sender comes first.
+
+1. **Choose a sender** and enter it under **Authentication → Emails → SMTP
+   Settings** (turn on *Enable custom SMTP*). Either of these works:
+
+   | | Resend | Gmail |
+   | --- | --- | --- |
+   | Needs | A domain you own, verified in Resend | A Google account with 2-Step Verification |
+   | Host / port | `smtp.resend.com` / `465` | `smtp.gmail.com` / `465` |
+   | Username | `resend` | the full Gmail address |
+   | Password | a Resend API key | an App Password (myaccount.google.com/apppasswords) |
+   | Sender email | an address **on the verified domain**, e.g. `no-reply@yourdomain.com` | the same Gmail address |
+   | Suits | Anything beyond a handful of people | Trying it out with people you know (about 500 emails a day) |
+
+   Resend refuses to send *from* an address on a domain it has not verified —
+   including `gmail.com` — and logs `Domain not verified`. In BROC that shows up
+   as "Supabase could not send the invitation email". Resend's dashboard
+   (**Logs**) shows the exact reason for every refused send.
+
+2. **Authentication → URL Configuration.** Set **Site URL** to your app's public
+   address, e.g. `https://app.yourdomain.com`. The templates use it for the
+   confirmation link and to load the logo (`/brand/broc-wordmark-email.png`).
+   Under **Redirect URLs**, add `https://<that address>/**`.
+
+   If you also invite people from Vercel *preview* deployments, add a wildcard
+   for those too, e.g. `https://*-<your-team>.vercel.app/**`. An invitation
+   sent from an address that is not on this list falls back to the Site URL's
+   home page instead of `/invite/accept`, and the invitee never gets to choose a
+   password. (Setting `NEXT_PUBLIC_APP_URL` to the production address makes
+   every invitation point there, wherever it was sent from.)
+3. **Authentication → Emails → Templates → Confirm sign up.** Paste the subject
+   from the table above and the whole of `confirm-signup.html` as the body. Save.
+4. **Templates → Invite user.** Same, with `invite-user.html`. Check both subject
+   lines: Supabase's defaults ("Confirm your email address", "You have been
+   invited") stay until you replace them.
+5. **Authentication → Sign In / Providers → Email.** Make sure **Confirm
    email** is on if you want new accounts verified.
-5. **Send one to yourself.** Sign up with a second address, or invite one from
-   Settings → Team, and check it in the inbox you actually use — Gmail and
-   Outlook render email differently from a browser.
+6. **Authentication → Rate Limits.** With your own sender, raise the email limit
+   above Supabase's default if you expect more than a few sign-ups an hour.
+7. **Send one to yourself.** Sign up with a second address, or invite one from
+   Settings → Team **on the production address**, and check it in the inbox you
+   actually use — Gmail and Outlook render email differently from a browser.
 
 Self-hosted Supabase takes the same templates through the auth service's
 `GOTRUE_MAILER_TEMPLATES_CONFIRMATION` and `GOTRUE_MAILER_TEMPLATES_INVITE`
@@ -47,14 +78,6 @@ link has expired, the login page says so and offers to send a new one.
 flow (`/invite/accept`) reads the session Supabase returns in that link and
 then asks the invitee to choose a password. Do not swap it for a token-hash
 link.
-
-## Sending from your own address
-
-Supabase's built-in mailer sends from a Supabase address, is rate-limited, and
-is meant for testing. For real use, set **Authentication → SMTP Settings** to
-your own provider. If you already use Resend for supplier surveys, its SMTP
-details are on the Resend dashboard; send from a domain you have verified there
-so the emails are not marked as spam.
 
 ## Changing the wording or brand
 

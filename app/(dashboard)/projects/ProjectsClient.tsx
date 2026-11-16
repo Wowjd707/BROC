@@ -886,9 +886,12 @@ function KanbanCard({
   const curIdx = STATUSES.indexOf(project.status as Status);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
+    // Every card has the same rows in the same places — a two-line title, a
+    // two-line description, four detail lines, the move buttons at the bottom —
+    // so cards line up across the board whatever each project has filled in.
+    <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow flex flex-col">
       <div className="flex items-start justify-between gap-2 mb-2">
-        <p className="font-medium text-gray-900 text-sm leading-snug">{project.name}</p>
+        <p className="font-medium text-gray-900 text-sm leading-snug line-clamp-2 min-h-[2lh]" title={project.name}>{project.name}</p>
         <div className="flex items-start gap-1 shrink-0">
         {evidence}
         {canEdit && (
@@ -908,26 +911,30 @@ function KanbanCard({
         </div>
       </div>
 
-      {project.description && (
-        <p className="text-xs text-gray-400 mb-2 line-clamp-2">{project.description}</p>
-      )}
+      <p className="text-xs text-gray-400 mb-2 line-clamp-2 min-h-[2lh]" title={project.description ?? undefined}>
+        {project.description ?? ''}
+      </p>
 
       <div className="space-y-1 text-xs text-gray-500 mb-3">
-        <p className="capitalize">{CATEGORIES.find(c => c.value === project.category)?.label ?? project.category}</p>
-        {project.site_id && <p>{siteMap.get(project.site_id) ?? '—'}</p>}
-        {project.estimated_co2e_reduction_kg_per_year != null && (
-          <p className="font-medium text-emerald-600">
-            {fmtCO2e(project.estimated_co2e_reduction_kg_per_year)}/yr
-          </p>
-        )}
-        {project.estimated_cost_usd != null && (
-          <p>${fmt(project.estimated_cost_usd)}</p>
-        )}
+        <p className="capitalize truncate">{CATEGORIES.find(c => c.value === project.category)?.label ?? project.category}</p>
+        {project.site_id
+          ? <p className="truncate">{siteMap.get(project.site_id) ?? '—'}</p>
+          : <p className="text-gray-300">No site set</p>}
+        {project.estimated_co2e_reduction_kg_per_year != null
+          ? (
+            <p className="font-medium text-emerald-600">
+              {fmtCO2e(project.estimated_co2e_reduction_kg_per_year)}/yr
+            </p>
+          )
+          : <p className="text-gray-300">No reduction estimate</p>}
+        {project.estimated_cost_usd != null
+          ? <p>${fmt(project.estimated_cost_usd)}</p>
+          : <p className="text-gray-300">No cost estimate</p>}
       </div>
 
-      {/* Move left/right */}
+      {/* Move left/right — pinned to the bottom of the card */}
       {canEdit && (
-        <div className="flex gap-1">
+        <div className="flex gap-1 mt-auto">
           {curIdx > 0 && (
             <button
               onClick={() => onStatusChange(project.id, STATUSES[curIdx - 1])}
