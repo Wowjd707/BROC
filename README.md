@@ -256,13 +256,14 @@ cp .env.example .env.local
 | `SUPABASE_SERVICE_ROLE_KEY` | Service-role key — **server only**, never exposed to the client |
 | `NEXT_PUBLIC_APP_URL` | Base URL used in invitation links (optional; falls back to the request's own address) |
 | `ALLOW_PUBLIC_SIGNUP` | `false` by default: the first sign-up creates the organization, then `/signup` closes and colleagues join by invitation |
-
-The `send-survey-email` Edge Function additionally needs `RESEND_API_KEY`,
-`APP_URL`, and `RESEND_FROM_EMAIL` set in the Supabase function environment.
+| `RESEND_API_KEY` | Optional. Sends supplier-survey invitations and reminders through [Resend](https://resend.com). Without it, copy each survey link and send it yourself |
+| `RESEND_FROM_EMAIL` | The address supplier emails come from, on a domain verified in Resend, e.g. `no-reply@yourdomain.com` |
+| `APP_URL` | Optional. The address suppliers open surveys at, if different from `NEXT_PUBLIC_APP_URL` |
+| `CRON_SECRET` | Optional. Turns on automatic survey reminders: the daily job at `/api/cron/survey-reminders` only runs when called with this secret |
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–040**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–041**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -407,8 +408,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–040, numbered SQL (source of truth for schema)
-  functions/             Deno Edge Functions (send-survey-email)
+  migrations/            001–041, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight

@@ -535,7 +535,11 @@ Registry: contact, country, `industry`, `spend_usd`, `tier`.
 
 ### Surveys
 - `supplier_surveys` — a disclosure campaign with a `title`, `regulation_type`
-  (cbam / eudr / pfas / general_carbon / custom), status, and due date. The
+  (cbam / eudr / pfas / general_carbon / custom), status, and due date.
+  *Migration 041:* `launched_at` is stamped by trigger the first time the
+  survey leaves draft and never moves (the dashboard's "launched" filter);
+  `reminder_interval_days` (null = off, 1–90) and `reminder_max` (1–20,
+  default 3) drive automatic reminders. The
   question set for the four regulatory types is defined in code
   (`lib/regulations/`); `custom` draws its questions from the table below.
 - `supplier_survey_questions` *(migration 022)* — bespoke question definitions,
@@ -551,9 +555,9 @@ Registry: contact, country, `industry`, `spend_usd`, `tier`.
   `token` (the capability for the public survey link), `email`/`supplier_name`
   (so ad-hoc invites need no supplier record — `supplier_id` is nullable), and
   status (pending → sent → viewed → submitted). `sent_at`, `last_reminded_at`
-  *(migration 022)* and `reminder_count` are written **only by the
-  `send-survey-email` edge function, after the provider accepts the message** —
-  never optimistically by the browser. An invitation whose email failed stays
+  *(migration 022)* and `reminder_count` are written **only on the server
+  (`lib/survey-email.ts`), after the provider accepts the message** — never
+  optimistically by the browser. An invitation whose email failed stays
   `pending`, because the status is the record of whether the supplier was
   actually asked.
 - `supplier_survey_question_responses` — normalized one-row-per-answer store the
@@ -609,6 +613,7 @@ authenticated user. The token is the only capability a supplier needs.
 | 038 | Reference factors corrected to their cited sources: EPA Hub 2024 fuels as CO₂e at AR6 (wood's biogenic CO₂ out of Scope 1; LPG and "other combustion" fixed), eGRID2023 rev. 2 subregion and ZIP rates, AIB 2023 residual mixes, the unsourced US residual mix removed, AR6 refrigerant blend GWPs. Existing entries are not recalculated |
 | 039 | Scope 2 market-based figure and lineage on every row (`location_factor_used`, `location_factor_source`, `scope2_market_basis`); `co2e_kg_outside_scopes` / `outside_scopes_basis` for biogenic CO₂ and Montreal gases; `scope1_emission_factors.biogenic_co2_factor`; `refrigerant_factors.is_montreal_protocol`; custom factor categories `scope2_residual` and `scope2_heat`; `emission_factor_source` widened to TEXT |
 | 040 | `projects.pipeline_inclusion_status` defaults to `forecasted`; on first application, pre-existing `excluded` projects (not ideas or cancelled) move to `forecasted`, because the pipeline ignored the flag until the same release; SBTi goals' stored targets restated linearly from their years |
+| 041 | `supplier_surveys.reminder_interval_days` (null = automatic reminders off) and `reminder_max`, read by the daily job `/api/cron/survey-reminders`; `supplier_surveys.launched_at`, stamped by trigger the first time a survey becomes active and never moved, backfilled from the first invitation for surveys already out |
 
 ## Applying migrations
 

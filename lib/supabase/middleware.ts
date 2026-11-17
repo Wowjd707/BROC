@@ -47,11 +47,12 @@ export async function updateSession(request: NextRequest) {
   //                  is what the route creates), and was bounced to /login
   //                  before the code exchange could run.
   //   /auth/confirm  — the email-confirmation link, same reason.
+  // /api/cron is called by a scheduler, not a person; it checks CRON_SECRET.
   // /forgot-password is public because the person asking cannot sign in;
   // /reset-password is not, because a verified reset link signs them in first.
   const publicRoutes = [
     '/login', '/signup', '/forgot-password', '/survey', '/invite',
-    '/api/signup', '/api/survey', '/auth/callback', '/auth/confirm',
+    '/api/signup', '/api/survey', '/api/cron', '/auth/callback', '/auth/confirm',
   ];
   const isPublic = publicRoutes.some((r) => pathname === r || pathname.startsWith(r + '/'));
 

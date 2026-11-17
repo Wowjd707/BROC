@@ -305,6 +305,16 @@ BEGIN
     RETURNING id INTO v_survey;
   END IF;
 
+  -- Launched when its invitations went out, 40 days ago. Migration 041 stamps
+  -- launch dates by trigger and never lets a client move them, so the seed
+  -- steps around the trigger for this one row. Automatic reminders stay off:
+  -- the demo suppliers' addresses are not real inboxes.
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_stamp_survey_launched_at') THEN
+    ALTER TABLE supplier_surveys DISABLE TRIGGER trg_stamp_survey_launched_at;
+    UPDATE supplier_surveys SET launched_at = NOW() - INTERVAL '40 days' WHERE id = v_survey;
+    ALTER TABLE supplier_surveys ENABLE TRIGGER trg_stamp_survey_launched_at;
+  END IF;
+
   -- Steelcore: submitted, verified
   INSERT INTO supplier_survey_invitations (survey_id, supplier_id, supplier_name, email, status, sent_at, submitted_at)
   VALUES (v_survey, v_sup_steel, 'Steelcore Industries', 'mchen@steelcore.example',

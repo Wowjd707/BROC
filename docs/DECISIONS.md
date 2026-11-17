@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–040** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–041** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–040 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. |
+| 008–041 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -138,12 +138,19 @@ changed, change it knowingly and update this list.
 - **Stakeholder ratings are never blended into materiality scores.** Blending
   would make it impossible to show which drove a conclusion.
 - **An invitation is never marked `sent` until the mailer confirms it.**
-  `supabase.functions.invoke()` resolves with `{ error }` instead of throwing,
-  so a `try/catch` around it catches nothing. `sent_at`, `last_reminded_at` and
-  `reminder_count` are now written by the `send-survey-email` edge function
-  only, after Resend accepts the message. A failed send stays `pending`: the
-  status is the record of whether a supplier was actually asked, and an
-  unanswered survey and an unsent one are different findings in an audit.
+  `sent_at` is written on the server (`lib/survey-email.ts`) only after Resend
+  accepts the message. A failed send stays `pending`: the status is the record
+  of whether a supplier was actually asked, and an unanswered survey and an
+  unsent one are different findings in an audit. (This used to be a Supabase
+  Edge Function, `send-survey-email`; it moved into the app in November 2026 so
+  there is one less thing to deploy.)
+- **Automatic reminders claim their slot before sending.** A reminder raises
+  `reminder_count` only if nobody else raised it first, sends, and gives the
+  slot back if the send fails. Overlapping runs of the daily job, or a click on
+  Remind while it runs, cannot email a supplier twice. Reminders are off for
+  every survey until someone turns them on, never go to an invitation whose
+  first email failed (that would be first contact, not a reminder), and never
+  go out from a practice workspace.
 - **Regulatory question sets stay in code; only bespoke ones live in the
   database.** `supplier_survey_questions` (022) backs `regulation_type =
   'custom'`. CBAM/EUDR/PFAS question sets remain in `lib/regulations/` so

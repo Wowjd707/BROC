@@ -264,8 +264,13 @@ Suppliers are external and have no account. The flow:
 1. An internal user creates a survey (question set chosen from
    `lib/regulations/`) and invites a supplier. An invitation row gets a random
    `token`.
-2. The `send-survey-email` Edge Function (Deno) looks the invitation up with the
-   service role and emails a tokenized link via Resend.
+2. The app emails a tokenized link via Resend (`app/api/survey-email` →
+   `lib/survey-email.ts`), after checking the caller is an admin or editor of
+   the organization that owns the survey. If the survey has automatic
+   reminders, a daily job (`/api/cron/survey-reminders`, scheduled by
+   `vercel.json` or any scheduler, authenticated with `CRON_SECRET`) emails
+   suppliers who have not submitted, using the same sender and the rule in
+   `lib/survey-reminder-core.ts`.
 3. The supplier opens `/survey/[token]` — a public page that reads the
    invitation **with the service client** (bypassing RLS, since the supplier is
    unauthenticated) and renders the question set.

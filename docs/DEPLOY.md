@@ -170,6 +170,39 @@ rather than just that the migrations returned success.
 
 ---
 
+## Supplier email and reminders
+
+Supplier-survey invitations and reminders are sent by the app itself, through
+[Resend](https://resend.com) (its free plan covers 3,000 emails a month). Set:
+
+| Variable | What it is |
+| --- | --- |
+| `RESEND_API_KEY` | A Resend API key with sending access |
+| `RESEND_FROM_EMAIL` | The sender, on a domain you have verified in Resend, e.g. `no-reply@yourdomain.com` |
+| `APP_URL` | Optional: where suppliers open surveys, if not `NEXT_PUBLIC_APP_URL` |
+
+Without them nothing breaks: each invitation keeps a link you can copy and send
+yourself, and the Suppliers page says the email is not set up.
+
+**Automatic reminders.** Each survey can chase suppliers who have not
+submitted, every few days up to a set number of times (Suppliers → the survey →
+Manage invitations → Automatic reminders). A daily job sends whatever is due:
+
+```
+GET /api/cron/survey-reminders
+Authorization: Bearer <CRON_SECRET>
+```
+
+On Vercel, `vercel.json` schedules this once a day; add `CRON_SECRET` to the
+project's environment variables and Vercel sends it with each call. Anywhere
+else, call the URL daily from whatever scheduler you already run: cron, a
+GitHub Action, Azure Logic Apps, or `pg_cron` with `pg_net`. The job refuses to
+run without `CRON_SECRET`, never emails from a practice workspace, and sends at
+most 50 reminders a run (the rest go the next day), which keeps a free Resend
+plan's 100-a-day limit free for invitations sent by hand.
+
+---
+
 ## Users and sites
 
 BROC is one deployment serving every location. Plants do not get their own
@@ -190,8 +223,8 @@ BROC functions with no outbound network access. Two features degrade:
 - **The AI regulatory watch** will not run. Leave `ANTHROPIC_API_KEY` and
   `OPENAI_API_KEY` unset and the regulatory tracker still works as a reference —
   it simply will not propose its own updates.
-- **Supplier survey email** will not send. Leave `RESEND_API_KEY` unset and
-  BROC shows the invitation text for sending by hand.
+- **Supplier survey email** will not send, and neither will automatic
+  reminders. Leave `RESEND_API_KEY` unset and copy each survey link by hand.
 
 Nothing else calls out. Build the image on a connected machine, export it with
 `docker save`, and load it on the target.

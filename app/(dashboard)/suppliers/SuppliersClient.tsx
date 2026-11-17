@@ -19,15 +19,22 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { FileDown, Users, Upload } from 'lucide-react';
+import { FileDown, Users, Upload, BarChart3 } from 'lucide-react';
 import { EvidenceCell } from '@/components/evidence/EvidencePanel';
 import { evidenceCountKey } from '@/lib/evidence-core';
 import { regulationLabel } from '@/lib/regulations';
 import {
-  describeSendFailure,
   summariseSendAttempt,
   type EmailFailure,
 } from '@/lib/survey-email-core';
+import {
+  REMINDER_INTERVAL_CHOICES,
+  DEFAULT_REMINDER_MAX,
+  MAX_REMINDERS,
+  describeSchedule,
+  parseSchedule,
+  reminderState,
+} from '@/lib/survey-reminder-core';
 import {
   lastContactedAt,
   daysSince,
@@ -63,6 +70,10 @@ interface Survey {
   due_date: string | null;
   notes: string | null;
   created_at: string;
+  /** Days between automatic reminders; null = off. Migration 041. */
+  reminder_interval_days: number | null;
+  reminder_max: number;
+  launched_at: string | null;
 }
 
 interface Invitation {
@@ -138,7 +149,11 @@ export function SuppliersClient({
 
   // Survey form state
   const [showSurveyForm, setShowSurveyForm] = useState(false);
-  const [surveyForm, setSurveyForm] = useState({ title: '', regulation_type: 'cbam', custom_regulation_name: '', due_date: '', notes: '' });
+  const EMPTY_SURVEY_FORM = { title: '', regulation_type: 'cbam', custom_regulation_name: '', due_date: '', notes: '', reminder_interval: '7', reminder_max: String(DEFAULT_REMINDER_MAX) };
+  const [surveyForm, setSurveyForm] = useState(EMPTY_SURVEY_FORM);
+  // Reminder schedule being edited on an open survey card.
+  const [scheduleDraft, setScheduleDraft] = useState<{ surveyId: string; interval: string; max: string } | null>(null);
+  const [scheduleError, setScheduleError] = useState('');
   const [surveyError, setSurveyError] = useState('');
 
   // Invite form state
@@ -261,6 +276,8 @@ export function SuppliersClient({
       setSurveyError('Name the regulation this survey is about.');
       return;
     }
+    const schedule = parseSchedule(surveyForm.reminder_interval, surveyForm.reminder_max);
+    if (!schedule.ok) { setSurveyError(schedule.error); return; }
     setSurveyError('');
     const payload = {
       title: surveyForm.title.trim(),
@@ -272,13 +289,15 @@ export function SuppliersClient({
       status: 'draft',
       due_date: surveyForm.due_date || null,
       notes: surveyForm.notes || null,
+      reminder_interval_days: schedule.reminder_interval_days,
+      reminder_max: schedule.reminder_max,
     };
     startTransition(async () => {
       const { data, error } = await supabase.from('supplier_surveys').insert(payload).select().single();
       if (error) { setSurveyError(error.message); return; }
       setSurveys(ss => [data as Survey, ...ss]);
       setShowSurveyForm(false);
-      setSurveyForm({ title: '', regulation_type: 'cbam', custom_regulation_name: '', due_date: '', notes: '' });
+      setSurveyForm(EMPTY_SURVEY_FORM);
       router.refresh();
     });
   }
@@ -293,39 +312,59 @@ export function SuppliersClient({
     if (data) setSurveys(ss => ss.map(s => s.id === id ? (data as Survey) : s));
   }
 
+  async function handleSaveSchedule() {
+    if (!scheduleDraft) return;
+    const schedule = parseSchedule(scheduleDraft.interval, scheduleDraft.max);
+    if (!schedule.ok) { setScheduleError(schedule.error); return; }
+    setScheduleError('');
+    const { data, error } = await supabase
+      .from('supplier_surveys')
+      .update({ reminder_interval_days: schedule.reminder_interval_days, reminder_max: schedule.reminder_max })
+      .eq('id', scheduleDraft.surveyId)
+      .select()
+      .single();
+    if (error || !data) { setScheduleError(error?.message ?? 'The schedule could not be saved.'); return; }
+    setSurveys(ss => ss.map(s => s.id === scheduleDraft.surveyId ? (data as Survey) : s));
+    setScheduleDraft(null);
+  }
+
+  /** "Next reminder Nov 24", "3 reminders sent", or nothing. */
+  function reminderLine(survey: Survey, inv: Invitation): string | null {
+    const state = reminderState(survey, inv, new Date());
+    if (state.kind === 'scheduled') {
+      return state.due ? 'Reminder due with the next daily run' : `Next reminder ${formatDate(state.nextAt.toISOString())}`;
+    }
+    if (state.kind === 'finished') return `All ${state.sent} automatic reminder${state.sent === 1 ? '' : 's'} sent`;
+    return null;
+  }
+
   // ── Invitations ───────────────────────────────────────────────────────────
 
   /**
-   * Invoke the mailer and report honestly whether it worked.
-   *
-   * `functions.invoke` resolves with `{ error }` rather than throwing, so the
-   * failure path here is a branch, not a catch. The status body carries the
-   * detail worth showing — a 404 means the function was never deployed to this
-   * project, which is an install step, not a bad address.
+   * Ask the server to email a supplier, and report honestly whether it worked.
+   * The server records sent_at / reminder_count only after the email service
+   * accepts the message, so a failure here leaves the invitation as it was.
    */
   async function sendSurveyEmail(
     invitationId: string,
     type: 'invite' | 'reminder',
   ): Promise<EmailFailure | null> {
-    const { error } = await supabase.functions.invoke('send-survey-email', {
-      body: { invitationId, type },
-    });
-    if (!error) return null;
-
-    const context = (error as { context?: unknown }).context;
-    let status: number | null = null;
-    let body: unknown = null;
-
-    if (context instanceof Response) {
-      status = context.status;
+    try {
+      const res = await fetch('/api/survey-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ invitationId, type }),
+      });
+      if (res.ok) return null;
+      let message = 'The email could not be sent.';
       try {
-        body = await context.clone().json();
-      } catch {
-        try { body = await context.clone().text(); } catch { body = null; }
-      }
+        const body = (await res.json()) as { error?: string };
+        if (body.error) message = body.error;
+      } catch { /* keep the generic message */ }
+      return { message, notDeployed: res.status === 503 };
+    } catch {
+      return { message: 'The app could not be reached, so no email was sent.', notDeployed: false };
     }
-
-    return describeSendFailure(status, body, error.message || 'The email could not be sent.');
   }
 
   /** Re-read one invitation so the row shows what the server actually recorded. */
@@ -380,7 +419,7 @@ export function SuppliersClient({
       return;
     }
 
-    // The edge function wrote status and sent_at after Resend accepted it.
+    // The server wrote status and sent_at after the email service accepted it.
     await refreshInvitation(invitation.id);
     setInviteNotice(summariseSendAttempt(1, 0));
     setInviteEmail('');
@@ -467,18 +506,21 @@ export function SuppliersClient({
     router.refresh();
   }
 
-  async function handleSendReminder(invId: string) {
-    setSendingReminder(invId);
+  async function handleSendReminder(inv: Invitation) {
+    setSendingReminder(inv.id);
     setReminderError('');
     setReminderNotice('');
 
-    const failure = await sendSurveyEmail(invId, 'reminder');
+    // An invitation that never went out gets its invitation, not a reminder:
+    // a "reminder" would be the supplier's first contact.
+    const kind = inv.sent_at ? 'reminder' : 'invite';
+    const failure = await sendSurveyEmail(inv.id, kind);
 
     if (failure) {
       setReminderError(failure.message);
     } else {
-      await refreshInvitation(invId);
-      setReminderNotice('Reminder sent.');
+      await refreshInvitation(inv.id);
+      setReminderNotice(kind === 'reminder' ? 'Reminder sent.' : 'Invitation sent.');
       router.refresh();
     }
     setSendingReminder(null);
@@ -530,6 +572,12 @@ export function SuppliersClient({
           <p className="text-sm text-gray-500 mt-0.5">Manage your supplier relationships and disclosure surveys</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/suppliers/responses">
+            <Button variant="outline" size="sm" className="flex items-center gap-1.5">
+              <BarChart3 className="w-4 h-4" />
+              Response dashboard
+            </Button>
+          </Link>
           {/* Responses are exportable in full from Reports; this is the way through. */}
           <Link href="/reports">
             <Button variant="outline" size="sm" className="flex items-center gap-1.5">
@@ -750,6 +798,71 @@ export function SuppliersClient({
                       {/* Invitation panel */}
                       {isActive && (
                         <div className="mt-4 border-t border-gray-100 pt-4 space-y-4">
+                          {/* Automatic reminders */}
+                          <div className="rounded-lg border border-gray-200 px-3 py-2.5">
+                            {scheduleDraft?.surveyId === survey.id ? (
+                              <div className="flex flex-wrap items-end gap-2">
+                                <div>
+                                  <Label className="text-xs">Automatic reminders</Label>
+                                  <Select value={scheduleDraft.interval} onValueChange={v => setScheduleDraft(d => d && ({ ...d, interval: v }))}>
+                                    <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="off">Off</SelectItem>
+                                      {REMINDER_INTERVAL_CHOICES.map(c => (
+                                        <SelectItem key={c.days} value={String(c.days)}>{c.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                                {scheduleDraft.interval !== 'off' && (
+                                  <div>
+                                    <Label className="text-xs">Up to</Label>
+                                    <div className="flex items-center gap-1.5">
+                                      <Input
+                                        type="number"
+                                        min={1}
+                                        max={MAX_REMINDERS}
+                                        className="w-20"
+                                        value={scheduleDraft.max}
+                                        onChange={e => setScheduleDraft(d => d && ({ ...d, max: e.target.value }))}
+                                      />
+                                      <span className="text-xs text-gray-500">reminders</span>
+                                    </div>
+                                  </div>
+                                )}
+                                <Button size="sm" onClick={handleSaveSchedule}>Save</Button>
+                                <Button size="sm" variant="ghost" onClick={() => { setScheduleDraft(null); setScheduleError(''); }}>Cancel</Button>
+                                {scheduleError && <p className="w-full text-xs text-red-600">{scheduleError}</p>}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <p className="text-sm text-gray-700">
+                                  <span className="font-medium">{describeSchedule(survey)}</span>
+                                  {survey.reminder_interval_days != null && (
+                                    <span className="text-gray-500">
+                                      {' '}to suppliers who haven&apos;t submitted, counted from when each was last emailed.
+                                    </span>
+                                  )}
+                                </p>
+                                {canEdit && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => {
+                                      setScheduleError('');
+                                      setScheduleDraft({
+                                        surveyId: survey.id,
+                                        interval: survey.reminder_interval_days == null ? 'off' : String(survey.reminder_interval_days),
+                                        max: String(survey.reminder_max ?? DEFAULT_REMINDER_MAX),
+                                      });
+                                    }}
+                                  >
+                                    Change
+                                  </Button>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           {/* Send invite form */}
                           {canEdit && survey.status !== 'closed' && (
                             <div className="flex gap-2 flex-wrap items-end">
@@ -933,6 +1046,9 @@ export function SuppliersClient({
                                     <p className="font-medium text-gray-900">{inv.supplier_name ?? inv.email}</p>
                                     <p className="text-xs text-gray-400">{inv.email}</p>
                                     <p className="text-xs text-gray-500 mt-0.5">{contactSummary(inv)}</p>
+                                    {reminderLine(survey, inv) && (
+                                      <p className="text-xs text-emerald-700 mt-0.5">{reminderLine(survey, inv)}</p>
+                                    )}
                                   </div>
                                   <div className="flex items-center gap-3 shrink-0">
                                     <Badge
@@ -963,7 +1079,7 @@ export function SuppliersClient({
                                       <Button
                                         size="sm"
                                         variant="ghost"
-                                        onClick={() => handleSendReminder(inv.id)}
+                                        onClick={() => handleSendReminder(inv)}
                                         disabled={sendingReminder === inv.id}
                                         className="text-xs h-6 px-2"
                                       >
@@ -1114,6 +1230,39 @@ export function SuppliersClient({
             <div>
               <Label>Due Date</Label>
               <Input type="date" value={surveyForm.due_date} onChange={e => setSurveyForm(f => ({ ...f, due_date: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Automatic reminders</Label>
+                <Select value={surveyForm.reminder_interval} onValueChange={v => setSurveyForm(f => ({ ...f, reminder_interval: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="off">Off</SelectItem>
+                    {REMINDER_INTERVAL_CHOICES.map(c => (
+                      <SelectItem key={c.days} value={String(c.days)}>{c.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {surveyForm.reminder_interval !== 'off' && (
+                <div>
+                  <Label>Up to</Label>
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={MAX_REMINDERS}
+                      value={surveyForm.reminder_max}
+                      onChange={e => setSurveyForm(f => ({ ...f, reminder_max: e.target.value }))}
+                    />
+                    <span className="text-xs text-gray-500 shrink-0">reminders</span>
+                  </div>
+                </div>
+              )}
+              <p className="col-span-2 text-xs text-gray-500 -mt-1">
+                Sent by email to suppliers who haven&apos;t submitted yet, counted from when each was last emailed.
+                You can change this later.
+              </p>
             </div>
             {surveyError && <p className="text-sm text-red-600">{surveyError}</p>}
           </div>

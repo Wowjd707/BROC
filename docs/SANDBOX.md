@@ -103,6 +103,7 @@ practice workspace.
   no user rows belong to it. Your own profile is still visible — migration 032
   widened the users SELECT policy to include `id = auth.uid()`, without which
   the whole app renders as though nobody is signed in.
-- **Suppliers invited from the sandbox would receive real email.** Practising
-  the survey flow is safe as far as the data goes; leave `RESEND_API_KEY` unset
-  in a training deployment if you would rather it could not send at all.
+- **The sandbox never emails suppliers.** Invitations and reminders are refused
+  there, because invented suppliers can still have real-looking addresses.
+  Practise the survey flow by copying an invitation's link and opening it
+  yourself.

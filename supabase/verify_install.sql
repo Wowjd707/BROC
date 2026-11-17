@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–040). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–041). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -362,6 +362,18 @@ checks(sort_key, check_name, status, detail) AS (
     ) LIKE '%forecasted%' THEN 'PASS' ELSE 'FAIL' END,
     'Without 040, every project created in the app is stored as excluded and the pipeline '
       || 'now honours that, so coverage reads zero. Re-apply 040.'
+
+  UNION ALL SELECT 34, 'Supplier surveys — reminder schedule and launch date',
+    CASE WHEN EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='supplier_surveys' AND column_name='reminder_interval_days'
+    ) AND EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='supplier_surveys' AND column_name='launched_at'
+    ) AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_stamp_survey_launched_at')
+      THEN 'PASS' ELSE 'FAIL' END,
+    'Automatic supplier reminders and the response dashboard''s launch-date filter read these. '
+      || 'Re-apply 041 if this fails.'
 )
 
 SELECT

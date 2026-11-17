@@ -2738,7 +2738,10 @@ export type Database = {
           notes: string | null
           organization_id: string
           custom_regulation_name: string | null
+          launched_at: string | null
           regulation_type: string
+          reminder_interval_days: number | null
+          reminder_max: number
           status: string
           title: string
         }
@@ -2750,7 +2753,10 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           custom_regulation_name?: string | null
+          launched_at?: string | null
           regulation_type: string
+          reminder_interval_days?: number | null
+          reminder_max?: number
           status?: string
           title: string
         }
@@ -2762,7 +2768,10 @@ export type Database = {
           notes?: string | null
           organization_id?: string
           custom_regulation_name?: string | null
+          launched_at?: string | null
           regulation_type?: string
+          reminder_interval_days?: number | null
+          reminder_max?: number
           status?: string
           title?: string
         }
