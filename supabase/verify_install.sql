@@ -374,6 +374,14 @@ checks(sort_key, check_name, status, detail) AS (
       THEN 'PASS' ELSE 'FAIL' END,
     'Automatic supplier reminders and the response dashboard''s launch-date filter read these. '
       || 'Re-apply 041 if this fails.'
+
+  UNION ALL SELECT 35, 'Supplier surveys — custom surveys carry the regulation''s name',
+    CASE WHEN EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema='public' AND table_name='supplier_surveys' AND column_name='custom_regulation_name'
+    ) THEN 'PASS' ELSE 'FAIL' END,
+    'The New Survey form, the response dashboard and supplier reports read this column. '
+      || 'Re-apply 036 if this fails.'
 )
 
 SELECT

@@ -14,7 +14,7 @@ export default async function SupplierResponsesPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const [{ data: surveys }, { data: suppliers }, { data: invitations }, { data: answerRows }, { data: questionRows }] =
+  const [surveysRes, suppliersRes, invitationsRes, answersRes, questionsRes] =
     await Promise.all([
       supabase
         .from('supplier_surveys')
@@ -39,6 +39,14 @@ export default async function SupplierResponsesPage() {
         .order('position'),
     ]);
 
+  const { data: surveys } = surveysRes;
+  const { data: suppliers } = suppliersRes;
+  const { data: invitations } = invitationsRes;
+  const { data: answerRows } = answersRes;
+  const { data: questionRows } = questionsRes;
+  const failed = [surveysRes, suppliersRes, invitationsRes, answersRes, questionsRes].find((r) => r.error);
+  const loadError = failed?.error?.message ?? null;
+
   const customQuestions: Record<string, SurveyQuestionRow[]> = {};
   for (const row of (questionRows ?? []) as SurveyQuestionRow[]) {
     (customQuestions[row.survey_id] ??= []).push(row);
@@ -51,6 +59,7 @@ export default async function SupplierResponsesPage() {
       invitations={invitations ?? []}
       answers={groupAnswersByInvitation(answerRows ?? [])}
       customQuestions={customQuestions}
+      loadError={loadError}
     />
   );
 }

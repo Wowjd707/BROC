@@ -16,7 +16,7 @@ proves the result.
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–041 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. |
+| 008–041 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor

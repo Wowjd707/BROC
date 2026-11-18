@@ -35,6 +35,8 @@ interface Props {
   invitations: DashInvitation[];
   answers: Record<string, Record<string, string | null>>;
   customQuestions: Record<string, SurveyQuestionRow[]>;
+  /** Set when a query failed, so an empty page is never mistaken for "no surveys". */
+  loadError?: string | null;
 }
 
 const STATUS_STYLE: Record<SupplierRow['status'], { label: string; variant: 'default' | 'secondary' | 'warning' | 'destructive' }> = {
@@ -52,7 +54,7 @@ function fmtNum(n: number): string {
   return Math.abs(n) >= 1000 ? n.toLocaleString('en-US', { maximumFractionDigits: 0 }) : String(Number(n.toPrecision(4)));
 }
 
-export function ResponsesDashboardClient({ surveys, suppliers, invitations, answers, customQuestions }: Props) {
+export function ResponsesDashboardClient({ surveys, suppliers, invitations, answers, customQuestions, loadError }: Props) {
   const [filters, setFilters] = useState<DashFilters>(DEFAULT_FILTERS);
   const [showAllSuppliers, setShowAllSuppliers] = useState(false);
   const [groupChoice, setGroupChoice] = useState<string | null>(null);
@@ -204,7 +206,14 @@ export function ResponsesDashboardClient({ surveys, suppliers, invitations, answ
         </CardContent>
       </Card>
 
-      {surveys.length === 0 ? (
+      {loadError ? (
+        <Card>
+          <CardContent className="py-12 text-center text-sm text-red-700">
+            Survey data could not be loaded: {loadError}. This usually means a database migration has not been
+            applied; run <code>supabase/verify_install.sql</code> to see which.
+          </CardContent>
+        </Card>
+      ) : surveys.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-gray-500">
             No surveys yet. Create one on the <Link className="text-emerald-700 hover:underline" href="/suppliers">Suppliers</Link> page.
