@@ -239,6 +239,22 @@ against each other by a test):
 | `business_metric_value` | `business_metric_values` | Business Metrics |
 | `materiality_assessment` | `materiality_assessments` | Materiality, on the assessment summary |
 
+### `evidence_checks` — entries checked against their documents *(migration 042)*
+
+One row per check run from Data Review → Document checks: which entry
+(`record_type` `emission_entry` or `ehs_entry`, `record_id`), which file
+(`attachment_id`, kept as `file_name` too in case the file is later removed),
+the `outcome` (`match`, `mismatch`, `unit_slip`, `needs_review`, `unreadable`)
+and a one-line `summary`. Three JSON columns keep the whole trail:
+`entry_snapshot` (quantity, unit and date as entered at the time),
+`document_reading` (what the model read, sanitised) and `comparison` (how the
+platform compared them). `provider`, `model`, `checked_by` and `checked_at`
+say who and what ran it.
+
+**Append-only.** RLS allows SELECT within the organization and INSERT by an
+admin or editor in their own name; there is no UPDATE or DELETE policy and the
+privileges are revoked. A wrong check is answered by checking again.
+
 The last five were added by migration 037.
 
 **Deleting a record removes its documents.** Because there is no foreign key,
@@ -614,6 +630,7 @@ authenticated user. The token is the only capability a supplier needs.
 | 039 | Scope 2 market-based figure and lineage on every row (`location_factor_used`, `location_factor_source`, `scope2_market_basis`); `co2e_kg_outside_scopes` / `outside_scopes_basis` for biogenic CO₂ and Montreal gases; `scope1_emission_factors.biogenic_co2_factor`; `refrigerant_factors.is_montreal_protocol`; custom factor categories `scope2_residual` and `scope2_heat`; `emission_factor_source` widened to TEXT |
 | 040 | `projects.pipeline_inclusion_status` defaults to `forecasted`; on first application, pre-existing `excluded` projects (not ideas or cancelled) move to `forecasted`, because the pipeline ignored the flag until the same release; SBTi goals' stored targets restated linearly from their years |
 | 041 | `supplier_surveys.reminder_interval_days` (null = automatic reminders off) and `reminder_max`, read by the daily job `/api/cron/survey-reminders`; `supplier_surveys.launched_at`, stamped by trigger the first time a survey becomes active and never moved, backfilled from the first invitation for surveys already out |
+| 042 | `evidence_checks`, append-only: each Data Review document check with the entry as it was, the model's reading of the document and the platform's comparison |
 
 ## Applying migrations
 

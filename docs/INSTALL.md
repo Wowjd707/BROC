@@ -56,6 +56,7 @@ order**, paste the whole file and run it. Do not skip any, and do not reorder.
                                        039_scope2_hierarchy_and_outside_scopes.sql
                                        040_pipeline_default_and_sbti_targets.sql
                                        041_survey_reminders_and_launch_date.sql
+                                       042_evidence_checks.sql
 ```
 
 There is no 034; the numbering gap is intentional.
@@ -66,7 +67,7 @@ There is no 034; the numbering gap is intentional.
 columns, so a second run fails or does damage. If one of them errors halfway,
 do not re-run it — go to *If something fails* below.
 
-**008–041 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
+**008–042 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
 `DROP … IF EXISTS` and `ON CONFLICT`, so re-running one is safe and is the
 correct fix for a script that half-applied. This has been verified, not just
 intended — see *What has actually been verified* below.
@@ -192,14 +193,16 @@ exclusion), and all thirty-three checks in `verify_install.sql` pass.
 Migration 041 has so far been verified only in the in-process Postgres below:
 it applies after 040, re-applies without changing anything, and its
 launch-date trigger behaves as documented (`tests/survey-reminders.test.ts`).
-It has not yet been run on a standalone PostgreSQL server.
+It has not yet been run on a standalone PostgreSQL server. The same is true of
+042 (`tests/evidence-checks.test.ts`). `tests/verify-install.test.ts` runs
+`verify_install.sql` against the clean install and requires every check to pass.
 
 `supabase/pg_harness.sql` stands in for the Supabase platform objects the
 migrations touch — `auth.uid()`, `auth.users`, `storage.buckets`,
 `storage.objects`, and the `anon` / `authenticated` / `service_role` roles — so
 you can reproduce that verification on any machine without a Supabase account.
 
-`npm test` also applies 001–041 to an empty in-process Postgres (PGlite) on
+`npm test` also applies 001–042 to an empty in-process Postgres (PGlite) on
 every run and exercises the RLS policies against it: tenancy, practice mode,
 deactivation, the audit trail and evidence record types (`tests/*.test.ts`).
 

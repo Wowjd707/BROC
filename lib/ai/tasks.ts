@@ -17,7 +17,12 @@
  * Pure and dependency-free so it is unit-testable.
  */
 
-export const AI_TASK_IDS = ['draft_disclosure_narrative', 'summarise_regulatory_change'] as const;
+export const AI_TASK_IDS = [
+  'draft_disclosure_narrative',
+  'summarise_regulatory_change',
+  'explain_review_finding',
+  'read_evidence_document',
+] as const;
 export type AiTaskId = (typeof AI_TASK_IDS)[number];
 
 export function isAiTaskId(value: string): value is AiTaskId {
@@ -228,4 +233,267 @@ export const AI_TASK_MAX_TOKENS: Record<AiTaskId, number> = {
   // A change summary plus a small patch. Anything longer is the model
   // editorialising, which the prompt forbids.
   summarise_regulatory_change: 700,
+  // An explanation, a short checklist and a note of a few sentences.
+  explain_review_finding: 900,
+  // A handful of extracted values with their quoted source text. A bill with
+  // many meters still fits; anything longer is the model transcribing.
+  read_evidence_document: 1500,
 };
+
+/** Pull the first JSON object out of a reply, tolerating fences and chatter. */
+function extractJsonObject(raw: string): Record<string, unknown> | null {
+  const text = raw.trim();
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    const parsed: unknown = JSON.parse(candidate.slice(start, end + 1));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function str(value: unknown, max = 2000): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
+// ─── Task: explain a data-review finding and draft the follow-up ─────────────
+
+/**
+ * The Data Review explainer.
+ *
+ * The finding itself is computed deterministically in `lib/anomaly-core.ts`
+ * and is the whole of the model's evidence. The model is asked to do the two
+ * things a reviewer spends their time on — say in plain words what the flag
+ * means, and write the note that asks the site what happened — and is told
+ * explicitly that it does not know the cause. It offers things to check, never
+ * a diagnosis: whether a 300% jump is a new production line or a units error is
+ * known only to the site.
+ */
+const REVIEW_FINDING_SYSTEM = `You help a sustainability data reviewer follow up on one data-quality flag raised by an automated check.
+
+You are given the FINDING: what the check found, at which site, for which data stream, and the numbers behind it.
+
+Absolute rules:
+- Use ONLY the figures in the FINDING. Never introduce a number, percentage, date or unit that is not there.
+- You do not know why this happened. Never state a cause. Offer possible explanations only as things to check, phrased as questions.
+- Never say the data is wrong or right. The check found something unusual; a person at the site knows whether it is real.
+- The follow-up note goes to whoever enters this site's data. Keep it short, polite and specific: what was noticed, and the one or two questions that would settle it. Ask for a supporting document (a bill, invoice or meter reading) when that would settle it. No greeting by name and no signature; the reviewer adds those.
+
+Reply with a single JSON object and nothing else:
+{
+  "explanation": "2-3 plain sentences on what the flag means and why it matters for reported figures.",
+  "things_to_check": ["3 to 5 short questions a reviewer could ask, most likely first"],
+  "follow_up_subject": "a short email subject",
+  "follow_up_body": "the note, 60-120 words"
+}`;
+
+export interface ReviewFindingInput {
+  kindLabel: string;
+  severity: string;
+  siteName: string;
+  businessUnitName: string | null;
+  streamLabel: string | null;
+  period: string | null;
+  headline: string;
+  detail: string;
+  basis: { label: string; value: string }[];
+}
+
+export function buildReviewFindingPrompt(input: ReviewFindingInput): BuiltPrompt {
+  const basis = input.basis.length > 0
+    ? input.basis.map((b) => `- ${b.label}: ${b.value}`).join('\n')
+    : '- (no figures)';
+  // The headline, detail and basis are all computed by the platform, so all of
+  // them are ground truth for the grounding check. The period goes in too: a
+  // note that says "March 2026" is quoting the finding, not inventing a date.
+  const context = [input.period ?? '', input.headline, input.detail, basis].join('\n');
+
+  const user = `FINDING
+Type: ${input.kindLabel} (severity ${input.severity})
+Site: ${input.siteName}${input.businessUnitName ? ` (${input.businessUnitName})` : ''}
+Data stream: ${input.streamLabel ?? 'not specific to one stream'}
+Period: ${input.period ?? 'not specific to one month'}
+Headline: ${input.headline}
+Detail: ${input.detail}
+Numbers behind it:
+${basis}
+
+Explain this flag and draft the follow-up note.`;
+
+  return { system: REVIEW_FINDING_SYSTEM, user, context };
+}
+
+export interface ParsedFindingExplanation {
+  explanation: string;
+  thingsToCheck: string[];
+  followUpSubject: string | null;
+  followUpBody: string | null;
+  fellBackToProse: boolean;
+}
+
+/** A parse failure keeps the prose: the explanation is the useful part. */
+export function parseFindingExplanation(raw: string): ParsedFindingExplanation {
+  const obj = extractJsonObject(raw);
+  if (!obj) {
+    return { explanation: raw.trim(), thingsToCheck: [], followUpSubject: null, followUpBody: null, fellBackToProse: true };
+  }
+  const things = Array.isArray(obj.things_to_check)
+    ? obj.things_to_check.map((t) => str(t, 300)).filter((t): t is string => t !== null).slice(0, 6)
+    : [];
+  return {
+    explanation: str(obj.explanation) ?? raw.trim(),
+    thingsToCheck: things,
+    followUpSubject: str(obj.follow_up_subject, 200),
+    followUpBody: str(obj.follow_up_body, 3000),
+    fellBackToProse: false,
+  };
+}
+
+/** Everything the reviewer will read, for the grounding check. */
+export function findingExplanationText(p: ParsedFindingExplanation): string {
+  return [p.explanation, ...p.thingsToCheck, p.followUpSubject ?? '', p.followUpBody ?? ''].join('\n');
+}
+
+// ─── Task: read a supporting document ─────────────────────────────────────────
+
+/**
+ * Reading a bill, and only reading it.
+ *
+ * The model is deliberately NOT told the figure that was entered. Shown the
+ * entered value, a model reading a smudged scan tends to find it; asked what
+ * the document says, it has nothing to agree with. The comparison with the
+ * entry is done afterwards, in code, by `compareEvidence` in
+ * `lib/evidence-check-core.ts` — so whether something "matches" is decided by
+ * arithmetic the reviewer can repeat, not by a model's judgement.
+ *
+ * Every value comes back with the text it was read from, so a reviewer can
+ * find it on the page in seconds.
+ */
+const READ_DOCUMENT_SYSTEM = `You read one supporting document (a utility bill, fuel invoice, delivery note, meter reading or waste manifest) for a sustainability data team, and report what it says.
+
+Absolute rules:
+- Report only what is printed in the document. Never estimate, calculate a missing value, or fill a gap. If something is not shown, use null.
+- Quantities only: energy, fuel, water or waste amounts. Never report money amounts, tax, rates or prices as quantities.
+- For each value, copy the exact text you read it from into "source_text", so a person can find it on the page.
+- Dates as YYYY-MM-DD. If the document shows only a month, use its first and last day.
+- If the document is not readable, or is not this kind of document, set "readable" to false and say why in "notes".
+
+Reply with a single JSON object and nothing else:
+{
+  "readable": true,
+  "document_type": "utility bill | invoice | delivery note | meter reading | waste manifest | other",
+  "issuer": "who issued it, or null",
+  "account_or_meter": "account, meter or site number as printed, or null",
+  "period_start": "YYYY-MM-DD or null",
+  "period_end": "YYYY-MM-DD or null",
+  "readings": [
+    { "description": "what this line is", "quantity": 1234.5, "unit_as_written": "kWh", "unit_code": "one of the UNIT CODES, or null", "source_text": "exact text" }
+  ],
+  "total": { "description": "total for the commodity", "quantity": 1234.5, "unit_as_written": "kWh", "unit_code": "...", "source_text": "exact text" } or null,
+  "notes": "anything a reviewer should know: several meters, estimated reads, a corrected bill. Or null."
+}`;
+
+export interface ReadDocumentInput {
+  /** What the entry is, e.g. "Purchased electricity (Scope 2)". */
+  commodityLabel: string;
+  /** Unit codes the platform can convert for this kind of entry. */
+  unitCodes: { code: string; label: string }[];
+  fileName: string;
+}
+
+export function buildReadDocumentPrompt(input: ReadDocumentInput): BuiltPrompt {
+  const codes = input.unitCodes.map((u) => `- ${u.code} (${u.label})`).join('\n');
+  const user = `DOCUMENT: ${input.fileName} (attached)
+LOOK FOR: ${input.commodityLabel}
+
+UNIT CODES (set unit_code to one of these when the printed unit is the same unit; otherwise null):
+${codes}
+
+Read the document and report what it says about ${input.commodityLabel}.`;
+  // No grounding context: extraction is checked against the document by the
+  // quoted source text, and against the entry by compareEvidence.
+  return { system: READ_DOCUMENT_SYSTEM, user, context: '' };
+}
+
+export interface DocumentReading {
+  description: string | null;
+  quantity: number;
+  unitAsWritten: string | null;
+  unitCode: string | null;
+  sourceText: string | null;
+}
+
+export interface ParsedDocument {
+  readable: boolean;
+  documentType: string | null;
+  issuer: string | null;
+  accountOrMeter: string | null;
+  periodStart: string | null;
+  periodEnd: string | null;
+  readings: DocumentReading[];
+  total: DocumentReading | null;
+  notes: string | null;
+  fellBackToProse: boolean;
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function reading(value: unknown, allowedCodes: ReadonlySet<string>): DocumentReading | null {
+  if (!value || typeof value !== 'object') return null;
+  const r = value as Record<string, unknown>;
+  const q = typeof r.quantity === 'number' ? r.quantity
+    : typeof r.quantity === 'string' ? Number(r.quantity.replace(/,/g, '')) : NaN;
+  if (!Number.isFinite(q)) return null;
+  const code = str(r.unit_code, 40);
+  return {
+    description: str(r.description, 200),
+    quantity: q,
+    unitAsWritten: str(r.unit_as_written, 40),
+    // A code the platform did not offer is treated as "unknown unit" rather
+    // than trusted: the comparison only converts between units it knows.
+    unitCode: code && allowedCodes.has(code) ? code : null,
+    sourceText: str(r.source_text, 300),
+  };
+}
+
+/**
+ * Parse and sanitise. Anything malformed becomes "not read" rather than a
+ * guess, and an unparseable reply is an unreadable document — a check that
+ * cannot say what the bill says must not report a match.
+ */
+export function parseDocumentReading(raw: string, allowedCodes: readonly string[]): ParsedDocument {
+  const allowed = new Set(allowedCodes);
+  const obj = extractJsonObject(raw);
+  if (!obj) {
+    return {
+      readable: false, documentType: null, issuer: null, accountOrMeter: null,
+      periodStart: null, periodEnd: null, readings: [], total: null,
+      notes: str(raw, 500), fellBackToProse: true,
+    };
+  }
+  const date = (v: unknown) => {
+    const s = str(v, 10);
+    return s && ISO_DATE.test(s) ? s : null;
+  };
+  const readings = Array.isArray(obj.readings)
+    ? obj.readings.map((r) => reading(r, allowed)).filter((r): r is DocumentReading => r !== null).slice(0, 30)
+    : [];
+  return {
+    readable: obj.readable !== false,
+    documentType: str(obj.document_type, 60),
+    issuer: str(obj.issuer, 200),
+    accountOrMeter: str(obj.account_or_meter, 120),
+    periodStart: date(obj.period_start),
+    periodEnd: date(obj.period_end),
+    readings,
+    total: reading(obj.total, allowed),
+    notes: str(obj.notes, 1000),
+    fellBackToProse: false,
+  };
+}

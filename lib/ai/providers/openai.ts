@@ -1,5 +1,5 @@
 import 'server-only';
-import { AiProviderError, type AiProvider, type CompletionRequest, type CompletionResult } from '../types';
+import { AiProviderError, type AiAttachment, type AiProvider, type CompletionRequest, type CompletionResult } from '../types';
 import type { AiConfig } from '../config';
 
 /**
@@ -22,6 +22,30 @@ interface OpenAiResponse {
   model?: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number };
   error?: { message?: string; type?: string };
+}
+
+/**
+ * Images go as data URLs, which every OpenAI-compatible server that accepts
+ * images understands. PDFs go as a `file` part, which OpenAI's own API reads;
+ * a local runtime that does not will say so in its error, and that error is
+ * shown to the user as-is.
+ */
+function attachmentPart(a: AiAttachment) {
+  const url = `data:${a.mediaType};base64,${a.data}`;
+  return a.kind === 'pdf'
+    ? { type: 'file', file: { filename: a.fileName, file_data: url } }
+    : { type: 'image_url', image_url: { url } };
+}
+
+export function openAiMessages(request: CompletionRequest) {
+  const lastUser = request.messages.map((m) => m.role).lastIndexOf('user');
+  return [
+    { role: 'system', content: request.system },
+    ...request.messages.map((m, i) =>
+      i === lastUser && request.attachments?.length
+        ? { role: m.role, content: [{ type: 'text', text: m.content }, ...request.attachments.map(attachmentPart)] }
+        : { role: m.role, content: m.content }),
+  ];
 }
 
 export function createOpenAiProvider(config: AiConfig): AiProvider {
@@ -52,10 +76,7 @@ export function createOpenAiProvider(config: AiConfig): AiProvider {
           body: JSON.stringify({
             model: config.model,
             [maxTokensField]: request.maxTokens,
-            messages: [
-              { role: 'system', content: request.system },
-              ...request.messages.map((m) => ({ role: m.role, content: m.content })),
-            ],
+            messages: openAiMessages(request),
           }),
         });
       } catch (cause) {

@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–041** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–042** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–041 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. |
+| 008–042 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042 is verified in PGlite only (RLS and append-only behaviour); check 36 covers it. `tests/verify-install.test.ts` now runs every check against a clean install. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -144,6 +144,17 @@ changed, change it knowingly and update this list.
   unsent one are different findings in an audit. (This used to be a Supabase
   Edge Function, `send-survey-email`; it moved into the app in November 2026 so
   there is one less thing to deploy.)
+- **AI document checks: the model reads, the platform compares.** When Data
+  Review checks an entry against its bill, the model is asked only what the
+  document says, and is not told the entered figure — shown it, a model reading
+  a poor scan tends to find it. Whether the entry matches is decided by
+  `compareEvidence` in plain arithmetic (1% band after unit conversion; a factor
+  of 1,000 called out as a unit slip). Every check is kept, append-only, in
+  `evidence_checks`. Do not let a model produce the match verdict, and do not
+  let a check edit the entry.
+- **AI finding explanations never state a cause.** The explainer offers things
+  to check and a note to the site; it is told it does not know why the data
+  moved, and its output passes the same grounding check as disclosure drafts.
 - **Automatic reminders claim their slot before sending.** A reminder raises
   `reminder_count` only if nobody else raised it first, sends, and gives the
   slot back if the send fails. Overlapping runs of the daily job, or a click on

@@ -236,6 +236,25 @@ What could *not* be checked is reported too: cross-site intensity needs a floor
 area, and sites lacking one are listed as uncompared rather than passing
 silently.
 
+**With the AI layer switched on**, Data Review gains two things, both built so
+that no model decides whether data is right:
+
+- **Explain and draft follow-up** on each finding (`/api/ai/review-finding`).
+  The request carries only the finding's id; the server rebuilds the finding
+  from the caller's data and passes its headline, detail and basis to the
+  `explain_review_finding` task. The model writes a plain explanation, things to
+  check and a note to the site, and is told it does not know the cause. The
+  grounding check runs on all of it. Nothing is saved.
+- **Document checks** (`/api/ai/evidence-check`, `lib/evidence-check*.ts`). For
+  entries in the review month with a PDF or image attached, the
+  `read_evidence_document` task reads the file and reports quantity, unit,
+  billing period and account, quoting the text behind each value. **It is not
+  told what was entered**, so it has nothing to agree with. `compareEvidence`
+  then compares in plain arithmetic: within 1% after unit conversion is a match,
+  a factor of 1,000 is a likely unit slip, a billing period with no overlap with
+  the entry's month is flagged. Every check is kept in `evidence_checks`,
+  append-only, with the entry as it was, the model's reading and the comparison.
+
 ### Evidence attachments
 
 Source documents attach to a record through `components/evidence/EvidencePanel.tsx`,
@@ -288,7 +307,8 @@ returns null, every affordance disappears, and nothing else changes — no core
 feature has a code path through it.
 
 **Provider-agnostic by a deliberately small interface** (`lib/ai/types.ts`):
-system prompt, messages, token ceiling, text back. Adapters exist for Anthropic
+system prompt, messages, token ceiling, optional PDF or image attachments, text
+back. Adapters exist for Anthropic
 Messages and OpenAI Chat Completions, the latter also covering Ollama, vLLM,
 LM Studio, Azure and OpenRouter — so an organization who will not send sustainability
 data to a third party points `AI_BASE_URL` at their own hardware and uses the
@@ -315,6 +335,13 @@ from a correctly derived one, so it says "verify", never "wrong".
 
 Output is always a draft in an editor the user must review and save through the
 normal path. The model cannot write to a reported figure.
+
+The task catalogue today: `draft_disclosure_narrative`,
+`summarise_regulatory_change`, `explain_review_finding` and
+`read_evidence_document` (see Data-quality review above for the last two).
+Reading a document needs a model that accepts PDFs and images; Anthropic's and
+OpenAI's current models do, and a local runtime that does not returns its own
+error, shown to the user as-is.
 
 ## Two kinds of output
 

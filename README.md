@@ -211,6 +211,11 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
   endpoint including self-hosted. Fixed task catalogue, no free-text prompt
   endpoint, and drafts are checked for figures absent from the supplied data.
   No core feature has a code path through it.
+- Uses: disclosure narrative drafts, regulatory-source change summaries, plain
+  explanations and follow-up notes for Data Review findings, and **document
+  checks** — the model reads the bill attached to an entry (without being told
+  what was entered) and the platform compares the two, keeping a record of every
+  check for assurance.
 
 **Outputs** — CSV exports (GHG inventory, Scope 3, EHS, supplier responses,
 audit trail) and self-contained HTML framework reports.
@@ -263,7 +268,7 @@ cp .env.example .env.local
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–041**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–042**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -408,7 +413,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–041, numbered SQL (source of truth for schema)
+  migrations/            001–042, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight

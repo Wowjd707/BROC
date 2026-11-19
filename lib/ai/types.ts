@@ -31,11 +31,33 @@ export interface AiMessage {
   content: string;
 }
 
+/**
+ * A document the model is asked to read: a scanned bill, a PDF invoice, a
+ * photo of a meter. Base64, because both APIs take it inline and neither needs
+ * a separate upload step. Only PDFs and the common image types are carried;
+ * other formats are refused before a request is made (see
+ * `lib/evidence-check-core.ts`), because a provider receiving a format it
+ * cannot read tends to answer anyway, about nothing.
+ */
+export interface AiAttachment {
+  kind: 'pdf' | 'image';
+  mediaType: string;
+  /** Base64, no data: prefix. */
+  data: string;
+  fileName: string;
+}
+
 export interface CompletionRequest {
   /** Fixed per task — never assembled from user input. See `tasks.ts`. */
   system: string;
   messages: AiMessage[];
   maxTokens: number;
+  /**
+   * Documents attached to the LAST user message. Optional: most tasks are text
+   * only. A provider or endpoint that cannot read a document returns its own
+   * error, which reaches the user verbatim rather than being swallowed.
+   */
+  attachments?: AiAttachment[];
 }
 
 export interface CompletionResult {

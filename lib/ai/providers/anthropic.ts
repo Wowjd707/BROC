@@ -1,5 +1,5 @@
 import 'server-only';
-import { AiProviderError, type AiProvider, type CompletionRequest, type CompletionResult } from '../types';
+import { AiProviderError, type AiAttachment, type AiProvider, type CompletionRequest, type CompletionResult } from '../types';
 import type { AiConfig } from '../config';
 
 /**
@@ -29,6 +29,21 @@ interface AnthropicResponse {
   error?: { type?: string; message?: string };
 }
 
+/** Documents become content blocks ahead of the text, which is where Claude reads them best. */
+function attachmentBlock(a: AiAttachment) {
+  return a.kind === 'pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: a.data } }
+    : { type: 'image', source: { type: 'base64', media_type: a.mediaType, data: a.data } };
+}
+
+export function anthropicMessages(request: CompletionRequest) {
+  const lastUser = request.messages.map((m) => m.role).lastIndexOf('user');
+  return request.messages.map((m, i) =>
+    i === lastUser && request.attachments?.length
+      ? { role: m.role, content: [...request.attachments.map(attachmentBlock), { type: 'text', text: m.content }] }
+      : { role: m.role, content: m.content });
+}
+
 export function createAnthropicProvider(config: AiConfig): AiProvider {
   return {
     id: 'anthropic',
@@ -48,7 +63,7 @@ export function createAnthropicProvider(config: AiConfig): AiProvider {
             model: config.model,
             max_tokens: request.maxTokens,
             system: request.system,
-            messages: request.messages.map((m) => ({ role: m.role, content: m.content })),
+            messages: anthropicMessages(request),
           }),
         });
       } catch (cause) {

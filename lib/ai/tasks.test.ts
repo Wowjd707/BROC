@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   AI_TASK_IDS, isAiTaskId, AI_TASK_MAX_TOKENS,
   buildRegulatoryChangePrompt, parseRegulatoryChange,
+  buildReviewFindingPrompt, parseFindingExplanation, findingExplanationText, buildReadDocumentPrompt,
 } from './tasks';
 
 describe('the task catalogue', () => {
@@ -108,5 +109,41 @@ describe('parseRegulatoryChange', () => {
 
   it('defaults suggested_changes to an empty object', () => {
     expect(parseRegulatoryChange('{"summary":"S"}').suggestedChanges).toEqual({});
+  });
+});
+
+describe('explain_review_finding', () => {
+  const input = {
+    kindLabel: 'Month-on-month change', severity: 'medium', siteName: 'Houston', businessUnitName: 'Compression',
+    streamLabel: 'Electricity (Scope 2)', period: '2026-03',
+    headline: 'Electricity up 212% on February', detail: 'March is 3.1 times the prior month.',
+    basis: [{ label: 'March', value: '93,000 kWh' }, { label: 'February', value: '29,800 kWh' }],
+  };
+
+  it('puts every platform figure in the grounding context', () => {
+    const p = buildReviewFindingPrompt(input);
+    for (const v of ['93,000', '29,800', '212%', '3.1', '2026-03']) expect(p.context).toContain(v);
+    expect(p.system).toMatch(/Never state a cause/);
+  });
+
+  it('parses the JSON reply and keeps prose when it is not JSON', () => {
+    const ok = parseFindingExplanation('{"explanation":"E","things_to_check":["A?","B?",3],"follow_up_subject":"S","follow_up_body":"B"}');
+    expect(ok).toMatchObject({ explanation: 'E', thingsToCheck: ['A?', 'B?'], followUpSubject: 'S', followUpBody: 'B', fellBackToProse: false });
+    const prose = parseFindingExplanation('Just some words.');
+    expect(prose).toMatchObject({ explanation: 'Just some words.', fellBackToProse: true });
+    expect(findingExplanationText(ok)).toContain('A?');
+  });
+});
+
+describe('read_evidence_document', () => {
+  it('never tells the model what was entered', () => {
+    const p = buildReadDocumentPrompt({
+      commodityLabel: 'Purchased electricity (Scope 2)',
+      unitCodes: [{ code: 'kWh', label: 'kWh' }, { code: 'MWh', label: 'MWh' }],
+      fileName: 'bill.pdf',
+    });
+    expect(p.user).toContain('kWh');
+    expect(p.user).not.toMatch(/entered|entry value/i);
+    expect(p.system).toMatch(/Never report money amounts/);
   });
 });

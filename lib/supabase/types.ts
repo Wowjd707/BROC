@@ -760,6 +760,60 @@ export type Database = {
           },
         ]
       }
+      evidence_checks: {
+        Row: {
+          attachment_id: string | null
+          checked_at: string
+          checked_by: string | null
+          comparison: Json
+          document_reading: Json
+          entry_snapshot: Json
+          file_name: string
+          id: string
+          model: string
+          organization_id: string
+          outcome: string
+          provider: string
+          record_id: string
+          record_type: string
+          summary: string
+        }
+        Insert: {
+          attachment_id?: string | null
+          checked_at?: string
+          checked_by?: string | null
+          comparison: Json
+          document_reading: Json
+          entry_snapshot: Json
+          file_name: string
+          id?: string
+          model: string
+          organization_id?: string
+          outcome: string
+          provider: string
+          record_id: string
+          record_type: string
+          summary: string
+        }
+        Update: {
+          attachment_id?: string | null
+          checked_at?: string
+          checked_by?: string | null
+          comparison?: Json
+          document_reading?: Json
+          entry_snapshot?: Json
+          file_name?: string
+          id?: string
+          model?: string
+          organization_id?: string
+          outcome?: string
+          provider?: string
+          record_id?: string
+          record_type?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       evidence_attachments: {
         Row: {
           content_type: string | null

@@ -3,6 +3,8 @@ import { resolveScope } from '@/lib/scope-filter';
 import { buildAnomalyReport } from '@/lib/anomaly';
 import { DataReviewClient } from './DataReviewClient';
 import { activeOrg } from '@/lib/active-org';
+import { getAiStatus } from '@/lib/ai';
+import { loadDocumentCheckList } from '@/lib/evidence-check';
 
 export default async function DataReviewPage({
   searchParams,
@@ -18,7 +20,7 @@ export default async function DataReviewPage({
 
   const { data: userProfile } = await supabase
     .from('users')
-    .select('organizations!users_organization_id_fkey(reporting_year_start), active_organization:organizations!users_active_organization_id_fkey(reporting_year_start)')
+    .select('role, organizations!users_organization_id_fkey(reporting_year_start), active_organization:organizations!users_active_organization_id_fkey(reporting_year_start)')
     .eq('id', user.id)
     .single();
 
@@ -32,7 +34,11 @@ export default async function DataReviewPage({
   const defaultMonth = `${lastComplete.getFullYear()}-${String(lastComplete.getMonth() + 1).padStart(2, '0')}`;
   const asOfMonth = /^\d{4}-\d{2}$/.test(asOf ?? '') ? asOf! : defaultMonth;
 
-  const report = await buildAnomalyReport(scope.siteIds, asOfMonth);
+  const [report, documentChecks] = await Promise.all([
+    buildAnomalyReport(scope.siteIds, asOfMonth),
+    loadDocumentCheckList(scope.siteIds, asOfMonth),
+  ]);
+  const canEdit = userProfile?.role === 'admin' || userProfile?.role === 'editor';
 
   return (
     <DataReviewClient
@@ -40,6 +46,10 @@ export default async function DataReviewPage({
       scopeLabel={scope.label}
       asOfMonth={asOfMonth}
       fyStart={fyStart}
+      rawScope={rawScope ?? null}
+      aiEnabled={getAiStatus().enabled}
+      canEdit={canEdit}
+      documentChecks={documentChecks}
     />
   );
 }

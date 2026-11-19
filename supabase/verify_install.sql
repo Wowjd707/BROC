@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–041). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–042). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -382,6 +382,13 @@ checks(sort_key, check_name, status, detail) AS (
     ) THEN 'PASS' ELSE 'FAIL' END,
     'The New Survey form, the response dashboard and supplier reports read this column. '
       || 'Re-apply 036 if this fails.'
+
+  UNION ALL SELECT 36, 'Document checks — append-only record of entries checked against their bills',
+    CASE WHEN EXISTS (
+      SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='evidence_checks'
+    ) AND COALESCE((SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.evidence_checks')), FALSE)
+      THEN 'PASS' ELSE 'FAIL' END,
+    'Data Review → Document checks saves each check here. Re-apply 042 if this fails.'
 )
 
 SELECT

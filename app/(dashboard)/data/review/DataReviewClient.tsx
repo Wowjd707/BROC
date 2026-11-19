@@ -2,6 +2,9 @@
 
 import { useState, useMemo } from 'react';
 import { rowsToCsv } from '@/lib/csv-export';
+import type { DocumentCheckList } from '@/lib/evidence-check';
+import { FindingExplainer } from './FindingExplainer';
+import { DocumentChecks } from './DocumentChecks';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,6 +24,10 @@ interface Props {
   scopeLabel: string;
   asOfMonth: string;
   fyStart: number;
+  rawScope: string | null;
+  aiEnabled: boolean;
+  canEdit: boolean;
+  documentChecks: DocumentCheckList;
 }
 
 const SEVERITY_META: Record<Severity, {
@@ -41,7 +48,7 @@ const SEVERITY_MEANING: Record<Severity, string> = {
   low: 'Worth an eye. Often a real operational change rather than an error.',
 };
 
-export function DataReviewClient({ report, scopeLabel, asOfMonth, fyStart }: Props) {
+export function DataReviewClient({ report, scopeLabel, asOfMonth, fyStart, rawScope, aiEnabled, canEdit, documentChecks }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -305,6 +312,9 @@ export function DataReviewClient({ report, scopeLabel, asOfMonth, fyStart }: Pro
                                   {f.entryIds.length} entr{f.entryIds.length === 1 ? 'y' : 'ies'} involved.
                                 </p>
                               )}
+                              {aiEnabled && canEdit && (
+                                <FindingExplainer findingId={f.id} asOf={asOfMonth} scope={rawScope} />
+                              )}
                             </div>
                           )}
                         </div>
@@ -325,6 +335,13 @@ export function DataReviewClient({ report, scopeLabel, asOfMonth, fyStart }: Pro
           )}
         </>
       )}
+
+      <DocumentChecks
+        key={`${asOfMonth}:${rawScope ?? ''}`}
+        list={documentChecks}
+        aiEnabled={aiEnabled}
+        canCheck={canEdit}
+      />
 
       {/* What could not be checked is itself worth reporting. */}
       {intensityCoverage.some((c) => !c.sufficient || c.excludedForNoFloorArea.length > 0) && (
