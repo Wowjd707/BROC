@@ -1009,8 +1009,9 @@ function ScopeRules({ rules, isAdmin, onChanged }: { rules: Rule[]; isAdmin: boo
       <p className="text-sm text-gray-600 max-w-3xl">
         A product is in scope of a regulation when its code in the rule&rsquo;s system (HS, CN or HTS) starts with one of
         the codes listed here. The first six digits are shared by all three, so a code of six digits or fewer matches
-        whichever code a product has. BROC ships no list of its own: enter the codes from the regulation&rsquo;s annex,
-        with where they are cited and when you last checked, so anyone can trace why a part is in or out.
+        whichever code a product has. BROC loads no list by default: enter the codes from the regulation&rsquo;s annex,
+        with where they are cited and when you last checked, so anyone can trace why a part is in or out. A cited CBAM
+        and EUDR list ready to load is in <code>supabase/content/scope-packs</code>.
       </p>
 
       {isAdmin && (

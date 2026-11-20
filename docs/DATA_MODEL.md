@@ -607,8 +607,9 @@ what has been collected about it.
   organization's own list: `regulation`, `code_system` (`hs`, `cn` or `hts`;
   migration 044, existing rules are CN), `cn_prefix` (the prefix in that
   system; named before HS and HTS existed), and a **required**
-  `source_citation` and `last_verified` date. BROC ships none, on the same
-  principle as the regulatory tracker. A product is in scope when its CN code
+  `source_citation` and `last_verified` date. Nothing loads by default, on the
+  same principle as the regulatory tracker; cited packs an admin can run are in
+  `supabase/content/scope-packs/`. A product is in scope when its CN code
   matches a listed prefix (`matchingRules` in `lib/compliance-core.ts`).
   Admin-only, audited.
 - `product_compliance_values` — every value collected for a product, one row

@@ -146,8 +146,9 @@ changed, change it knowingly and update this list.
   there is one less thing to deploy.)
 - **Product regulation scope is the organization's cited data.** Which HS, CN
   or HTS codes CBAM, EUDR or PPWR cover is entered with a citation and a last-verified
-  date (`compliance_scope_rules`); BROC ships no list. Do not add a built-in
-  scope list from memory — the Annex lists change, and a part that silently
+  date (`compliance_scope_rules`). Nothing loads by default; cited packs
+  researched from the legal text live in `supabase/content/scope-packs/` for an
+  admin to run and then own. Do not add a scope list from memory — the Annex lists change, and a part that silently
   falls out of scope is a part nobody files for.
 - **Product compliance values are append-only.** A correction is a new row; the
   latest row is current and the rest is the history an auditor reads. Survey
