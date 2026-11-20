@@ -49,7 +49,7 @@ If you can do it as data, do it as data.
 | **Social & governance metrics** | Migration 023 + `social-metrics-core.ts` | Both |
 | **Units** | `lib/conversions.ts`, `lib/units.ts` | Code |
 | **What your AI assistant knows** | `.claude/skills/` | Code |
-| Which CN codes each regulation covers | Products → Which regulations apply (`compliance_scope_rules`) | Data |
+| Which HS, CN or HTS codes each regulation covers | Products and Parts → Which regulations apply (`compliance_scope_rules`) | Data |
 | **Product compliance fields** (what CBAM, EUDR, PPWR collect per product, and how long an answer stays valid) | `lib/compliance-catalog.ts` | Code |
 
 ---

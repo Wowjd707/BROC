@@ -370,6 +370,7 @@ export type Database = {
       compliance_scope_rules: {
         Row: {
           cn_prefix: string
+          code_system: string
           created_at: string
           created_by: string | null
           id: string
@@ -382,6 +383,7 @@ export type Database = {
         }
         Insert: {
           cn_prefix: string
+          code_system?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -394,6 +396,7 @@ export type Database = {
         }
         Update: {
           cn_prefix?: string
+          code_system?: string
           created_at?: string
           created_by?: string | null
           id?: string
@@ -1343,6 +1346,8 @@ export type Database = {
         Row: {
           business_unit_id: string | null
           cn_code: string | null
+          hs_code: string | null
+          hts_code: string | null
           country_of_origin: string | null
           created_at: string
           description: string | null
@@ -1359,6 +1364,8 @@ export type Database = {
         Insert: {
           business_unit_id?: string | null
           cn_code?: string | null
+          hs_code?: string | null
+          hts_code?: string | null
           country_of_origin?: string | null
           created_at?: string
           description?: string | null
@@ -1375,6 +1382,8 @@ export type Database = {
         Update: {
           business_unit_id?: string | null
           cn_code?: string | null
+          hs_code?: string | null
+          hts_code?: string | null
           country_of_origin?: string | null
           created_at?: string
           description?: string | null

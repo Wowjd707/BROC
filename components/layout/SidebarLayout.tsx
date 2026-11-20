@@ -52,7 +52,7 @@ const NAV_SECTIONS: {
       { href: '/social',    label: 'Social & Governance',  icon: Users },
       { href: '/metrics',   label: 'Business Metrics',     icon: Gauge },
       { href: '/suppliers', label: 'Suppliers',            icon: Handshake },
-      { href: '/products',  label: 'Products & parts',     icon: Package },
+      { href: '/products',  label: 'Products and Parts',   icon: Package },
     ],
   },
   {

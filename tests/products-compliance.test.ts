@@ -127,3 +127,33 @@ describe('migration 043', () => {
     expect(await count(`SELECT count(*) n FROM products`)).toBe(3);
   });
 });
+
+describe('migration 044 — HS and HTS codes', () => {
+  it('keeps HS to six digits and HTS to ten', async () => {
+    await h.signIn(editorA);
+    expect(await errorOf(`INSERT INTO products (part_number, hs_code, hts_code) VALUES ('C-1','720851','7208510030')`)).toBeNull();
+    expect(await errorOf(`INSERT INTO products (part_number, hs_code) VALUES ('C-2','72085120')`)).not.toBeNull();
+    expect(await errorOf(`INSERT INTO products (part_number, hts_code) VALUES ('C-3','72085100301')`)).not.toBeNull();
+  });
+
+  it('treats rules without a code system as CN, and allows the same prefix in another system', async () => {
+    await h.asServiceRole();
+    const r = await h.db.query<{ code_system: string }>(`SELECT code_system FROM compliance_scope_rules WHERE organization_id = $1`, [orgA]);
+    expect(r.rows.every((x) => x.code_system === 'cn')).toBe(true);
+    await h.signIn(adminA);
+    const add = (system: string, prefix: string) => errorOf(
+      `INSERT INTO compliance_scope_rules (regulation, code_system, cn_prefix, source_citation, last_verified) VALUES ('cbam',$1,$2,'Annex I','2026-11-19')`,
+      [system, prefix]);
+    expect(await add('hs', '72')).toBeNull();
+    expect(await add('hs', '72')).toMatch(/duplicate|uq_scope_rules/);
+    expect(await add('hs', '7208512')).not.toBeNull();
+    expect(await add('nope', '73')).not.toBeNull();
+  });
+
+  it('can be applied twice', async () => {
+    await h.asServiceRole();
+    const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'migrations', '044_hs_and_hts_codes.sql'), 'utf8');
+    await h.db.exec(sql);
+    await h.db.exec(sql);
+  });
+});

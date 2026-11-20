@@ -15,13 +15,13 @@
  * facility's packaging spreadsheet becomes PPWR data without retyping.
  */
 
-import { normalizeCn } from './compliance-core';
+import { normalizeCode } from './compliance-core';
 import { FIELD_BY_KEY, normalizeFieldValue } from './compliance-catalog';
 
 export const PRODUCT_EXAMPLE_ROW_NOTE = 'Example — delete this row';
 
 export const PRODUCT_IMPORT_COLUMNS = [
-  'part_number', 'description', 'cn_code', 'supplier', 'country_of_origin',
+  'part_number', 'description', 'hs_code', 'cn_code', 'hts_code', 'supplier', 'country_of_origin',
   'business_unit', 'site', 'owner_email', 'notes',
 ] as const;
 
@@ -30,7 +30,9 @@ export type ProductImportColumn = (typeof PRODUCT_IMPORT_COLUMNS)[number];
 export const PRODUCT_COLUMN_LABELS: Record<ProductImportColumn, string> = {
   part_number: 'Part Number',
   description: 'Description',
+  hs_code: 'HS Code',
   cn_code: 'CN Code',
+  hts_code: 'HTS Code',
   supplier: 'Supplier',
   country_of_origin: 'Country of Origin',
   business_unit: 'Business Unit',
@@ -44,7 +46,9 @@ export const PRODUCT_IMPORT_HEADERS: string[] = PRODUCT_IMPORT_COLUMNS.map((c) =
 const HEADER_ALIASES: Record<string, ProductImportColumn> = {
   part: 'part_number', part_no: 'part_number', sku: 'part_number', item: 'part_number', item_number: 'part_number',
   material_number: 'part_number',
-  cn: 'cn_code', hs_code: 'cn_code', hts_code: 'cn_code', commodity_code: 'cn_code', tariff_code: 'cn_code',
+  hs: 'hs_code', hs6: 'hs_code',
+  cn: 'cn_code', cn8: 'cn_code', commodity_code: 'cn_code',
+  hts: 'hts_code', htsus: 'hts_code', hts_number: 'hts_code',
   supplier_name: 'supplier', vendor: 'supplier', vendor_name: 'supplier',
   origin: 'country_of_origin', country: 'country_of_origin', coo: 'country_of_origin',
   bu: 'business_unit', owner: 'owner_email',
@@ -72,7 +76,9 @@ export interface MappedProduct {
   partNumber: string;
   fields: Partial<{
     description: string;
+    hs_code: string | null;
     cn_code: string | null;
+    hts_code: string | null;
     supplier_id: string;
     country_of_origin: string;
     business_unit_id: string;
@@ -94,10 +100,12 @@ export function mapProductRow(input: Record<string, string>, lookups: Lookups): 
 
   const fields: MappedProduct['fields'] = {};
   if (text('description')) fields.description = text('description');
-  if (text('cn_code')) {
-    const cn = normalizeCn(text('cn_code'));
-    if (!cn.ok) return { ok: false, error: cn.error };
-    fields.cn_code = cn.value;
+  for (const system of ['hs', 'cn', 'hts'] as const) {
+    const col = `${system}_code` as const;
+    if (!text(col)) continue;
+    const code = normalizeCode(text(col), system);
+    if (!code.ok) return { ok: false, error: code.error };
+    fields[col] = code.value;
   }
   if (text('country_of_origin')) fields.country_of_origin = text('country_of_origin');
   if (text('notes')) fields.notes = text('notes');

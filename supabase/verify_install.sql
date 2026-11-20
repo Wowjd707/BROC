@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–043). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–044). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -397,6 +397,13 @@ checks(sort_key, check_name, status, detail) AS (
                   AND table_name='supplier_survey_questions' AND column_name='maps_to')
       THEN 'PASS' ELSE 'FAIL' END,
     'The Products page, survey answers saved to products, and the question builder''s "Saves to" read these. Re-apply 043 if this fails.'
+
+  UNION ALL SELECT 38, 'Products — HS and HTS codes alongside CN',
+    CASE WHEN (SELECT count(*) FROM information_schema.columns WHERE table_schema='public'
+               AND ((table_name='products' AND column_name IN ('hs_code','hts_code'))
+                 OR (table_name='compliance_scope_rules' AND column_name='code_system'))) = 3
+      THEN 'PASS' ELSE 'FAIL' END,
+    'Products and scope rules read these. Re-apply 044 if this fails.'
 )
 
 SELECT

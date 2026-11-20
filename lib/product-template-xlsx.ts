@@ -28,7 +28,7 @@ export async function buildProductTemplate(): Promise<Buffer> {
   data.views = [{ state: 'frozen', ySplit: 1, xSplit: 1 }];
 
   data.addRow({
-    part_number: 'EX-1001', description: 'Hot-rolled steel coil', cn_code: '7208 51 20', country_of_origin: 'Turkey',
+    part_number: 'EX-1001', description: 'Hot-rolled steel coil', hs_code: '7208 51', cn_code: '7208 51 20', country_of_origin: 'Turkey',
     notes: PRODUCT_EXAMPLE_ROW_NOTE,
   });
 
@@ -37,7 +37,8 @@ export async function buildProductTemplate(): Promise<Buffer> {
     'How to use this template',
     '',
     'Only Part Number is required. Re-uploading a part number that is already on file updates it; blank cells leave stored values alone.',
-    'CN Code: digits, with or without spaces or dots (7208 51 20, 7208.51.20). Which regulations apply is decided by your scope rules on the Products page.',
+    'HS Code (up to 6 digits), CN Code (EU, up to 8, or 10 with TARIC) and HTS Code (US, up to 10): digits, with or without spaces or dots. Fill whichever you hold.',
+    'Which regulations apply is decided by your scope rules on the Products and Parts page. The first six digits are shared by all three systems, so a short rule matches any of them.',
     'Supplier, Business Unit and Site must match names already in BROC. Owner Email must be a BROC user.',
     '',
     'The teal columns are optional compliance fields. A value there is recorded for the part with source "import".',

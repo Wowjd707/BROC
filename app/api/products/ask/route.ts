@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
   const [{ data: survey }, { data: products }] = await Promise.all([
     supabase.from('supplier_surveys').select('id, status, organization_id').eq('id', body.surveyId).maybeSingle(),
-    supabase.from('products').select('id, organization_id, supplier_id, suppliers(id, name, contact_email)').in('id', productIds),
+    supabase.from('products').select('id, organization_id, supplier_id, is_active, suppliers(id, name, contact_email)').in('id', productIds),
   ]);
   if (!survey) return NextResponse.json({ error: 'Survey not found.' }, { status: 404 });
   if (survey.status !== 'active') {
@@ -50,6 +50,10 @@ export async function POST(request: NextRequest) {
   }
   if (!products || products.length !== productIds.length) {
     return NextResponse.json({ error: 'Some of those products were not found.' }, { status: 404 });
+  }
+
+  if (products.some((p) => !p.is_active)) {
+    return NextResponse.json({ error: 'Inactive products cannot be sent to suppliers. Reactivate them first.' }, { status: 400 });
   }
 
   const supplierIds = new Set(products.map((p) => p.supplier_id));

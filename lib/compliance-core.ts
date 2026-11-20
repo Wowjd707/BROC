@@ -5,36 +5,96 @@
  */
 
 import {
-  FIELD_BY_KEY, fieldsFor, isRegulationKey, normalizeFieldValue,
+  FIELD_BY_KEY, fieldsFor, isRegulationKey, normalizeFieldValue, questionTypeFor, REGULATIONS, BUILT_IN_QUESTION_MAP,
   type RegulationKey,
 } from './compliance-catalog';
 
-// ─── CN codes ────────────────────────────────────────────────────────────────
+// ─── Customs codes: HS, CN, HTS ───────────────────────────────────────────────
+
+export type CodeSystem = 'hs' | 'cn' | 'hts';
+
+export const CODE_SYSTEMS: Record<CodeSystem, { label: string; name: string; maxDigits: number; example: string }> = {
+  hs: { label: 'HS', name: 'Harmonized System', maxDigits: 6, example: '7208 51' },
+  cn: { label: 'CN', name: 'EU Combined Nomenclature', maxDigits: 10, example: '7208 51 20' },
+  hts: { label: 'HTS', name: 'US Harmonized Tariff Schedule', maxDigits: 10, example: '7208.51.0030' },
+};
+
+export const CODE_SYSTEM_KEYS = Object.keys(CODE_SYSTEMS) as CodeSystem[];
 
 /**
  * "7208 51 20", "7208.51.20" and "72085120" are the same code. Anything that
- * is not 2–10 digits once separators are gone is refused rather than guessed.
+ * is not 2 digits up to the system's length, once separators are gone, is
+ * refused rather than guessed — an 8-digit "HS code" is really a CN or HTS
+ * code, and filing it as HS would hide which.
  */
-export function normalizeCn(raw: string | null | undefined): { ok: true; value: string | null } | { ok: false; error: string } {
+export function normalizeCode(
+  raw: string | null | undefined,
+  system: CodeSystem = 'cn',
+): { ok: true; value: string | null } | { ok: false; error: string } {
   const s = (raw ?? '').replace(/[\s.\-]/g, '');
   if (!s) return { ok: true, value: null };
-  if (!/^\d{2,10}$/.test(s)) return { ok: false, error: `CN code must be 2 to 10 digits, got "${raw}".` };
+  const { label, maxDigits } = CODE_SYSTEMS[system];
+  if (!/^\d+$/.test(s) || s.length < 2 || s.length > maxDigits) {
+    return {
+      ok: false,
+      error: system === 'hs' && /^\d+$/.test(s) && s.length > 6
+        ? `HS codes have at most 6 digits; "${raw}" looks like a CN or HTS code.`
+        : `${label} code must be 2 to ${maxDigits} digits, got "${raw}".`,
+    };
+  }
   return { ok: true, value: s };
+}
+
+/**
+ * Codes pasted as a list: one per line, or separated by commas or semicolons.
+ * Spaces inside a code are kept, because "7208 51 20" is one code.
+ */
+export function splitCodes(text: string): string[] {
+  return text.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+}
+
+export interface ProductCodes {
+  hs_code?: string | null;
+  cn_code?: string | null;
+  hts_code?: string | null;
 }
 
 export interface ScopeRule {
   regulation: string;
+  /** Prefix in `code_system` (column named for CN, see migration 044). */
   cn_prefix: string;
+  /** Rules saved before migration 044 have none; they are CN rules. */
+  code_system?: string | null;
 }
 
-/** The regulations whose cited scope list covers this CN code. */
-export function regulationsForCn(cn: string | null, rules: ScopeRule[]): RegulationKey[] {
-  if (!cn) return [];
-  const out = new Set<RegulationKey>();
-  for (const r of rules) {
-    if (isRegulationKey(r.regulation) && cn.startsWith(r.cn_prefix)) out.add(r.regulation);
-  }
-  return [...out].sort();
+function codeIn(product: ProductCodes, system: CodeSystem): string | null {
+  return (system === 'hs' ? product.hs_code : system === 'cn' ? product.cn_code : product.hts_code) ?? null;
+}
+
+/**
+ * The regulations whose cited scope list covers this product.
+ *
+ * A rule is checked against the product's code in the rule's own system. The
+ * first six digits are the same in HS, CN and HTS by design, so a rule of six
+ * digits or fewer also matches whichever code the product has: an HS "7208"
+ * rule covers a part that only carries its HTS code. Longer prefixes are
+ * national and only ever match their own system.
+ */
+export function regulationsForProduct(product: ProductCodes, rules: ScopeRule[]): RegulationKey[] {
+  return [...new Set(matchingRules(product, rules).map((r) => r.regulation as RegulationKey))].sort();
+}
+
+/** The rules that put a product in scope, so the page can say why. */
+export function matchingRules<R extends ScopeRule>(product: ProductCodes, rules: R[]): R[] {
+  const all = [product.hs_code, product.cn_code, product.hts_code].filter((c): c is string => !!c);
+  if (all.length === 0) return [];
+  return rules.filter((r) => {
+    if (!isRegulationKey(r.regulation)) return false;
+    const system = (CODE_SYSTEM_KEYS as string[]).includes(r.code_system ?? '') ? (r.code_system as CodeSystem) : 'cn';
+    const own = codeIn(product, system);
+    return !!own?.startsWith(r.cn_prefix)
+      || (r.cn_prefix.length <= 6 && all.some((c) => c.startsWith(r.cn_prefix)));
+  });
 }
 
 // ─── Values and their status ─────────────────────────────────────────────────
@@ -174,4 +234,51 @@ export function valuesFromAnswers(
     }
   }
   return { values, skipped };
+}
+
+// ─── Surveys that collect fields ─────────────────────────────────────────────
+
+/**
+ * The survey "Create a survey for these fields" builds: one question per field,
+ * mapped to it. CBAM and EUDR keep their regulation type (so the response
+ * dashboard files them under that topic); PPWR has no built-in type, so it is
+ * a custom survey named for it. Adding questions to a built-in type replaces
+ * its built-in set, which is what is wanted here.
+ */
+export function fieldSurveyPlan(regulation: RegulationKey) {
+  const reg = REGULATIONS[regulation];
+  const builtIn = regulation === 'cbam' || regulation === 'eudr';
+  return {
+    survey: {
+      title: `${reg.label} product data request`,
+      regulation_type: builtIn ? regulation : 'custom',
+      custom_regulation_name: builtIn ? null : reg.label,
+      status: 'active',
+      notes: `Questions map to BROC's ${reg.label} product fields. Answers are recorded on each product the request asks about.`,
+    },
+    questions: fieldsFor(regulation).map((f, i) => ({
+      position: i,
+      question_key: f.key.replace('.', '_'),
+      label: f.label,
+      question_type: questionTypeFor(f),
+      required: false,
+      unit: f.unit ?? null,
+      options: f.options ? f.options.map((o) => ({ value: o.value, label: o.label })) : [],
+      help_text: f.help ?? null,
+      maps_to: f.key,
+    })),
+  };
+}
+
+/**
+ * Which product fields a survey's answers fill: its custom questions' maps_to,
+ * or the built-in map when it has no custom questions.
+ */
+export function surveyFieldKeys(
+  survey: { id: string; regulation_type: string },
+  questions: { survey_id: string; maps_to: string | null }[],
+): string[] {
+  const own = questions.filter((q) => q.survey_id === survey.id);
+  if (own.length > 0) return own.flatMap((q) => (q.maps_to && FIELD_BY_KEY.has(q.maps_to) ? [q.maps_to] : []));
+  return Object.values(BUILT_IN_QUESTION_MAP[survey.regulation_type] ?? {});
 }

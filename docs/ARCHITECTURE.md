@@ -282,9 +282,14 @@ CBAM, EUDR, PPWR and EPR differ less than they look: each needs a list of
 products with customs codes, the supplier's answers about each one, how long
 those answers stay good, and proof. `/products` is that shared foundation.
 
-- **Scope** is data: the organization's cited CN-code prefixes per regulation
-  (`compliance_scope_rules`). A product is in scope when its code starts with
-  one. Nothing is inferred and nothing ships from memory.
+- **Scope** is data: the organization's cited code prefixes per regulation
+  (`compliance_scope_rules`), each in a named code system — HS (6 digits), the
+  EU's CN, or the US HTS. A product is in scope when its code in that system
+  starts with one; because the first six digits are shared by all three, a
+  prefix of six digits or fewer matches whichever code the product has
+  (`matchingRules` in `lib/compliance-core.ts`). The product drawer shows which
+  rule matched, with its citation. Nothing is inferred and nothing ships from
+  memory.
 - **Fields** are code: `lib/compliance-catalog.ts` defines each regulation's
   fields with type, unit and validity. The product drawer, the template, the
   importer and the question builder all read the same catalogue.

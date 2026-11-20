@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–043** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–044** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–043 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042 and 043 are verified in PGlite only (RLS, append-only behaviour, re-apply); checks 36 and 37 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
+| 008–044 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–044 are verified in PGlite only (RLS, append-only behaviour, re-apply); checks 36–38 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -144,8 +144,8 @@ changed, change it knowingly and update this list.
   unsent one are different findings in an audit. (This used to be a Supabase
   Edge Function, `send-survey-email`; it moved into the app in November 2026 so
   there is one less thing to deploy.)
-- **Product regulation scope is the organization's cited data.** Which CN
-  codes CBAM, EUDR or PPWR cover is entered with a citation and a last-verified
+- **Product regulation scope is the organization's cited data.** Which HS, CN
+  or HTS codes CBAM, EUDR or PPWR cover is entered with a citation and a last-verified
   date (`compliance_scope_rules`); BROC ships no list. Do not add a built-in
   scope list from memory — the Annex lists change, and a part that silently
   falls out of scope is a part nobody files for.

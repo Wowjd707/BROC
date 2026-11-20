@@ -27,8 +27,17 @@ describe('mapProductRow', () => {
   });
 
   it('accepts common ERP header names', () => {
-    const r = mapProductRow({ sku: 'P-1', hs_code: '4011.10', vendor: 'steelcore' }, lookups);
-    expect(r.ok && r.product).toMatchObject({ partNumber: 'P-1', fields: { cn_code: '401110', supplier_id: 's1' } });
+    const r = mapProductRow({ sku: 'P-1', hs: '4011.10', hts: '4011.10.1010', commodity_code: '4011 10 00', vendor: 'steelcore' }, lookups);
+    expect(r.ok && r.product).toMatchObject({
+      partNumber: 'P-1',
+      fields: { hs_code: '401110', hts_code: '4011101010', cn_code: '40111000', supplier_id: 's1' },
+    });
+  });
+
+  it('refuses an 8-digit code in the HS column', () => {
+    expect(mapProductRow({ part_number: 'P-1', hs_code: '7208 51 20' }, lookups)).toEqual({
+      ok: false, error: expect.stringMatching(/at most 6 digits/),
+    });
   });
 
   it('refuses a name that is not on file instead of dropping it', () => {

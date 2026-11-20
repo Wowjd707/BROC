@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  normalizeCn, regulationsForCn, currentValues, fieldStatus, validUntil, regulationProgress, valuesFromAnswers,
+  normalizeCode, regulationsForProduct, matchingRules, splitCodes, fieldSurveyPlan, surveyFieldKeys, currentValues, fieldStatus, validUntil, regulationProgress, valuesFromAnswers,
   type ValueRow,
 } from './compliance-core';
 import { COMPLIANCE_FIELDS, FIELD_BY_KEY, REGULATION_KEYS, normalizeFieldValue, BUILT_IN_QUESTION_MAP, fieldsFor } from './compliance-catalog';
@@ -11,25 +11,49 @@ const row = (over: Partial<ValueRow>): ValueRow => ({
   valid_to: '2026-12-31', source: 'manual', source_invitation_id: null, recorded_at: '2026-01-01T00:00:00Z', ...over,
 });
 
-describe('CN codes', () => {
+describe('customs codes', () => {
   it('accepts the usual ways of writing a code', () => {
-    expect(normalizeCn('7208 51 20')).toEqual({ ok: true, value: '72085120' });
-    expect(normalizeCn('7208.51.20')).toEqual({ ok: true, value: '72085120' });
-    expect(normalizeCn('')).toEqual({ ok: true, value: null });
-    expect(normalizeCn('72AB').ok).toBe(false);
-    expect(normalizeCn('7').ok).toBe(false);
+    expect(normalizeCode('7208 51 20', 'cn')).toEqual({ ok: true, value: '72085120' });
+    expect(normalizeCode('7208.51.0030', 'hts')).toEqual({ ok: true, value: '7208510030' });
+    expect(normalizeCode('7208.51', 'hs')).toEqual({ ok: true, value: '720851' });
+    expect(normalizeCode('', 'cn')).toEqual({ ok: true, value: null });
+    expect(normalizeCode('72AB', 'cn').ok).toBe(false);
+    expect(normalizeCode('7', 'hts').ok).toBe(false);
   });
 
-  it('scopes by prefix, ignoring regulations BROC does not know', () => {
-    const rules = [
-      { regulation: 'cbam', cn_prefix: '72' },
-      { regulation: 'eudr', cn_prefix: '4011' },
-      { regulation: 'made_up', cn_prefix: '72' },
-    ];
-    expect(regulationsForCn('72085120', rules)).toEqual(['cbam']);
-    expect(regulationsForCn('40111000', rules)).toEqual(['eudr']);
-    expect(regulationsForCn('84', rules)).toEqual([]);
-    expect(regulationsForCn(null, rules)).toEqual([]);
+  it('refuses a national code typed into the HS field, and says why', () => {
+    const r = normalizeCode('7208 51 20', 'hs');
+    expect(r).toEqual({ ok: false, error: expect.stringMatching(/at most 6 digits.*CN or HTS/) });
+  });
+
+  const rules = [
+    { regulation: 'cbam', code_system: 'cn', cn_prefix: '72085120' },
+    { regulation: 'eudr', code_system: 'hs', cn_prefix: '4011' },
+    { regulation: 'ppwr', code_system: 'hts', cn_prefix: '4819100040' },
+    { regulation: 'made_up', code_system: 'cn', cn_prefix: '72' },
+  ];
+
+  it('matches a long prefix only in its own system', () => {
+    expect(regulationsForProduct({ cn_code: '72085120' }, rules)).toEqual(['cbam']);
+    // Same digits, but an HTS code: the 8-digit CN rule does not apply.
+    expect(regulationsForProduct({ hts_code: '7208512000' }, rules)).toEqual([]);
+    expect(regulationsForProduct({ hts_code: '4819100040' }, rules)).toEqual(['ppwr']);
+    expect(regulationsForProduct({ cn_code: '48191000' }, rules)).toEqual([]);
+  });
+
+  it('matches a prefix of six digits or fewer against any code, since they share those digits', () => {
+    expect(regulationsForProduct({ hs_code: '401110' }, rules)).toEqual(['eudr']);
+    expect(regulationsForProduct({ cn_code: '40111000' }, rules)).toEqual(['eudr']);
+    expect(regulationsForProduct({ hts_code: '4011101010' }, rules)).toEqual(['eudr']);
+  });
+
+  it('treats a rule saved before code systems as a CN rule', () => {
+    expect(regulationsForProduct({ cn_code: '72085120' }, [{ regulation: 'cbam', cn_prefix: '72085120' }])).toEqual(['cbam']);
+  });
+
+  it('ignores unknown regulations and products with no code', () => {
+    expect(regulationsForProduct({ cn_code: '72010000' }, rules)).toEqual([]);
+    expect(regulationsForProduct({}, rules)).toEqual([]);
   });
 });
 
@@ -120,5 +144,40 @@ describe('catalogue', () => {
     expect(normalizeFieldValue(f('ppwr.packaging_material'), 'Glass')).toEqual({ ok: true, value: 'glass' });
     expect(normalizeFieldValue(f('ppwr.recycled_content'), '120').ok).toBe(false);
     expect(normalizeFieldValue(f('eudr.geolocation'), '  ').ok).toBe(false);
+  });
+});
+
+describe('surveys and pasted codes', () => {
+  it('splits a pasted list without breaking codes that contain spaces', () => {
+    expect(splitCodes('7208 51 20\n7209, 7210;  7211 \n\n')).toEqual(['7208 51 20', '7209', '7210', '7211']);
+  });
+
+  it('builds a survey with one mapped question per field', () => {
+    const cbam = fieldSurveyPlan('cbam');
+    expect(cbam.survey).toMatchObject({ regulation_type: 'cbam', custom_regulation_name: null, status: 'active' });
+    expect(cbam.questions.map((q) => q.maps_to)).toEqual(fieldsFor('cbam').map((f) => f.key));
+    expect(new Set(cbam.questions.map((q) => q.question_key)).size).toBe(cbam.questions.length);
+    for (const q of cbam.questions) if (q.question_type === 'select') expect(q.options.length).toBeGreaterThan(0);
+    // No built-in PPWR survey type, so it is a custom survey named for it.
+    expect(fieldSurveyPlan('ppwr').survey).toMatchObject({ regulation_type: 'custom', custom_regulation_name: 'PPWR' });
+  });
+
+  it('reports the fields a survey fills, built-in or custom', () => {
+    expect(surveyFieldKeys({ id: 's1', regulation_type: 'eudr' }, [])).toContain('eudr.geolocation');
+    expect(surveyFieldKeys({ id: 's1', regulation_type: 'eudr' }, [
+      { survey_id: 's1', maps_to: 'ppwr.reusable' }, { survey_id: 's1', maps_to: null }, { survey_id: 's2', maps_to: 'eudr.commodity' },
+    ])).toEqual(['ppwr.reusable']);
+    expect(surveyFieldKeys({ id: 's1', regulation_type: 'general_carbon' }, [])).toEqual([]);
+  });
+});
+
+describe('matchingRules', () => {
+  it('returns the rules that put a product in scope', () => {
+    const rules = [
+      { id: 'a', regulation: 'cbam', code_system: 'cn', cn_prefix: '7208' },
+      { id: 'b', regulation: 'cbam', code_system: 'hts', cn_prefix: '7208510030' },
+      { id: 'c', regulation: 'eudr', code_system: 'cn', cn_prefix: '4011' },
+    ];
+    expect(matchingRules({ cn_code: '72085120', hts_code: '7208510030' }, rules).map((r) => r.id)).toEqual(['a', 'b']);
   });
 });

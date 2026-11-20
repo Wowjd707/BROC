@@ -598,15 +598,18 @@ what has been collected about it.
 
 - `products` — the part / SKU / packaging list: `part_number` (unique per
   organization, case-insensitive, so an ERP export can be re-imported to
-  refresh it), `description`, `cn_code` (2–10 digits, separators stripped),
+  refresh it), `description`, `hs_code` (up to 6 digits), `cn_code` (EU, up
+  to 10) and `hts_code` (US, up to 10) *(migration 044)*, separators stripped,
   `supplier_id`, `country_of_origin`, `business_unit_id`, `site_id` and
   `owner_user_id` (who collects its data). Audited. Editors write; only an
   admin deletes.
 - `compliance_scope_rules` — which CN codes each regulation covers, as the
-  organization's own list: `regulation`, `cn_prefix`, and a **required**
+  organization's own list: `regulation`, `code_system` (`hs`, `cn` or `hts`;
+  migration 044, existing rules are CN), `cn_prefix` (the prefix in that
+  system; named before HS and HTS existed), and a **required**
   `source_citation` and `last_verified` date. BROC ships none, on the same
   principle as the regulatory tracker. A product is in scope when its CN code
-  starts with a listed prefix (`regulationsForCn` in `lib/compliance-core.ts`).
+  matches a listed prefix (`matchingRules` in `lib/compliance-core.ts`).
   Admin-only, audited.
 - `product_compliance_values` — every value collected for a product, one row
   per value: `field_key` (a key from `lib/compliance-catalog.ts`, e.g.
@@ -666,6 +669,7 @@ built-in survey question sets. Adding one is a code change with a test.
 | 041 | `supplier_surveys.reminder_interval_days` (null = automatic reminders off) and `reminder_max`, read by the daily job `/api/cron/survey-reminders`; `supplier_surveys.launched_at`, stamped by trigger the first time a survey becomes active and never moved, backfilled from the first invitation for surveys already out |
 | 042 | `evidence_checks`, append-only: each Data Review document check with the entry as it was, the model's reading of the document and the platform's comparison |
 | 043 | `products`, `compliance_scope_rules` (cited CN-code scope per regulation), `product_compliance_values` (append-only, with validity and source), `supplier_survey_invitation_products`, and `supplier_survey_questions.maps_to` — the foundation for CBAM, EUDR and PPWR data collection |
+| 044 | `products.hs_code` (≤ 6 digits) and `products.hts_code` (≤ 10) alongside `cn_code`; `compliance_scope_rules.code_system` (`hs` / `cn` / `hts`, existing rules CN), with uniqueness per code system |
 
 ## Applying migrations
 
