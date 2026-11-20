@@ -51,6 +51,8 @@ export interface SurveyQuestionRow {
   help_text: string | null;
   show_when_question_key: string | null;
   show_when_answer: string | null;
+  /** Compliance field this question fills (migration 043). */
+  maps_to?: string | null;
 }
 
 /**
@@ -73,6 +75,7 @@ export interface QuestionDraft {
   help_text: string;
   show_when_question_key: string | null;
   show_when_answer: string | null;
+  maps_to: string | null;
 }
 
 export const EMPTY_QUESTION_DRAFT: QuestionDraft = {
@@ -84,6 +87,7 @@ export const EMPTY_QUESTION_DRAFT: QuestionDraft = {
   help_text: '',
   show_when_question_key: null,
   show_when_answer: null,
+  maps_to: null,
 };
 
 // ─── Options parsing ─────────────────────────────────────────────────────────

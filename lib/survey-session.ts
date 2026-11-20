@@ -3,6 +3,8 @@ import { createServiceClient } from './supabase/server';
 import { resolveQuestionSet, type SurveyQuestionRow } from './survey-questions-core';
 import { isWellFormedToken } from './survey-answers-core';
 import type { SurveyQuestion } from './regulations';
+import { BUILT_IN_QUESTION_MAP } from './compliance-catalog';
+import type { MappedQuestion } from './compliance-core';
 
 /**
  * Resolve a supplier survey token to what it is allowed to touch.
@@ -18,6 +20,9 @@ export interface SurveySession {
   invitationStatus: string;
   surveyStatus: string;
   questions: SurveyQuestion[];
+  organizationId: string;
+  /** Questions whose answers fill a product compliance field. */
+  mapped: MappedQuestion[];
 }
 
 export type SurveySessionResult =
@@ -40,7 +45,7 @@ export async function resolveSurveySession(token: unknown): Promise<SurveySessio
 
   const { data: survey } = await supabase
     .from('supplier_surveys')
-    .select('id, title, regulation_type, notes, status')
+    .select('id, title, regulation_type, notes, status, organization_id')
     .eq('id', invitation.survey_id)
     .maybeSingle();
   if (!survey) return { ok: false, status: 404, error: 'Invalid survey link.' };
@@ -55,6 +60,21 @@ export async function resolveSurveySession(token: unknown): Promise<SurveySessio
 
   const questionSet = resolveQuestionSet(survey, (customRows ?? []) as SurveyQuestionRow[]);
 
+  // Read separately and allowed to fail: a database without migration 043 has
+  // no maps_to column, and that must not stop a supplier answering the survey.
+  let mapped: MappedQuestion[] = [];
+  if ((customRows ?? []).length > 0) {
+    const { data: mapRows } = await supabase
+      .from('supplier_survey_questions')
+      .select('question_key, maps_to, unit')
+      .eq('survey_id', survey.id)
+      .not('maps_to', 'is', null);
+    mapped = (mapRows ?? []).map((r) => ({ questionId: r.question_key, mapsTo: r.maps_to as string, unit: r.unit }));
+  } else {
+    const builtIn = BUILT_IN_QUESTION_MAP[survey.regulation_type] ?? {};
+    mapped = Object.entries(builtIn).map(([questionId, mapsTo]) => ({ questionId, mapsTo }));
+  }
+
   return {
     ok: true,
     data: {
@@ -62,6 +82,8 @@ export async function resolveSurveySession(token: unknown): Promise<SurveySessio
       invitationStatus: invitation.status,
       surveyStatus: survey.status,
       questions: questionSet?.questions ?? [],
+      organizationId: survey.organization_id,
+      mapped,
     },
   };
 }

@@ -276,6 +276,34 @@ attacker-influenced input that becomes part of an object key, so it is treated
 as such. See [`DATA_MODEL.md`](DATA_MODEL.md) for the immutability and audit
 guarantees.
 
+## Products and regulation data
+
+CBAM, EUDR, PPWR and EPR differ less than they look: each needs a list of
+products with customs codes, the supplier's answers about each one, how long
+those answers stay good, and proof. `/products` is that shared foundation.
+
+- **Scope** is data: the organization's cited CN-code prefixes per regulation
+  (`compliance_scope_rules`). A product is in scope when its code starts with
+  one. Nothing is inferred and nothing ships from memory.
+- **Fields** are code: `lib/compliance-catalog.ts` defines each regulation's
+  fields with type, unit and validity. The product drawer, the template, the
+  importer and the question builder all read the same catalogue.
+- **Values** arrive four ways — supplier survey, import, by hand, (later) a
+  read document — and every one is a new row in `product_compliance_values`
+  with its source and validity. Status per field is computed, never stored:
+  missing, current, expiring within 30 days, expired.
+- **Collecting from suppliers:** "Ask supplier" on the Products page creates an
+  invitation on an active survey, links it to the chosen products
+  (`supplier_survey_invitation_products`) and emails it through the normal
+  sender. On submission, answers to questions mapped to a field
+  (`supplier_survey_questions.maps_to`, or `BUILT_IN_QUESTION_MAP` for the CBAM
+  and EUDR sets) are written onto every linked product. The raw answers stay in
+  the survey response either way.
+
+What each regulation then produces from this (CBAM threshold tracking and the
+annual declaration, the EUDR filing pack, PPWR technical documentation, EPR
+tonnage by country) builds on these tables.
+
 ## Supplier surveys (public, unauthenticated flow)
 
 Suppliers are external and have no account. The flow:

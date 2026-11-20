@@ -367,6 +367,45 @@ export type Database = {
           },
         ]
       }
+      compliance_scope_rules: {
+        Row: {
+          cn_prefix: string
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string | null
+          last_verified: string
+          organization_id: string
+          regulation: string
+          source_citation: string
+          source_url: string | null
+        }
+        Insert: {
+          cn_prefix: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          last_verified: string
+          organization_id?: string
+          regulation: string
+          source_citation: string
+          source_url?: string | null
+        }
+        Update: {
+          cn_prefix?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string | null
+          last_verified?: string
+          organization_id?: string
+          regulation?: string
+          source_citation?: string
+          source_url?: string | null
+        }
+        Relationships: []
+      }
       custom_emission_factors: {
         Row: {
           co2e_factor: number
@@ -1251,6 +1290,105 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      product_compliance_values: {
+        Row: {
+          field_key: string
+          id: string
+          note: string | null
+          organization_id: string
+          product_id: string
+          recorded_at: string
+          recorded_by: string | null
+          source: string
+          source_invitation_id: string | null
+          unit: string | null
+          valid_from: string
+          valid_to: string | null
+          value: string
+        }
+        Insert: {
+          field_key: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          product_id: string
+          recorded_at?: string
+          recorded_by?: string | null
+          source: string
+          source_invitation_id?: string | null
+          unit?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value: string
+        }
+        Update: {
+          field_key?: string
+          id?: string
+          note?: string | null
+          organization_id?: string
+          product_id?: string
+          recorded_at?: string
+          recorded_by?: string | null
+          source?: string
+          source_invitation_id?: string | null
+          unit?: string | null
+          valid_from?: string
+          valid_to?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          business_unit_id: string | null
+          cn_code: string | null
+          country_of_origin: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          notes: string | null
+          organization_id: string
+          owner_user_id: string | null
+          part_number: string
+          site_id: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_unit_id?: string | null
+          cn_code?: string | null
+          country_of_origin?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          organization_id?: string
+          owner_user_id?: string | null
+          part_number: string
+          site_id?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_unit_id?: string | null
+          cn_code?: string | null
+          country_of_origin?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          notes?: string | null
+          organization_id?: string
+          owner_user_id?: string | null
+          part_number?: string
+          site_id?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       projects: {
         Row: {
@@ -2577,6 +2715,24 @@ export type Database = {
           },
         ]
       }
+      supplier_survey_invitation_products: {
+        Row: {
+          invitation_id: string
+          organization_id: string
+          product_id: string
+        }
+        Insert: {
+          invitation_id: string
+          organization_id?: string
+          product_id: string
+        }
+        Update: {
+          invitation_id?: string
+          organization_id?: string
+          product_id?: string
+        }
+        Relationships: []
+      }
       supplier_survey_invitations: {
         Row: {
           email: string | null
@@ -2675,6 +2831,7 @@ export type Database = {
           help_text: string | null
           id: string
           label: string
+          maps_to: string | null
           options: Json
           position: number
           question_key: string
@@ -2691,6 +2848,7 @@ export type Database = {
           help_text?: string | null
           id?: string
           label: string
+          maps_to?: string | null
           options?: Json
           position?: number
           question_key: string
@@ -2707,6 +2865,7 @@ export type Database = {
           help_text?: string | null
           id?: string
           label?: string
+          maps_to?: string | null
           options?: Json
           position?: number
           question_key?: string

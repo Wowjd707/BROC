@@ -205,6 +205,11 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
   cited EU default value (none ship: they are set per period and, for
   electricity, per country).
 
+- **Products & parts** — the part list every product regulation hangs off,
+  imported from an ERP or broker export. Your own cited CN-code scope rules say
+  which of CBAM, EUDR and PPWR apply; supplier answers, imports and manual
+  entries fill each regulation's fields, with source, history and expiry.
+
 **Optional AI layer**
 
 - Off by default and provider-agnostic — Claude, OpenAI, or any OpenAI-shaped
@@ -268,7 +273,7 @@ cp .env.example .env.local
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–042**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–043**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -413,7 +418,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–042, numbered SQL (source of truth for schema)
+  migrations/            001–043, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight

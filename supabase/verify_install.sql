@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–042). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–043). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -389,6 +389,14 @@ checks(sort_key, check_name, status, detail) AS (
     ) AND COALESCE((SELECT relrowsecurity FROM pg_class WHERE oid = to_regclass('public.evidence_checks')), FALSE)
       THEN 'PASS' ELSE 'FAIL' END,
     'Data Review → Document checks saves each check here. Re-apply 042 if this fails.'
+
+  UNION ALL SELECT 37, 'Products — parts, regulation scope rules and collected compliance values',
+    CASE WHEN (SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+               AND table_name IN ('products','compliance_scope_rules','product_compliance_values','supplier_survey_invitation_products')) = 4
+      AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public'
+                  AND table_name='supplier_survey_questions' AND column_name='maps_to')
+      THEN 'PASS' ELSE 'FAIL' END,
+    'The Products page, survey answers saved to products, and the question builder''s "Saves to" read these. Re-apply 043 if this fails.'
 )
 
 SELECT

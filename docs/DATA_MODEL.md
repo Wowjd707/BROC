@@ -590,6 +590,40 @@ permissive `USING (true)` invitation-read and response-insert policies were
 **removed in migration 006** — they leaked every org's invitation tokens to any
 authenticated user. The token is the only capability a supplier needs.
 
+### Products and compliance data *(migration 043)*
+
+The shared foundation for product regulations (CBAM, EUDR, PPWR, and EPR to
+come): what you buy or place on the market, which regulations cover it, and
+what has been collected about it.
+
+- `products` — the part / SKU / packaging list: `part_number` (unique per
+  organization, case-insensitive, so an ERP export can be re-imported to
+  refresh it), `description`, `cn_code` (2–10 digits, separators stripped),
+  `supplier_id`, `country_of_origin`, `business_unit_id`, `site_id` and
+  `owner_user_id` (who collects its data). Audited. Editors write; only an
+  admin deletes.
+- `compliance_scope_rules` — which CN codes each regulation covers, as the
+  organization's own list: `regulation`, `cn_prefix`, and a **required**
+  `source_citation` and `last_verified` date. BROC ships none, on the same
+  principle as the regulatory tracker. A product is in scope when its CN code
+  starts with a listed prefix (`regulationsForCn` in `lib/compliance-core.ts`).
+  Admin-only, audited.
+- `product_compliance_values` — every value collected for a product, one row
+  per value: `field_key` (a key from `lib/compliance-catalog.ts`, e.g.
+  `eudr.geolocation`), `value` (text; normalized by field type), `unit`,
+  `valid_from` / `valid_to` (null = does not expire), `source` (`survey`,
+  `import`, `manual`, `document`), `source_invitation_id` and `note`.
+  **Append-only:** the current value is the latest row, and earlier rows are
+  the history. No UPDATE or DELETE policy, privileges revoked.
+- `supplier_survey_invitation_products` — which products an invitation asks
+  about. When the supplier submits, each answer to a question with
+  `supplier_survey_questions.maps_to` set is recorded on every linked product
+  (built-in CBAM and EUDR questions map through `BUILT_IN_QUESTION_MAP`).
+
+The **fields** themselves — label, type, unit, options, how many months an
+answer stays current — are code, in `lib/compliance-catalog.ts`, like the
+built-in survey question sets. Adding one is a code change with a test.
+
 ### CBAM
 - `cbam_supplier_factors` — supplier-declared emission factors that override EU
   defaults, with `factor_source` provenance.
@@ -631,6 +665,7 @@ authenticated user. The token is the only capability a supplier needs.
 | 040 | `projects.pipeline_inclusion_status` defaults to `forecasted`; on first application, pre-existing `excluded` projects (not ideas or cancelled) move to `forecasted`, because the pipeline ignored the flag until the same release; SBTi goals' stored targets restated linearly from their years |
 | 041 | `supplier_surveys.reminder_interval_days` (null = automatic reminders off) and `reminder_max`, read by the daily job `/api/cron/survey-reminders`; `supplier_surveys.launched_at`, stamped by trigger the first time a survey becomes active and never moved, backfilled from the first invitation for surveys already out |
 | 042 | `evidence_checks`, append-only: each Data Review document check with the entry as it was, the model's reading of the document and the platform's comparison |
+| 043 | `products`, `compliance_scope_rules` (cited CN-code scope per regulation), `product_compliance_values` (append-only, with validity and source), `supplier_survey_invitation_products`, and `supplier_survey_questions.maps_to` — the foundation for CBAM, EUDR and PPWR data collection |
 
 ## Applying migrations
 

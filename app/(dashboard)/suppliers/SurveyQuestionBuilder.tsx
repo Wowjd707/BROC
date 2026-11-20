@@ -45,6 +45,7 @@ import {
   type QuestionOption,
 } from '@/lib/survey-questions-core';
 import { REGULATION_LABELS, type QuestionType } from '@/lib/regulations';
+import { COMPLIANCE_FIELDS, FIELD_BY_KEY, REGULATIONS, questionTypeFor } from '@/lib/compliance-catalog';
 
 interface Props {
   surveyId: string;
@@ -58,7 +59,7 @@ interface Props {
 }
 
 const SELECT_COLUMNS =
-  'id, survey_id, position, question_key, label, question_type, required, unit, options, help_text, show_when_question_key, show_when_answer';
+  'id, survey_id, position, question_key, label, question_type, required, unit, options, help_text, show_when_question_key, show_when_answer, maps_to';
 
 export function SurveyQuestionBuilder({
   surveyId,
@@ -153,6 +154,7 @@ export function SurveyQuestionBuilder({
       help_text: row.help_text ?? '',
       show_when_question_key: row.show_when_question_key,
       show_when_answer: row.show_when_answer,
+      maps_to: row.maps_to ?? null,
     });
     setEditingId(row.id);
     setFormError('');
@@ -186,6 +188,7 @@ export function SurveyQuestionBuilder({
       help_text: draft.help_text.trim() || null,
       show_when_question_key: draft.show_when_question_key || null,
       show_when_answer: draft.show_when_question_key ? (draft.show_when_answer ?? '') : null,
+      maps_to: draft.maps_to,
     };
 
     if (editingId) {
@@ -316,6 +319,11 @@ export function SurveyQuestionBuilder({
                             {QUESTION_TYPE_LABELS[row.question_type as QuestionType] ?? row.question_type}
                           </Badge>
                           {row.unit && <span className="text-xs text-gray-400">in {row.unit}</span>}
+                          {row.maps_to && (
+                            <span className="text-xs text-emerald-700">
+                              saves to {FIELD_BY_KEY.get(row.maps_to)?.label ?? row.maps_to}
+                            </span>
+                          )}
                           {row.show_when_question_key && (
                             <span className="text-xs text-gray-500">
                               shown when <code className="text-gray-600">{row.show_when_question_key}</code>
@@ -426,6 +434,38 @@ export function SurveyQuestionBuilder({
                   onChange={(e) => setField('unit', e.target.value)}
                 />
               </div>
+            </div>
+
+            <div>
+              <Label>Saves to product field (optional)</Label>
+              <Select
+                value={draft.maps_to ?? 'none'}
+                onValueChange={(v) => {
+                  if (v === 'none') { setField('maps_to', null); return; }
+                  const field = FIELD_BY_KEY.get(v);
+                  setDraft(prev => ({
+                    ...prev,
+                    maps_to: v,
+                    // Ask for the kind of answer the field stores.
+                    question_type: field ? questionTypeFor(field) : prev.question_type,
+                    unit: field?.unit ?? prev.unit,
+                    options: field?.options ? field.options.map(o => ({ ...o })) : prev.options,
+                  }));
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Not saved to a product</SelectItem>
+                  {COMPLIANCE_FIELDS.map(f => (
+                    <SelectItem key={f.key} value={f.key}>
+                      {REGULATIONS[f.regulation].label} · {f.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-400 mt-1">
+                When this survey is sent from the Products page, the answer is recorded on each product it asks about.
+              </p>
             </div>
 
             {draft.question_type === 'select' && (

@@ -13,7 +13,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Target,
   Wrench, Handshake, ClipboardList, Settings,
   ChevronDown, LogOut, Menu, Network, BookCheck, Grid2x2,
-  Users, Scale, Gauge, UserPen,
+  Users, Scale, Gauge, UserPen, Package,
 } from 'lucide-react';
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
@@ -52,6 +52,7 @@ const NAV_SECTIONS: {
       { href: '/social',    label: 'Social & Governance',  icon: Users },
       { href: '/metrics',   label: 'Business Metrics',     icon: Gauge },
       { href: '/suppliers', label: 'Suppliers',            icon: Handshake },
+      { href: '/products',  label: 'Products & parts',     icon: Package },
     ],
   },
   {
