@@ -211,6 +211,12 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
   which of CBAM, EUDR and PPWR apply; supplier answers, imports and manual
   entries fill each regulation's fields, with source, history and expiry.
 
+- **EUDR due diligence** — plots of land with their geolocation (pasted, or
+  taken from supplier answers), risk assessments against the Article 10(2)
+  criteria, and a record per shipment that shows what its statement still
+  lacks. When nothing is missing it produces the TRACES-ready GeoJSON file and
+  statement; once the TRACES reference is recorded, the shipment is locked.
+
 **Optional AI layer**
 
 - Off by default and provider-agnostic — Claude, OpenAI, or any OpenAI-shaped
@@ -274,7 +280,7 @@ cp .env.example .env.local
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–044**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–045**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -419,7 +425,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–044, numbered SQL (source of truth for schema)
+  migrations/            001–045, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight

@@ -802,6 +802,219 @@ export type Database = {
           },
         ]
       }
+      eudr_plots: {
+        Row: {
+          area_ha: number | null
+          commodity: string | null
+          country_code: string
+          created_at: string
+          geometry: Json
+          id: string
+          is_active: boolean
+          name: string
+          notes: string | null
+          organization_id: string
+          producer_name: string | null
+          source: string
+          source_value_id: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          area_ha?: number | null
+          commodity?: string | null
+          country_code: string
+          created_at?: string
+          geometry: Json
+          id?: string
+          is_active?: boolean
+          name: string
+          notes?: string | null
+          organization_id?: string
+          producer_name?: string | null
+          source?: string
+          source_value_id?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          area_ha?: number | null
+          commodity?: string | null
+          country_code?: string
+          created_at?: string
+          geometry?: Json
+          id?: string
+          is_active?: boolean
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          producer_name?: string | null
+          source?: string
+          source_value_id?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      eudr_risk_assessments: {
+        Row: {
+          assessed_at: string
+          assessed_by: string | null
+          commodity: string
+          conclusion: string
+          country_code: string
+          country_risk: string
+          country_risk_basis: string
+          created_at: string
+          criteria: Json
+          id: string
+          mitigation: string | null
+          notes: string | null
+          organization_id: string
+          review_by: string | null
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          assessed_at?: string
+          assessed_by?: string | null
+          commodity: string
+          conclusion: string
+          country_code: string
+          country_risk: string
+          country_risk_basis: string
+          created_at?: string
+          criteria?: Json
+          id?: string
+          mitigation?: string | null
+          notes?: string | null
+          organization_id?: string
+          review_by?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assessed_at?: string
+          assessed_by?: string | null
+          commodity?: string
+          conclusion?: string
+          country_code?: string
+          country_risk?: string
+          country_risk_basis?: string
+          created_at?: string
+          criteria?: Json
+          id?: string
+          mitigation?: string | null
+          notes?: string | null
+          organization_id?: string
+          review_by?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      eudr_shipment_plots: {
+        Row: {
+          id: string
+          organization_id: string
+          plot_id: string
+          shipment_id: string
+        }
+        Insert: {
+          id?: string
+          organization_id?: string
+          plot_id: string
+          shipment_id: string
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          plot_id?: string
+          shipment_id?: string
+        }
+        Relationships: []
+      }
+      eudr_shipments: {
+        Row: {
+          activity: string
+          countries_of_production: string[]
+          created_at: string
+          dds_reference: string | null
+          dds_verification_number: string | null
+          description: string | null
+          filed_at: string | null
+          filed_by: string | null
+          hs_code: string | null
+          id: string
+          net_mass_kg: number | null
+          notes: string | null
+          organization_id: string
+          product_id: string
+          production_from: string | null
+          production_to: string | null
+          reference: string
+          risk_assessment_id: string | null
+          status: string
+          supplementary_quantity: number | null
+          supplementary_unit: string | null
+          supplier_id: string | null
+          updated_at: string
+          upstream_references: Json
+        }
+        Insert: {
+          activity?: string
+          countries_of_production?: string[]
+          created_at?: string
+          dds_reference?: string | null
+          dds_verification_number?: string | null
+          description?: string | null
+          filed_at?: string | null
+          filed_by?: string | null
+          hs_code?: string | null
+          id?: string
+          net_mass_kg?: number | null
+          notes?: string | null
+          organization_id?: string
+          product_id: string
+          production_from?: string | null
+          production_to?: string | null
+          reference: string
+          risk_assessment_id?: string | null
+          status?: string
+          supplementary_quantity?: number | null
+          supplementary_unit?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+          upstream_references?: Json
+        }
+        Update: {
+          activity?: string
+          countries_of_production?: string[]
+          created_at?: string
+          dds_reference?: string | null
+          dds_verification_number?: string | null
+          description?: string | null
+          filed_at?: string | null
+          filed_by?: string | null
+          hs_code?: string | null
+          id?: string
+          net_mass_kg?: number | null
+          notes?: string | null
+          organization_id?: string
+          product_id?: string
+          production_from?: string | null
+          production_to?: string | null
+          reference?: string
+          risk_assessment_id?: string | null
+          status?: string
+          supplementary_quantity?: number | null
+          supplementary_unit?: string | null
+          supplier_id?: string | null
+          updated_at?: string
+          upstream_references?: Json
+        }
+        Relationships: []
+      }
       evidence_checks: {
         Row: {
           attachment_id: string | null
@@ -1240,11 +1453,13 @@ export type Database = {
           base_year: number | null
           consolidation_approach: string
           created_at: string
+          eori_number: string | null
           hq_country: string
           id: string
           industry: string | null
           intensity_metric_key: string | null
           is_active: boolean
+          legal_address: string | null
           name: string
           reporting_year_start: number
           sandbox_of: string | null
@@ -1256,11 +1471,13 @@ export type Database = {
           base_year?: number | null
           consolidation_approach?: string
           created_at?: string
+          eori_number?: string | null
           hq_country?: string
           id?: string
           industry?: string | null
           intensity_metric_key?: string | null
           is_active?: boolean
+          legal_address?: string | null
           name: string
           reporting_year_start?: number
           sandbox_of?: string | null
@@ -1272,11 +1489,13 @@ export type Database = {
           base_year?: number | null
           consolidation_approach?: string
           created_at?: string
+          eori_number?: string | null
           hq_country?: string
           id?: string
           industry?: string | null
           intensity_metric_key?: string | null
           is_active?: boolean
+          legal_address?: string | null
           name?: string
           reporting_year_start?: number
           sandbox_of?: string | null

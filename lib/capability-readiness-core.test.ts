@@ -19,6 +19,7 @@ function facts(o: Partial<ReadinessFacts> = {}): ReadinessFacts {
     ehsFamiliesWithData: [],
     evidence: { withEvidence: 0, total: 0 },
     goalsByMetric: {},
+    eudr: { plots: 0, shipments: 0, filed: 0, assessments: 0 },
     ...o,
   };
 }
@@ -180,6 +181,14 @@ describe('summariseRegime', () => {
       cap({ capability_key: 'required_gap', probe: 'suppliers_registered', necessity: 'required', display_order: 20 }),
     ], facts());
     expect(summariseRegime(evaluated).biggestGap?.capability_key).toBe('required_gap');
+  });
+
+  it('reads EUDR due diligence from plots, assessments and filed shipments', () => {
+    const e = (o: Partial<ReadinessFacts['eudr']>) => facts({ eudr: { plots: 0, shipments: 0, filed: 0, assessments: 0, ...o } });
+    expect(evaluateProbe('eudr_due_diligence', null, e({})).status).toBe('absent');
+    expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3 })).detail).toBe('3 plots, 0 risk assessments; no shipments yet.');
+    expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3, assessments: 1, shipments: 2, filed: 1 })).status).toBe('partial');
+    expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3, assessments: 1, shipments: 2, filed: 2 })).status).toBe('ready');
   });
 
   it('never offers not_built or no_action as the next action', () => {

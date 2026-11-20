@@ -307,7 +307,32 @@ those answers stay good, and proof. `/products` is that shared foundation.
 
 What each regulation then produces from this (CBAM threshold tracking and the
 annual declaration, the EUDR filing pack, PPWR technical documentation, EPR
-tonnage by country) builds on these tables.
+tonnage by country) builds on these tables. EUDR is built; see the next section.
+
+## EUDR due diligence
+
+`/eudr` builds on the product foundation for Regulation (EU) 2023/1115. Three
+records, one page:
+
+- **Plots** (`eudr_plots`) — pasted as GeoJSON or "latitude, longitude" lines,
+  or imported from suppliers' `eudr.geolocation` answers. `lib/eudr-core.ts`
+  validates every geometry against what TRACES accepts (RFC 7946, WGS 84,
+  longitude first; points and polygons only; closed rings, no holes, no
+  self-crossing) and computes the area, so a point over 4 ha is flagged as
+  needing a polygon (Art. 2(28)).
+- **Risk assessments** (`eudr_risk_assessments`) — per country and commodity,
+  optionally per supplier: the country's classification with its cited basis,
+  a finding against each Art. 10(2) criterion, a conclusion, and mitigation
+  (Art. 11) where the risk is not negligible.
+- **Shipments** (`eudr_shipments`) — the facts a due diligence statement
+  carries (Annex II). `shipmentIssues` lists what blocks filing; it is
+  computed on read and never stored. When nothing blocks, the drawer downloads
+  the GeoJSON (`buildGeoJson`) and the statement fields (`statementFields`).
+  Filing happens in TRACES; recording the reference number it returns sets the
+  shipment to `filed`, and a trigger then freezes what was declared.
+
+BROC does not submit to TRACES and does not decide that a risk is negligible.
+Both stay with the operator, deliberately.
 
 ## Supplier surveys (public, unauthenticated flow)
 

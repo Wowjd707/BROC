@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–044** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–045** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–044 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–044 are verified in PGlite only (RLS, append-only behaviour, re-apply); checks 36–38 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
+| 008–045 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–045 are verified in PGlite only (RLS, append-only behaviour, re-apply, and for 045 the freeze on filed statements); checks 36–39 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -39,6 +39,8 @@ half-applied script must be able to finish on a second run.
 | Site profile | Water withdrawal source, wastewater discharge, natural-gas and utility identification, headcount and operating hours, backup generation — plus a per-site equipment inventory (chillers, boilers, compressors, production machines) with refrigerant charge for fugitive screening |
 | Goals & projects | Targets across GHG, water and waste; SBTi 1.5 °C pathways (GHG only); pipeline pro-rated by in-service date and denominated per metric; gap-to-target on all three |
 | Suppliers | Registry, tokenized public surveys (CBAM/EUDR/PFAS/general), CBAM calculator |
+| Products and Parts | Part list with HS, CN and HTS codes, cited scope rules per regulation, append-only compliance values from surveys, imports and manual entry |
+| EUDR | `/eudr`: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
 | Disclosures | TCFD, IFRS S2, ESRS E1, GRI 305, CSRD (all ESRS standards), CA SB 253, CA SB 261 — with metric auto-answering and assembled HTML report export |
 | Materiality | Double materiality per ESRS 1 §3, matrix, stakeholder divergence, and topic → disclosure-requirement gating (a CSRD report demands only the topics assessed as material, and names every omission) |
 | Org structure | Business-unit hierarchy (cycle-guarded), many-to-many site groups, URL-driven scope filtering across all modules |
@@ -52,7 +54,7 @@ half-applied script must be able to finish on a second run.
 | Intensity denominators | Org-defined business metrics — revenue, FTE, production volume, units shipped, room-nights, whatever the business runs on — used as the divisor for reported intensity. Falls back to floor area when nothing is chosen. |
 | Data quality | measured / calculated / estimated on Scope 1, 2 and EHS entries, with the estimation method required by CHECK when estimated. Lets a close proceed on a gap-filled site without the estimate becoming indistinguishable from a meter read, and lets the estimated share be disclosed — weighted by emissions, not row count. |
 | Roles | admin, editor, viewer and auditor. Auditor is read-only by construction: every SELECT policy gates on organization alone and every write policy allowlists admin and editor. |
-| Regulatory capability map | Each tracked regime linked to the platform features that serve it, with readiness computed from the organization's own data — site coverage, questionnaires sent and answered, Scope 3 categories, framework coverage, evidence, targets. Deterministic and model-free, so it works with the AI layer off. Records absence as a first-class answer: `not_built` (EUDR plot geolocation, EU Taxonomy, land-sector accounting) and `no_action` (the stayed SEC rule). Surfaces the single biggest gap per regime with a link into the feature that closes it. |
+| Regulatory capability map | Each tracked regime linked to the platform features that serve it, with readiness computed from the organization's own data — site coverage, questionnaires sent and answered, Scope 3 categories, framework coverage, evidence, targets. Deterministic and model-free, so it works with the AI layer off. Records absence as a first-class answer: `not_built` (EU Taxonomy, land-sector accounting; EUDR geolocation until 045 built it) and `no_action` (the stayed SEC rule). Surfaces the single biggest gap per regime with a link into the feature that closes it. |
 | Regulatory watch | Change detection over every tracked source: fetch, normalise, hash, compare. Detection is deterministic and model-free, so a run with no changes makes no model calls at all. Where a source genuinely changed, an optional AI task summarises **the diff it was handed** — never what a regulation now requires. Output is a review queue; nothing reaches `regulatory_items` without a human approving it, and the reviewer sets the confidence themselves while `last_verified` is stamped on approval. A patch may not carry `confidence`, `last_verified`, `sources` or `code` — enforced by CHECK constraint, not convention. Failed fetches are a first-class outcome and never read as "unchanged". |
 | Quality | Strict TypeScript; `npm test` runs the unit suites and RLS tests that apply every migration to an in-process Postgres. |
 
@@ -97,6 +99,13 @@ half-applied script must be able to finish on a second run.
   OpenAI adapter sends `max_completion_tokens` for provider `openai` and
   `max_tokens` for `openai-compatible`; a mismatch with your endpoint surfaces
   the provider's own error verbatim.
+- **EUDR filing is manual, by design for now.** BROC prepares the GeoJSON file
+  and the statement fields; someone enters them in TRACES and records the
+  reference it returns. There is no TRACES API integration.
+- **Scope rules have no effective date.** The EUDR scope changes in Delegated
+  Regulation (EU) 2026/2102 that apply from 30 December 2027 are not in the
+  starter pack; add them when they apply, or the pack will need an effective
+  date column first.
 
 ---
 
@@ -273,6 +282,15 @@ changed, change it knowingly and update this list.
   `releaseEvidence()` (`components/evidence/release-evidence.ts`) after the
   delete succeeds, as Projects, Suppliers and Emission Factors do; otherwise the
   documents stay in storage, unlinked, and `verify_install.sql` check 30 fails.
+- **A filed EUDR statement is frozen.** Once a shipment has a TRACES
+  reference, a trigger refuses changes to what it declared and to its plots,
+  and refuses deleting it; only withdrawal and notes remain. The record of what
+  was declared must match TRACES. Do not add an "unlock" path; a correction is
+  a withdrawal in TRACES and a new shipment here.
+- **BROC never concludes that an EUDR risk is negligible, and never files.**
+  The readiness check reports gaps; the conclusion of a risk assessment is a
+  person's, and so is the declaration made in TRACES on submission. Country
+  risk carries the cited classification it relies on (required by the schema).
 - **Evidence uploads are scoped to the active organization**, via
   `evidenceOrganizationId()` in `lib/evidence.ts`. Never pass
   `users.organization_id` to the evidence panel.

@@ -51,6 +51,8 @@ If you can do it as data, do it as data.
 | **What your AI assistant knows** | `.claude/skills/` | Code |
 | Which HS, CN or HTS codes each regulation covers | Products and Parts → Which regulations apply (`compliance_scope_rules`); cited starter packs in `supabase/content/scope-packs/` | Data |
 | **Product compliance fields** (what CBAM, EUDR, PPWR collect per product, and how long an answer stays valid) | `lib/compliance-catalog.ts` | Code |
+| EUDR country risk and its basis | Each risk assessment records the classification and the act it comes from; nothing is preloaded | Data |
+| **EUDR readiness rules and the GeoJSON format** (what blocks a statement, what TRACES accepts) | `lib/eudr-core.ts`, with tests | Code |
 
 ---
 

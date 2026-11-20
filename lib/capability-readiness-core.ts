@@ -80,6 +80,8 @@ export interface ReadinessFacts {
   evidence: { withEvidence: number; total: number };
   /** Active goals per metric family. */
   goalsByMetric: Record<string, number>;
+  /** EUDR due diligence records (migration 045). Withdrawn shipments are not counted. */
+  eudr: { plots: number; shipments: number; filed: number; assessments: number };
 }
 
 export interface ProbeResult {
@@ -142,6 +144,17 @@ export function evaluateProbe(
         status: n === 0 ? 'absent' : 'ready',
         detail: n === 0 ? 'No calculations saved.' : `${plural(n, 'calculation', 'calculations')} saved.`,
       };
+    }
+
+    case 'eudr_due_diligence': {
+      const { plots, shipments, filed, assessments } = facts.eudr;
+      const counts = `${plural(plots, 'plot', 'plots')}, ${plural(assessments, 'risk assessment', 'risk assessments')}`;
+      if (shipments === 0) {
+        return plots + assessments === 0
+          ? { status: 'absent', detail: 'No plots, risk assessments or shipments recorded.' }
+          : { status: 'partial', detail: `${counts}; no shipments yet.` };
+      }
+      return { status: ratio(filed, shipments), detail: `${filed} of ${shipments} shipments filed; ${counts}.` };
     }
 
     case 'supplier_survey': {

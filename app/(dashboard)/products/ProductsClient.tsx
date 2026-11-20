@@ -25,6 +25,7 @@ import {
   CODE_SYSTEMS, CODE_SYSTEM_KEYS, splitCodes, type CodeSystem, type ValueRow, type FieldStatus,
 } from '@/lib/compliance-core';
 import { PRODUCT_IMPORT_HEADERS } from '@/lib/product-import-core';
+import { DrawerShell } from '@/components/ui/drawer-shell';
 
 interface Product {
   id: string;
@@ -406,24 +407,6 @@ export function ProductsClient({
         skippedLabel="Updated"
       />
     </div>
-  );
-}
-
-// ─── Drawer layout ───────────────────────────────────────────────────────────
-
-/** Header, scrolling body and footer, matching the data-entry drawers. */
-function DrawerShell({ title, subtitle, children, footer }: {
-  title: string; subtitle?: React.ReactNode; children: React.ReactNode; footer?: React.ReactNode;
-}) {
-  return (
-    <>
-      <DialogHeader className="px-6 py-5 border-b border-gray-100 pr-12">
-        <DialogTitle>{title}</DialogTitle>
-        {subtitle && <DialogDescription>{subtitle}</DialogDescription>}
-      </DialogHeader>
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">{children}</div>
-      {footer && <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">{footer}</div>}
-    </>
   );
 }
 

@@ -40,6 +40,9 @@ export async function getReadinessFacts(
     { data: evidenceRows },
     { count: entryCount },
     { data: goals },
+    { count: eudrPlots },
+    { count: eudrAssessments },
+    { data: eudrShipments },
   ] = await Promise.all([
     supabase.from('sites').select('id').eq('is_active', true),
     // List queries are paged (lib/fetch-all.ts): coverage measured on the first
@@ -71,6 +74,10 @@ export async function getReadinessFacts(
     supabase.from('emission_entries').select('id', { count: 'exact', head: true })
       .gte('entry_date', startDate).lte('entry_date', endDate).is('deleted_at', null),
     supabase.from('goals').select('metric, status').eq('status', 'active'),
+    supabase.from('eudr_plots').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    supabase.from('eudr_risk_assessments').select('id', { count: 'exact', head: true }),
+    fetchAll((from, to) => supabase.from('eudr_shipments').select('status').neq('status', 'withdrawn')
+      .order('id').range(from, to)),
   ]);
 
   // ── Site coverage ──────────────────────────────────────────────────────────
@@ -152,5 +159,11 @@ export async function getReadinessFacts(
       total: entryCount ?? 0,
     },
     goalsByMetric,
+    eudr: {
+      plots: eudrPlots ?? 0,
+      assessments: eudrAssessments ?? 0,
+      shipments: (eudrShipments ?? []).length,
+      filed: (eudrShipments ?? []).filter((s) => s.status === 'filed').length,
+    },
   };
 }

@@ -18,7 +18,7 @@ describe('verify_install.sql', () => {
       const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'verify_install.sql'), 'utf8');
       const results = await h.db.exec(sql);
       const rows = results[results.length - 1].rows as { result: string; check_name: string }[];
-      expect(rows.length).toBeGreaterThanOrEqual(38);
+      expect(rows.length).toBeGreaterThanOrEqual(39);
       expect(rows.filter((r) => r.result !== 'PASS').map((r) => r.check_name)).toEqual([]);
     } finally {
       await h.db.close();

@@ -628,6 +628,42 @@ The **fields** themselves — label, type, unit, options, how many months an
 answer stays current — are code, in `lib/compliance-catalog.ts`, like the
 built-in survey question sets. Adding one is a code change with a test.
 
+### EUDR due diligence *(migration 045)*
+
+The record behind each due diligence statement filed in TRACES under
+Regulation (EU) 2023/1115. BROC prepares the statement and the GeoJSON plot
+file; the statement itself is submitted, and its declaration made, in TRACES.
+
+- `organizations.legal_address` and `organizations.eori_number` — the
+  operator's details, Annex II point 1. The EORI number is required for goods
+  entering or leaving the market.
+- `eudr_plots` — each plot of land: `name`, `producer_name`, `country_code`
+  (ISO 3166 alpha-2), `commodity`, `geometry` (GeoJSON Point, MultiPoint,
+  Polygon or MultiPolygon, WGS 84, longitude first, validated by
+  `lib/eudr-core.ts` before it is written), `area_ha`, `source` (`manual`,
+  `import`, `survey`) and `source_value_id` when it came from a supplier's
+  `eudr.geolocation` answer. Audited.
+- `eudr_risk_assessments` — per supplier (or any supplier), country and
+  commodity: `country_risk` (`low` / `standard` / `high`) with a required
+  `country_risk_basis` (the classification relied on), `criteria` (the
+  Art. 10(2) criteria (a)–(n), each a finding and a concern flag),
+  `conclusion` (`negligible` / `not_negligible`), `mitigation` (Art. 11),
+  `assessed_at`, `review_by`. BROC never sets the conclusion; a person does.
+- `eudr_shipments` — one placing on the market, export or domestic production:
+  `product_id`, `supplier_id`, `reference`, `activity`, `hs_code`,
+  `description`, `net_mass_kg`, `supplementary_quantity` / `_unit`,
+  `countries_of_production`, `production_from` / `_to`,
+  `upstream_references` (reference and verification numbers relied on),
+  `status` (`draft` / `filed` / `withdrawn`), `dds_reference`,
+  `dds_verification_number`, `filed_at`, `filed_by`. **Once filed, the
+  declared facts and linked plots are frozen by trigger**: only the move to
+  `withdrawn` and the notes may change, and a filed or withdrawn shipment
+  cannot be deleted (except when its whole organization is).
+- `eudr_shipment_plots` — which plots a shipment came from.
+
+Readiness — what a statement still lacks — is computed, not stored:
+`shipmentIssues` in `lib/eudr-core.ts`.
+
 ### CBAM
 - `cbam_supplier_factors` — supplier-declared emission factors that override EU
   defaults, with `factor_source` provenance.
@@ -671,6 +707,7 @@ built-in survey question sets. Adding one is a code change with a test.
 | 042 | `evidence_checks`, append-only: each Data Review document check with the entry as it was, the model's reading of the document and the platform's comparison |
 | 043 | `products`, `compliance_scope_rules` (cited CN-code scope per regulation), `product_compliance_values` (append-only, with validity and source), `supplier_survey_invitation_products`, and `supplier_survey_questions.maps_to` — the foundation for CBAM, EUDR and PPWR data collection |
 | 044 | `products.hs_code` (≤ 6 digits) and `products.hts_code` (≤ 10) alongside `cn_code`; `compliance_scope_rules.code_system` (`hs` / `cn` / `hts`, existing rules CN), with uniqueness per code system |
+| 045 | EUDR due diligence: `eudr_plots`, `eudr_risk_assessments`, `eudr_shipments` (frozen once filed), `eudr_shipment_plots`; `organizations.legal_address` and `eori_number` |
 
 ## Applying migrations
 
