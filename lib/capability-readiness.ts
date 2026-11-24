@@ -7,6 +7,7 @@ import { resolveMetric } from './disclosure-metrics-core';
 import { isSocialGovernanceFamily } from './social-metrics-core';
 import type { ReadinessFacts } from './capability-readiness-core';
 import { summariseYear, type ImportRow } from './cbam-core';
+import { componentIssues, isEuMemberState, type ComponentRow } from './ppwr-core';
 
 /**
  * Gather every fact the capability probes need, in one pass.
@@ -47,6 +48,11 @@ export async function getReadinessFacts(
     { count: eudrAssessments },
     { data: eudrShipments },
     { data: cbamImports },
+    { data: packaging },
+    { data: packagingPlaced },
+    { data: eprRegs },
+    { count: activeParts },
+    { data: pfasDecls },
   ] = await Promise.all([
     supabase.from('sites').select('id').eq('is_active', true),
     // List queries are paged (lib/fetch-all.ts): coverage measured on the first
@@ -87,7 +93,17 @@ export async function getReadinessFacts(
       .select('id, product_id, supplier_id, import_date, customs_reference, cn_code, quantity, unit, country_of_origin, installation_name, installation_id, direct_emissions, indirect_emissions, emissions_basis, emissions_source, verification_report, carbon_price_paid_eur, carbon_price_evidence, notes')
       .gte('import_date', `${cbamYear}-01-01`).lte('import_date', `${cbamYear}-12-31`)
       .order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('packaging_components')
+      .select('id, product_id, name, material, material_detail, function, weight_g, units_per_packaging, reusable, food_contact, recycled_content_pct, supplier_id, heavy_metals_evidence, pfas_evidence, conformity_reference, notes, is_active')
+      .eq('is_active', true).order('id').range(from, to)),
+    fetchAll((from, to) => supabase.from('packaging_placements').select('jurisdiction').eq('year', cbamYear).order('id').range(from, to)),
+    supabase.from('epr_registrations').select('jurisdiction'),
+    supabase.from('products').select('id', { count: 'exact', head: true }).eq('is_active', true),
+    fetchAll((from, to) => supabase.from('pfas_declarations').select('status, products!inner(is_active)')
+      .eq('products.is_active', true).order('id').range(from, to)),
   ]);
+  const placedIn = new Set((packagingPlaced ?? []).map((p) => p.jurisdiction));
+  const registered = new Set((eprRegs ?? []).map((r) => r.jurisdiction));
   const cbam = summariseYear((cbamImports ?? []) as unknown as ImportRow[], cbamYear);
 
   // ── Site coverage ──────────────────────────────────────────────────────────
@@ -174,6 +190,17 @@ export async function getReadinessFacts(
       assessments: eudrAssessments ?? 0,
       shipments: (eudrShipments ?? []).length,
       filed: (eudrShipments ?? []).filter((s) => s.status === 'filed').length,
+    },
+    ppwr: {
+      components: (packaging ?? []).length,
+      gaps: ((packaging ?? []) as unknown as ComponentRow[]).filter((c) => componentIssues(c).length > 0).length,
+      placements: (packagingPlaced ?? []).length,
+      unregistered: [...placedIn].filter((j) => isEuMemberState(j) && !registered.has(j)).length,
+    },
+    pfas: {
+      parts: activeParts ?? 0,
+      declared: (pfasDecls ?? []).filter((d) => d.status !== 'unknown').length,
+      containing: (pfasDecls ?? []).filter((d) => d.status === 'intentionally_added').length,
     },
     cbam: { year: cbamYear, imports: cbam.imports, incomplete: cbam.incomplete, tonnes: cbam.thresholdMass, threshold: cbam.threshold.tonnes },
   };

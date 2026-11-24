@@ -84,6 +84,10 @@ export interface ReadinessFacts {
   eudr: { plots: number; shipments: number; filed: number; assessments: number };
   /** CBAM imports in the current calendar year (migration 046). */
   cbam: { year: number; imports: number; incomplete: number; tonnes: number; threshold: number };
+  /** PPWR packaging (migration 047): pieces, those with gaps, and EU countries with packaging but no registration. */
+  ppwr: { components: number; gaps: number; placements: number; unregistered: number };
+  /** PFAS declarations (migration 048): active parts, and those with an evidenced answer. */
+  pfas: { parts: number; declared: number; containing: number };
 }
 
 export interface ProbeResult {
@@ -146,6 +150,24 @@ export function evaluateProbe(
         status: n === 0 ? 'absent' : 'ready',
         detail: n === 0 ? 'No calculations saved.' : `${plural(n, 'calculation', 'calculations')} saved.`,
       };
+    }
+
+    case 'pfas_declarations': {
+      const { parts, declared, containing } = facts.pfas;
+      if (declared === 0) return { status: 'absent', detail: parts ? `None of ${plural(parts, 'part', 'parts')} has a PFAS declaration.` : 'No parts recorded.' };
+      return {
+        status: ratio(declared, parts),
+        detail: `${declared} of ${plural(parts, 'part', 'parts')} declared; ${containing} with intentionally added PFAS.`,
+      };
+    }
+
+    case 'ppwr_packaging': {
+      const { components, gaps, placements, unregistered } = facts.ppwr;
+      if (components === 0) return { status: 'absent', detail: 'No packaging recorded on any part.' };
+      const parts = [`${plural(components, 'packaging piece', 'packaging pieces')}, ${gaps} missing evidence`];
+      if (placements === 0) parts.push('no quantities by country yet');
+      if (unregistered) parts.push(`${plural(unregistered, 'EU country', 'EU countries')} without a registration`);
+      return { status: gaps === 0 && placements > 0 && unregistered === 0 ? 'ready' : 'partial', detail: `${parts.join('; ')}.` };
     }
 
     case 'cbam_declaration': {

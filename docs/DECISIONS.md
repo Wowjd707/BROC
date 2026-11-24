@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–046** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–048** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–046 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–046 are verified in PGlite only (RLS, append-only behaviour, re-apply, for 045 the freeze on filed statements and for 046 the lock on a declared year); checks 36–40 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
+| 008–048 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–048 are verified in PGlite only (RLS, append-only behaviour, re-apply, for 045 the freeze on filed statements, for 046 the lock on a declared year, for 047 the lock on a reported country-year and for 048 the rule that an answer needs evidence); checks 36–42 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -42,6 +42,8 @@ half-applied script must be able to finish on a second run.
 | Products and Parts | Part list with HS, CN and HTS codes, cited scope rules per regulation, append-only compliance values from surveys, imports and manual entry |
 | CBAM | `/products/cbam` and each part's CBAM tab: imports with sourced embedded emissions, the 50 t threshold, the annual declaration pack; a submitted year's imports locked (046) |
 | EUDR | `/products/eudr` and each part's EUDR tab: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
+| PPWR and packaging EPR | `/products/ppwr` and each part's PPWR tab: packaging by material and function with evidence for the substance limits, units placed per country or US state, tonnes by material, registrations, the report pack per country and year; a submitted country-year's placements locked (047) |
+| PFAS | `/products/pfas` and a PFAS tab on every part: an evidenced declaration (contains, none, unknown) with substances, the Minnesota, Maine and TSCA rules each part touches with sources and a verified date, and a substance inventory (048) |
 | Disclosures | TCFD, IFRS S2, ESRS E1, GRI 305, CSRD (all ESRS standards), CA SB 253, CA SB 261 — with metric auto-answering and assembled HTML report export |
 | Materiality | Double materiality per ESRS 1 §3, matrix, stakeholder divergence, and topic → disclosure-requirement gating (a CSRD report demands only the topics assessed as material, and names every omission) |
 | Org structure | Business-unit hierarchy (cycle-guarded), many-to-many site groups, URL-driven scope filtering across all modules |
@@ -111,6 +113,18 @@ half-applied script must be able to finish on a second run.
   Regulation (EU) 2026/2102 that apply from 30 December 2027 are not in the
   starter pack; add them when they apply, or the pack will need an effective
   date column first.
+- **PPWR tonnes use today's component specs.** Changing a part's packaging
+  changes the tonnes for every period not yet reported (a submitted
+  country-year's placements are locked, its specs are not). Record a new
+  component and retire the old one if history matters.
+- **PFAS rules are code with a verified date.** The Minnesota, Maine and TSCA
+  rules in `lib/pfas-core.ts` were checked on the date they carry; these laws
+  change often (Minnesota's reporting deadline and exclusions changed in 2026).
+  Re-verify before relying on them. The EU universal PFAS restriction is still
+  a proposal and is not modelled.
+- **PPWR covers the EU rules only for EU Member States.** US state packaging
+  EPR uses the same records, but each state's scheme rules, fees and reporting
+  formats are not built in.
 
 ---
 
@@ -159,7 +173,7 @@ changed, change it knowingly and update this list.
   Edge Function, `send-survey-email`; it moved into the app in November 2026 so
   there is one less thing to deploy.)
 - **Product regulation scope is the organization's cited data.** Which HS, CN
-  or HTS codes CBAM, EUDR or PPWR cover is entered with a citation and a last-verified
+  or HTS codes CBAM or EUDR cover is entered with a citation and a last-verified
   date (`compliance_scope_rules`). Nothing loads by default; cited packs
   researched from the legal text live in `supabase/content/scope-packs/` for an
   admin to run and then own. Do not add a scope list from memory — the Annex lists change, and a part that silently
@@ -304,6 +318,15 @@ changed, change it knowingly and update this list.
   The readiness check reports gaps; the conclusion of a risk assessment is a
   person's, and so is the declaration made in TRACES on submission. Country
   risk carries the cited classification it relies on (required by the schema).
+- **A part is in PPWR because it has packaging, not because of its code.**
+  Packaging regulation reaches any packaged product, so there is no scope rule
+  for it; "Track packaging" on a part starts it.
+- **PFAS "unknown" is never PFAS-free.** A part with no declaration, or one
+  answered unknown, is counted and shown as unknown. Any other answer needs a
+  basis, evidence and a date (enforced by the schema).
+- **PFAS rules are cited, dated and flagged, not decided.** Each regime carries
+  its sources and the date it was last verified; the app says which rules a
+  part touches for the user to check, never that it complies.
 - **Evidence uploads are scoped to the active organization**, via
   `evidenceOrganizationId()` in `lib/evidence.ts`. Never pass
   `users.organization_id` to the evidence panel.

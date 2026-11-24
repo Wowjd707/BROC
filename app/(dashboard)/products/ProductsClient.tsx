@@ -32,9 +32,15 @@ import { CbamPartPanel } from './cbam/PartPanel';
 import { ShipmentView, ShipmentForm, issuesFor } from './eudr/ShipmentDrawer';
 import { AssessmentForm, type AssessmentPreset } from './eudr/RiskTab';
 import { ImportForm } from './cbam/ImportForm';
+import { PpwrPartPanel } from './ppwr/PartPanel';
+import { ComponentForm } from './ppwr/ComponentForm';
+import { componentIssues, jurisdictionReport, jurisdictionsFor } from '@/lib/ppwr-core';
+import { PfasPartPanel } from './pfas/PartPanel';
+import { DeclarationForm } from './pfas/DeclarationForm';
+import { declarationIssues as pfasIssues, regimesFor, STATUS_LABEL as PFAS_STATUS } from '@/lib/pfas-core';
 import { isReady } from '@/lib/eudr-core';
 import { importIssues, yearOf } from '@/lib/cbam-core';
-import type { EudrData, CbamData } from './load';
+import type { EudrData, CbamData, PpwrData, PfasData } from './load';
 import type { Org } from './eudr/types';
 
 interface Product {
@@ -78,6 +84,8 @@ interface Props {
   org: Org | null;
   eudr: EudrData;
   cbam: CbamData;
+  ppwr: PpwrData;
+  pfas: PfasData;
   role: string;
   loadError: string | null;
 }
@@ -90,7 +98,9 @@ type DrawerState =
   | { kind: 'product'; id: string | null; mode: 'view' | 'edit'; tab?: string }
   | { kind: 'shipment'; id: string | null; mode: 'view' | 'edit'; productId: string }
   | { kind: 'assessment'; id: string | null; preset?: AssessmentPreset; productId: string }
-  | { kind: 'import'; id: string | null; productId: string };
+  | { kind: 'import'; id: string | null; productId: string }
+  | { kind: 'component'; id: string | null; productId: string }
+  | { kind: 'pfas'; productId: string };
 
 const STATUS_BADGE: Record<FieldStatus, { label: string; variant: 'default' | 'warning' | 'destructive' | 'secondary' }> = {
   current: { label: 'Current', variant: 'default' },
@@ -125,7 +135,7 @@ function draftOf(p: Product): Draft {
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function ProductsClient({
-  products, suppliers, businessUnits, sites, users, rules, values, surveys, org, eudr, cbam, role, loadError,
+  products, suppliers, businessUnits, sites, users, rules, values, surveys, org, eudr, cbam, ppwr, pfas, role, loadError,
 }: Props) {
   const router = useRouter();
   const canEdit = role === 'admin' || role === 'editor';
@@ -146,9 +156,21 @@ export function ProductsClient({
   const now = today();
   const supplierName = useMemo(() => new Map(suppliers.map((s) => [s.id, s.name])), [suppliers]);
   const current = useMemo(() => currentValues(values), [values]);
+  // PPWR applies to a part's packaging whatever its customs code, so a part is
+  // in it once packaging or quantities are recorded (or a scope rule says so),
+  // or once someone starts tracking its packaging from the Overview tab.
+  const [startedPpwr, setStartedPpwr] = useState<Set<string>>(new Set());
+  const ppwrParts = useMemo(() => new Set([
+    ...ppwr.components.filter((c) => c.is_active).map((c) => c.product_id),
+    ...ppwr.placements.map((pl) => pl.product_id),
+    ...startedPpwr,
+  ]), [ppwr, startedPpwr]);
   const regsByProduct = useMemo(
-    () => new Map(products.map((p) => [p.id, regulationsForProduct(p, rules)])),
-    [products, rules],
+    () => new Map(products.map((p) => {
+      const regs = regulationsForProduct(p, rules);
+      return [p.id, ppwrParts.has(p.id) && !regs.includes('ppwr') ? [...regs, 'ppwr' as RegulationKey] : regs];
+    })),
+    [products, rules, ppwrParts],
   );
 
   const rows = useMemo(() => {
@@ -193,7 +215,28 @@ export function ProductsClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [eudr, products, rules, org]);
   const thisYear = new Date().getFullYear();
-  const regsWithRules = REGULATION_KEYS.filter((k) => rules.some((r) => r.regulation === k));
+  const regsWithRules = REGULATION_KEYS.filter((k) => rules.some((r) => r.regulation === k) || (k === 'ppwr' && ppwrParts.size > 0));
+  const ppwrSummary = useMemo(() => {
+    const places = jurisdictionsFor(ppwr.placements, thisYear);
+    const reps = places.map((j) => jurisdictionReport(ppwr.placements, ppwr.components, j, thisYear));
+    return {
+      tonnes: reps.reduce((a, r) => a + r.total, 0),
+      places: places.length,
+      missingRegistrations: reps.filter((r) => r.eu && !ppwr.registrations.some((g) => g.jurisdiction === r.jurisdiction)).length,
+      toCheck: ppwr.components.filter((c) => c.is_active && componentIssues(c).length > 0).length,
+    };
+  }, [ppwr, thisYear]);
+  const pfasDecl = useMemo(() => new Map(pfas.declarations.map((d) => [d.product_id, d])), [pfas]);
+  const pfasSummary = useMemo(() => {
+    const act = products.filter((p) => p.is_active);
+    const decl = act.map((p) => ({ p, d: pfasDecl.get(p.id) ?? null }));
+    return {
+      parts: act.length,
+      declared: decl.filter((x) => x.d && x.d.status !== 'unknown').length,
+      containing: decl.filter((x) => x.d?.status === 'intentionally_added').length,
+      flagged: decl.filter((x) => regimesFor(x.d, x.p).length > 0).length,
+    };
+  }, [products, pfasDecl]);
   const partsInScope = useMemo(() => Object.fromEntries(REGULATION_KEYS.map((k) => [k,
     products.filter((p) => p.is_active && (regsByProduct.get(p.id) ?? []).includes(k)).map((p) => p.id)])) as Record<RegulationKey, string[]>,
   [products, regsByProduct]);
@@ -212,6 +255,14 @@ export function ProductsClient({
       const missing = mine.filter((i) => importIssues(i).some((x) => x.level === 'block')).length;
       if (missing) out.push(`CBAM: emissions missing on ${missing} import${missing === 1 ? '' : 's'}`);
       else if (mine.length) out.push(`CBAM: ${mine.length} import${mine.length === 1 ? '' : 's'} in ${thisYear}`);
+    }
+    const pd = pfasDecl.get(productId);
+    if (pd?.status === 'intentionally_added') out.push('PFAS: contains intentionally added PFAS');
+    if (regs.includes('ppwr')) {
+      const mine = ppwr.components.filter((c) => c.product_id === productId && c.is_active);
+      const blocked = mine.filter((c) => componentIssues(c).some((x) => x.level === 'block')).length;
+      if (mine.length === 0) out.push('PPWR: no packaging recorded');
+      else if (blocked) out.push(`PPWR: PFAS evidence missing on ${blocked} piece${blocked === 1 ? '' : 's'}`);
     }
     return out;
   }
@@ -271,6 +322,8 @@ export function ProductsClient({
           filed: eudr.shipments.filter((sh) => sh.status === 'filed').length,
         }}
         cbamImports={cbam.imports}
+        ppwr={ppwrSummary}
+        pfas={pfasSummary}
         onFilter={(reg) => { setTab('products'); setRegFilter(reg); }}
       />
 
@@ -422,7 +475,7 @@ export function ProductsClient({
           <DrawerContent className="max-w-2xl">
             {drawer.kind !== 'product' && drawerProduct && (
               <button className="flex items-center gap-1 px-4 sm:px-6 pt-3 -mb-2 text-xs text-gray-500 hover:text-gray-900 self-start"
-                onClick={() => backTo(drawer.kind === 'import' ? 'cbam' : 'eudr')}>
+                onClick={() => backTo(drawer.kind === 'import' ? 'cbam' : drawer.kind === 'component' ? 'ppwr' : drawer.kind === 'pfas' ? 'pfas' : 'eudr')}>
                 <ChevronLeft size={14} />{drawerProduct.part_number}
               </button>
             )}
@@ -453,6 +506,11 @@ export function ProductsClient({
                 tab={drawer.tab ?? 'overview'}
                 onTab={(t) => setDrawer({ ...drawer, tab: t })}
                 workLines={workLine(drawerProduct.id, regsByProduct.get(drawerProduct.id) ?? [])}
+                pfasLine={(() => {
+                  const d = pfasDecl.get(drawerProduct.id) ?? null;
+                  const n = pfasIssues(d, pfas.substances, now).length;
+                  return `${PFAS_STATUS[d?.status ?? 'unknown']}${d && d.status !== 'unknown' && n ? ` · ${n} to check` : ''}`;
+                })()}
                 renderPanel={(reg) => reg === 'eudr' ? (
                   <EudrPartPanel product={drawerProduct} org={org} products={products} rules={rules} suppliers={suppliers}
                     plots={eudr.plots} assessments={eudr.assessments} shipments={eudr.shipments} links={eudr.links} values={values}
@@ -462,7 +520,15 @@ export function ProductsClient({
                 ) : reg === 'cbam' ? (
                   <CbamPartPanel productId={drawerProduct.id} imports={cbam.imports} canEdit={canEdit}
                     onOpenImport={(id) => setDrawer({ kind: 'import', id, productId: drawerProduct.id })} />
+                ) : reg === 'pfas' ? (
+                  <PfasPartPanel product={drawerProduct} declaration={pfasDecl.get(drawerProduct.id) ?? null} substances={pfas.substances}
+                    canEdit={canEdit} onEdit={() => setDrawer({ kind: 'pfas', productId: drawerProduct.id })} />
+                ) : reg === 'ppwr' ? (
+                  <PpwrPartPanel productId={drawerProduct.id} components={ppwr.components} placements={ppwr.placements}
+                    reports={ppwr.reports} canEdit={canEdit} isAdmin={isAdmin} onChanged={() => router.refresh()}
+                    onOpenComponent={(id) => setDrawer({ kind: 'component', id, productId: drawerProduct.id })} />
                 ) : null}
+                onStartPpwr={canEdit ? () => { setStartedPpwr((x) => new Set([...x, drawerProduct.id])); setDrawer({ ...drawer, tab: 'ppwr' }); } : undefined}
                 onEdit={() => setDrawer({ kind: 'product', id: drawerProduct.id, mode: 'edit' })}
                 onAsk={() => setAsking([drawerProduct.id])}
                 onGoToScope={() => { setDrawer(null); setTab('scope'); }}
@@ -486,6 +552,15 @@ export function ProductsClient({
               <AssessmentForm assessment={drawer.id ? eudr.assessments.find((a) => a.id === drawer.id) ?? null : null}
                 preset={drawer.preset} suppliers={suppliers} canEdit={canEdit}
                 onClose={() => backTo('eudr')} onSaved={() => { backTo('eudr'); router.refresh(); }} />
+            ) : drawer.kind === 'pfas' && drawerProduct ? (
+              <DeclarationForm declaration={pfasDecl.get(drawerProduct.id) ?? null} substances={pfas.substances}
+                productId={drawerProduct.id} supplierId={drawerProduct.supplier_id} suppliers={suppliers} canEdit={canEdit}
+                onCancel={() => backTo('pfas')} onSaved={() => { backTo('pfas'); router.refresh(); }} />
+            ) : drawer.kind === 'component' && drawerProduct ? (
+              <ComponentForm component={drawer.id ? ppwr.components.find((c) => c.id === drawer.id) ?? null : null}
+                productId={drawerProduct.id} supplierId={drawerProduct.supplier_id} suppliers={suppliers} values={values}
+                canEdit={canEdit} isAdmin={isAdmin}
+                onCancel={() => backTo('ppwr')} onSaved={() => { backTo('ppwr'); router.refresh(); }} />
             ) : drawer.kind === 'import' && drawerProduct ? (
               <ImportForm imp={drawer.id ? cbam.imports.find((i) => i.id === drawer.id) ?? null : null}
                 productId={drawerProduct.id} products={products} rules={rules} suppliers={suppliers} values={values}
@@ -663,7 +738,7 @@ function ProductForm({
 
 function ProductDetail({
   product, regulations, matched, hasRules, values, current, supplierName, owner, bu, site, canEdit,
-  tab, onTab, workLines, renderPanel, onEdit, onAsk, onGoToScope, onChanged,
+  tab, onTab, workLines, pfasLine, renderPanel, onStartPpwr, onEdit, onAsk, onGoToScope, onChanged,
 }: {
   product: Product;
   regulations: RegulationKey[];
@@ -681,7 +756,11 @@ function ProductDetail({
   onTab: (tab: string) => void;
   workLines: string[];
   /** The regulation's own work for this part (EUDR shipments, CBAM imports), where it has any. */
-  renderPanel: (reg: RegulationKey) => React.ReactNode;
+  /** The part's PFAS answer, for the Overview. PFAS has a tab on every part. */
+  pfasLine: string;
+  renderPanel: (tab: RegulationKey | 'pfas') => React.ReactNode;
+  /** Packaging can be tracked for any part, whatever its codes. */
+  onStartPpwr?: () => void;
   onEdit: () => void;
   onAsk: () => void;
   onGoToScope: () => void;
@@ -714,15 +793,14 @@ function ProductDetail({
         {regulations.length > 0 && product.is_active && <Button onClick={onAsk}><Send size={13} className="mr-1.5" />Ask supplier</Button>}
       </> : undefined}
     >
-      <Tabs value={regulations.includes(tab as RegulationKey) ? tab : 'overview'} onValueChange={onTab}>
-        {regulations.length > 0 && (
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            {regulations.map((reg) => <TabsTrigger key={reg} value={reg}>{REGULATIONS[reg].label}</TabsTrigger>)}
-          </TabsList>
-        )}
+      <Tabs value={regulations.includes(tab as RegulationKey) || tab === 'pfas' ? tab : 'overview'} onValueChange={onTab}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          {regulations.map((reg) => <TabsTrigger key={reg} value={reg}>{REGULATIONS[reg].label}</TabsTrigger>)}
+          <TabsTrigger value="pfas">PFAS</TabsTrigger>
+        </TabsList>
 
-        <TabsContent value="overview" className={regulations.length > 0 ? 'mt-4 space-y-5' : 'space-y-5'}>
+        <TabsContent value="overview" className="mt-4 space-y-5">
           <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
             <div className="col-span-2">
               <dt className="text-xs text-gray-500">Customs codes</dt>
@@ -770,8 +848,7 @@ function ProductDetail({
           )}
 
 
-          {regulations.length > 0 && (
-            <div>
+          <div>
               <p className="text-sm font-semibold text-gray-900 mb-2">Regulations</p>
               <ul className="divide-y divide-gray-50 border border-gray-100 rounded-lg">
                 {regulations.map((reg) => {
@@ -791,7 +868,21 @@ function ProductDetail({
                     </li>
                   );
                 })}
+                <li>
+                  <button className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50" onClick={() => onTab('pfas')}>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-sm text-gray-900">PFAS <span className="text-gray-500">· applies to any part</span></span>
+                      <span className="block text-xs text-gray-500">{pfasLine}</span>
+                    </span>
+                    <ArrowRight size={14} className="text-gray-300" />
+                  </button>
+                </li>
               </ul>
+            </div>
+          {!regulations.includes('ppwr') && onStartPpwr && product.is_active && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-dashed border-gray-200 px-3 py-2.5">
+              <p className="text-sm text-gray-600">Packaging (PPWR) applies whatever the part&rsquo;s codes. Record its packaging to include it in EPR reports.</p>
+              <Button size="sm" variant="outline" onClick={onStartPpwr}>Track packaging</Button>
             </div>
           )}
         </TabsContent>
@@ -800,7 +891,7 @@ function ProductDetail({
           <TabsContent key={reg} value={reg} className="mt-4 space-y-6">
             {DASHBOARDS[reg] && (
               <p className="text-xs text-gray-500 -mt-2">
-                Work across all parts, such as {reg === 'cbam' ? 'the threshold and the annual declaration' : 'statements waiting to be filed'}, is on the{' '}
+                Work across all parts, such as {({ cbam: 'the threshold and the annual declaration', eudr: 'statements waiting to be filed', ppwr: 'tonnes by country, registrations and reports' } as Record<string, string>)[reg] ?? 'filings'}, is on the{' '}
                 <Link href={DASHBOARDS[reg]!} className="text-emerald-700 hover:underline">{REGULATIONS[reg].label} dashboard</Link>.
               </p>
             )}
@@ -808,8 +899,10 @@ function ProductDetail({
             <div>
               <p className="text-sm font-semibold text-gray-900">Supplier data</p>
               <p className="text-xs text-gray-500 mb-2">
-                In scope by {matched.filter((r) => r.regulation === reg).map((r) =>
-                  `${CODE_SYSTEMS[r.code_system as CodeSystem]?.label ?? 'CN'} ${r.cn_prefix} (${r.source_citation})`).join('; ')}
+                {matched.some((r) => r.regulation === reg)
+                  ? `In scope by ${matched.filter((r) => r.regulation === reg).map((r) =>
+                    `${CODE_SYSTEMS[r.code_system as CodeSystem]?.label ?? 'CN'} ${r.cn_prefix} (${r.source_citation})`).join('; ')}`
+                  : 'Included because this part has packaging recorded; no scope rule is needed for packaging.'}
               </p>
               <div className="divide-y divide-gray-50 border border-gray-100 rounded-lg">
                 {fieldsFor(reg).map((f) => {
@@ -856,6 +949,14 @@ function ProductDetail({
             </div>
           </TabsContent>
         ))}
+
+        <TabsContent value="pfas" className="mt-4 space-y-6">
+          <p className="text-xs text-gray-500 -mt-2">
+            Parts across all your products, and which PFAS rules each one touches, are on the{' '}
+            <Link href="/products/pfas" className="text-emerald-700 hover:underline">PFAS dashboard</Link>.
+          </p>
+          {renderPanel('pfas')}
+        </TabsContent>
       </Tabs>
 
       <RecordValueDialog field={recording} productId={product.id} onClose={() => setRecording(null)} onSaved={() => { setRecording(null); onChanged(); }} />

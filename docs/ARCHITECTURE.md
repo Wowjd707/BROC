@@ -279,7 +279,7 @@ guarantees.
 ## Products and regulation data
 
 CBAM, EUDR, PPWR and EPR differ less than they look: each needs a list of
-products with customs codes, the supplier's answers about each one, how long
+products (with customs codes, where the regulation is scoped by them), the supplier's answers about each one, how long
 those answers stay good, and proof. `/products` is that shared foundation.
 
 - **Scope** is data: the organization's cited code prefixes per regulation
@@ -306,15 +306,19 @@ those answers stay good, and proof. `/products` is that shared foundation.
   the survey response either way.
 
 What each regulation then produces from this (CBAM threshold tracking and the
-annual declaration, the EUDR filing pack, PPWR technical documentation, EPR
-tonnage by country) builds on these tables. EUDR is built; see the next section.
+annual declaration, the EUDR filing pack, packaging tonnage by country, the
+PFAS inventory) builds on these tables; each has a section below.
 
 ## Regulations inside Products and Parts
 
 Product regulations are worked **part first**. Open a part and its panel has an
 Overview tab plus one tab per regulation that covers it; each tab holds that
-regulation's work for the part (EUDR shipments, plots and risk; CBAM imports)
-above the supplier data it needs. A shipment, assessment or import opened from
+regulation's work for the part (EUDR shipments, plots and risk; CBAM imports;
+PPWR packaging and placements) above the supplier data it needs. A part is in
+EUDR or CBAM when a cited scope rule matches its code, and in PPWR when it has
+packaging recorded, whatever its code ("Track packaging" on the Overview
+starts that). Every part also has a **PFAS** tab, last, because PFAS rules
+reach any article. A shipment, assessment or import opened from
 a tab replaces the panel's content with a link back to the part, so the user
 never leaves the part to do the work.
 
@@ -322,10 +326,12 @@ Work that spans parts lives on a dashboard per regulation, reached from the
 figure cards at the top of Products and Parts and from each tab:
 `/products/eudr` (statements to file, all plots and assessments) and
 `/products/cbam` (the threshold, imports across parts, the annual
-declaration). `/eudr` redirects to `/products/eudr`. Both pages and the parts
-list read the same records through `app/(dashboard)/products/load.ts`. A
-regulation without a dashboard (PPWR today) gets a card that filters the list.
-None of this is a sidebar entry.
+declaration), `/products/ppwr` (tonnes and reports by country, registrations,
+all packaging) and `/products/pfas` (declarations, the rules each part
+touches, the substance inventory). `/eudr` redirects to `/products/eudr`. The
+dashboards and the parts list read the same records through
+`app/(dashboard)/products/load.ts`. A regulation without a dashboard gets a
+card that filters the list. None of this is a sidebar entry.
 
 ## EUDR due diligence
 
@@ -374,6 +380,51 @@ BROC supplies no emission value and computes neither deduction; the
 declaration is submitted in the CBAM registry, and recording its reference
 locks the year's imports. The older `/suppliers/cbam` page stays as a what-if
 estimator.
+
+## PPWR packaging and EPR
+
+`/products/ppwr` covers Regulation (EU) 2025/40 and, with the same tables,
+US state packaging EPR. From a part's PPWR tab the user records its packaging
+(`packaging_components`: material, function, weight, units per piece, reusable,
+food contact, recycled content, and evidence for the substance limits) and how
+many units were made available where (`packaging_placements`, per country or
+US state and year). `lib/ppwr-core.ts` then works out, per jurisdiction and
+year:
+
+- tonnes by the seven Annex IX Part B materials and by function (sales,
+  grouped, transport), reusable against single-use, and the parts placed with
+  no packaging recorded;
+- for EU Member States, the 10-tonne small-producer flag and the 1 June due
+  date for the previous year (Art. 44);
+- what blocks the report: an EU country with no registration (Art. 44(2)), a
+  part with no packaging; and per component, food-contact packaging with no
+  PFAS evidence (Art. 5(5)) as a block, and missing heavy-metal evidence
+  (Art. 5(4)), declaration of conformity (Art. 39) or recycled content for
+  plastic (Art. 7) as warnings.
+
+The report pack is a CSV per country and year. BROC states EU rules only for
+EU Member States; a scheme's own rules elsewhere are the user's. Submission
+happens on each register; recording it (admin) locks that country-year's
+placements. Tonnes are computed from the **current** component specs, so a
+spec change alters periods not yet reported.
+
+## PFAS declarations
+
+`/products/pfas` holds one declaration per part (`pfas_declarations`):
+contains intentionally added PFAS, none, or unknown, and for anything but
+unknown the basis, evidence and date. A part that contains PFAS lists its
+substances (`pfas_substances`) with CAS number, function, component and
+amount. Which rules a part touches is computed by `regimesFor` in
+`lib/pfas-core.ts` from the declaration's markets and the part's country of
+origin: Minnesota (Minn. Stat. § 116.943), Maine (38 M.R.S. § 1614) and US
+federal TSCA 8(a)(7) reporting for imported articles. Each regime is code,
+with its sources and the date it was last verified, because these laws change
+often. EU food-contact packaging limits are handled with packaging (PPWR
+Art. 5(5)).
+
+Unknown is never shown as PFAS-free, and a declaration older than 24 months is
+flagged for renewal. The dashboard downloads a substance inventory CSV. These
+are flags for the user to check, not a legal determination.
 
 ## Supplier surveys (public, unauthenticated flow)
 

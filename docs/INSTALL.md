@@ -61,6 +61,8 @@ order**, paste the whole file and run it. Do not skip any, and do not reorder.
                                        044_hs_and_hts_codes.sql
                                        045_eudr_due_diligence.sql
                                        046_cbam_imports_and_declarations.sql
+                                       047_ppwr_packaging_and_epr.sql
+                                       048_pfas_declarations.sql
 ```
 
 There is no 034; the numbering gap is intentional.
@@ -71,7 +73,7 @@ There is no 034; the numbering gap is intentional.
 columns, so a second run fails or does damage. If one of them errors halfway,
 do not re-run it — go to *If something fails* below.
 
-**008–046 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
+**008–048 are re-runnable, with one exception.** They use `IF NOT EXISTS`,
 `DROP … IF EXISTS` and `ON CONFLICT`, so re-running one is safe and is the
 correct fix for a script that half-applied. This has been verified, not just
 intended — see *What has actually been verified* below.
@@ -198,7 +200,7 @@ Migration 041 has so far been verified only in the in-process Postgres below:
 it applies after 040, re-applies without changing anything, and its
 launch-date trigger behaves as documented (`tests/survey-reminders.test.ts`).
 It has not yet been run on a standalone PostgreSQL server. The same is true of
-042 (`tests/evidence-checks.test.ts`), 043–044 (`tests/products-compliance.test.ts`) 045 (`tests/eudr.test.ts`) and 046 (`tests/cbam.test.ts`). `tests/verify-install.test.ts` runs
+042 (`tests/evidence-checks.test.ts`), 043–044 (`tests/products-compliance.test.ts`) 045 (`tests/eudr.test.ts`) 046 (`tests/cbam.test.ts`), 047 (`tests/ppwr.test.ts`) and 048 (`tests/pfas.test.ts`). `tests/verify-install.test.ts` runs
 `verify_install.sql` against the clean install and requires every check to pass.
 
 `supabase/pg_harness.sql` stands in for the Supabase platform objects the
@@ -206,7 +208,7 @@ migrations touch — `auth.uid()`, `auth.users`, `storage.buckets`,
 `storage.objects`, and the `anon` / `authenticated` / `service_role` roles — so
 you can reproduce that verification on any machine without a Supabase account.
 
-`npm test` also applies 001–046 to an empty in-process Postgres (PGlite) on
+`npm test` also applies 001–048 to an empty in-process Postgres (PGlite) on
 every run and exercises the RLS policies against it: tenancy, practice mode,
 deactivation, the audit trail and evidence record types (`tests/*.test.ts`).
 

@@ -946,6 +946,90 @@ export type Database = {
           },
         ]
       }
+      epr_registrations: {
+        Row: {
+          authorised_representative: string | null
+          created_at: string
+          fulfilment: string
+          id: string
+          jurisdiction: string
+          notes: string | null
+          organization_id: string
+          pro_name: string | null
+          register_name: string | null
+          registered_on: string | null
+          registration_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          authorised_representative?: string | null
+          created_at?: string
+          fulfilment?: string
+          id?: string
+          jurisdiction: string
+          notes?: string | null
+          organization_id?: string
+          pro_name?: string | null
+          register_name?: string | null
+          registered_on?: string | null
+          registration_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          authorised_representative?: string | null
+          created_at?: string
+          fulfilment?: string
+          id?: string
+          jurisdiction?: string
+          notes?: string | null
+          organization_id?: string
+          pro_name?: string | null
+          register_name?: string | null
+          registered_on?: string | null
+          registration_number?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      epr_reports: {
+        Row: {
+          created_at: string
+          id: string
+          jurisdiction: string
+          notes: string | null
+          organization_id: string
+          reference: string | null
+          status: string
+          submitted_on: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jurisdiction: string
+          notes?: string | null
+          organization_id?: string
+          reference?: string | null
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jurisdiction?: string
+          notes?: string | null
+          organization_id?: string
+          reference?: string | null
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
       eudr_plots: {
         Row: {
           area_ha: number | null
@@ -1656,6 +1740,213 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      packaging_components: {
+        Row: {
+          conformity_reference: string | null
+          created_at: string
+          food_contact: boolean
+          function: string
+          heavy_metals_evidence: string | null
+          id: string
+          is_active: boolean
+          material: string
+          material_detail: string | null
+          name: string
+          notes: string | null
+          organization_id: string
+          pfas_evidence: string | null
+          product_id: string
+          recycled_content_pct: number | null
+          reusable: boolean
+          supplier_id: string | null
+          units_per_packaging: number
+          updated_at: string
+          weight_g: number
+        }
+        Insert: {
+          conformity_reference?: string | null
+          created_at?: string
+          food_contact?: boolean
+          function: string
+          heavy_metals_evidence?: string | null
+          id?: string
+          is_active?: boolean
+          material: string
+          material_detail?: string | null
+          name: string
+          notes?: string | null
+          organization_id?: string
+          pfas_evidence?: string | null
+          product_id: string
+          recycled_content_pct?: number | null
+          reusable?: boolean
+          supplier_id?: string | null
+          units_per_packaging?: number
+          updated_at?: string
+          weight_g: number
+        }
+        Update: {
+          conformity_reference?: string | null
+          created_at?: string
+          food_contact?: boolean
+          function?: string
+          heavy_metals_evidence?: string | null
+          id?: string
+          is_active?: boolean
+          material?: string
+          material_detail?: string | null
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          pfas_evidence?: string | null
+          product_id?: string
+          recycled_content_pct?: number | null
+          reusable?: boolean
+          supplier_id?: string | null
+          units_per_packaging?: number
+          updated_at?: string
+          weight_g?: number
+        }
+        Relationships: []
+      }
+      packaging_placements: {
+        Row: {
+          created_at: string
+          id: string
+          jurisdiction: string
+          notes: string | null
+          organization_id: string
+          product_id: string
+          quarter: number | null
+          source: string | null
+          units: number
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          jurisdiction: string
+          notes?: string | null
+          organization_id?: string
+          product_id: string
+          quarter?: number | null
+          source?: string | null
+          units: number
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          jurisdiction?: string
+          notes?: string | null
+          organization_id?: string
+          product_id?: string
+          quarter?: number | null
+          source?: string | null
+          units?: number
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      pfas_declarations: {
+        Row: {
+          basis: string | null
+          created_at: string
+          declared_on: string | null
+          evidence: string | null
+          id: string
+          markets: string[]
+          notes: string | null
+          organization_id: string
+          product_category: string | null
+          product_id: string
+          status: string
+          supplier_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          basis?: string | null
+          created_at?: string
+          declared_on?: string | null
+          evidence?: string | null
+          id?: string
+          markets?: string[]
+          notes?: string | null
+          organization_id?: string
+          product_category?: string | null
+          product_id: string
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          basis?: string | null
+          created_at?: string
+          declared_on?: string | null
+          evidence?: string | null
+          id?: string
+          markets?: string[]
+          notes?: string | null
+          organization_id?: string
+          product_category?: string | null
+          product_id?: string
+          status?: string
+          supplier_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      pfas_substances: {
+        Row: {
+          amount_high: number | null
+          amount_low: number | null
+          amount_unit: string | null
+          cas_number: string | null
+          component: string | null
+          created_at: string
+          declaration_id: string
+          function: string | null
+          id: string
+          name: string
+          notes: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_high?: number | null
+          amount_low?: number | null
+          amount_unit?: string | null
+          cas_number?: string | null
+          component?: string | null
+          created_at?: string
+          declaration_id: string
+          function?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Update: {
+          amount_high?: number | null
+          amount_low?: number | null
+          amount_unit?: string | null
+          cas_number?: string | null
+          component?: string | null
+          created_at?: string
+          declaration_id?: string
+          function?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       product_compliance_values: {
         Row: {

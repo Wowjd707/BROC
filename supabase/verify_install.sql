@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–046). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–048). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -425,6 +425,23 @@ checks(sort_key, check_name, status, detail) AS (
                   WHERE item_code = 'CBAM' AND capability_key = 'cbam_calculator' AND route = '/products/cbam')
       THEN 'PASS' ELSE 'FAIL' END,
     'The CBAM dashboard and each part''s CBAM tab read these. Re-apply 046 if this fails.'
+
+  UNION ALL SELECT 41, 'PPWR — packaging, quantities by country, EPR registrations and reports',
+    CASE WHEN (SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+               AND table_name IN ('packaging_components','packaging_placements','epr_registrations','epr_reports')) = 4
+      AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_packaging_placements_lock_reported')
+      AND EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'epr_reports' AND policyname = 'epr_reports_status_admin')
+      AND EXISTS (SELECT 1 FROM regulatory_capabilities WHERE item_code = 'PPWR' AND capability_key = 'ppwr_packaging')
+      THEN 'PASS' ELSE 'FAIL' END,
+    'The PPWR dashboard and each part''s PPWR tab read these. Re-apply 047 if this fails.'
+
+  UNION ALL SELECT 42, 'PFAS — declarations and substances per part',
+    CASE WHEN (SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+               AND table_name IN ('pfas_declarations','pfas_substances')) = 2
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'pfas_declarations_answer_supported')
+      AND EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'pfas_substances' AND policyname = 'pfas_substances_refs_own_org')
+      THEN 'PASS' ELSE 'FAIL' END,
+    'The PFAS dashboard and each part''s PFAS tab read these. Re-apply 048 if this fails.'
 )
 
 SELECT

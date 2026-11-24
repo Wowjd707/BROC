@@ -2,6 +2,8 @@ import 'server-only';
 import type { createServerClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/fetch-all';
 import type { ImportRow, DeclarationRow } from '@/lib/cbam-core';
+import type { ComponentRow, PlacementRow, RegistrationRow, ReportRow } from '@/lib/ppwr-core';
+import type { DeclarationRow as PfasDeclaration, SubstanceRow } from '@/lib/pfas-core';
 // JSONB columns (geometry, criteria, upstream_references) come back typed as Json; their shape is enforced by
 // CHECK constraints in migration 045 and by lib/eudr-core on write, so the casts below narrow to that shape.
 import type { Assessment, Link, Org, Plot, Shipment } from './eudr/types';
@@ -14,6 +16,8 @@ type Supabase = Awaited<ReturnType<typeof createServerClient>>;
 
 export interface EudrData { plots: Plot[]; assessments: Assessment[]; shipments: Shipment[]; links: Link[] }
 export interface CbamData { imports: ImportRow[]; declarations: DeclarationRow[] }
+export interface PfasData { declarations: PfasDeclaration[]; substances: SubstanceRow[] }
+export interface PpwrData { components: ComponentRow[]; placements: PlacementRow[]; registrations: RegistrationRow[]; reports: ReportRow[] }
 
 export async function loadProfile(supabase: Supabase) {
   const { data: { user } } = await supabase.auth.getUser();
@@ -72,5 +76,53 @@ export async function loadCbam(supabase: Supabase): Promise<{ data: CbamData; er
       declarations: (declarations.data ?? []) as unknown as DeclarationRow[],
     },
     error: [imports, declarations].find((r) => r.error)?.error?.message ?? null,
+  };
+}
+
+export async function loadPpwr(supabase: Supabase): Promise<{ data: PpwrData; error: string | null }> {
+  const [components, placements, registrations, reports] = await Promise.all([
+    fetchAll((from, to) => supabase
+      .from('packaging_components')
+      .select('id, product_id, name, material, material_detail, function, weight_g, units_per_packaging, reusable, food_contact, recycled_content_pct, supplier_id, heavy_metals_evidence, pfas_evidence, conformity_reference, notes, is_active')
+      .order('name').range(from, to)),
+    fetchAll((from, to) => supabase
+      .from('packaging_placements')
+      .select('id, product_id, jurisdiction, year, quarter, units, source, notes')
+      .order('year', { ascending: false }).order('id').range(from, to)),
+    supabase.from('epr_registrations')
+      .select('id, jurisdiction, register_name, registration_number, fulfilment, pro_name, authorised_representative, registered_on, notes')
+      .order('jurisdiction'),
+    supabase.from('epr_reports').select('id, jurisdiction, year, status, submitted_on, reference, notes').order('year', { ascending: false }),
+  ]);
+  return {
+    // material, function, fulfilment and status are constrained by CHECKs in migration 047.
+    data: {
+      components: (components.data ?? []) as unknown as ComponentRow[],
+      placements: (placements.data ?? []) as unknown as PlacementRow[],
+      registrations: (registrations.data ?? []) as unknown as RegistrationRow[],
+      reports: (reports.data ?? []) as unknown as ReportRow[],
+    },
+    error: [components, placements, registrations, reports].find((r) => r.error)?.error?.message ?? null,
+  };
+}
+
+export async function loadPfas(supabase: Supabase): Promise<{ data: PfasData; error: string | null }> {
+  const [declarations, substances] = await Promise.all([
+    fetchAll((from, to) => supabase
+      .from('pfas_declarations')
+      .select('id, product_id, status, basis, evidence, declared_on, supplier_id, markets, product_category, notes')
+      .order('id').range(from, to)),
+    fetchAll((from, to) => supabase
+      .from('pfas_substances')
+      .select('id, declaration_id, name, cas_number, function, component, amount_low, amount_high, amount_unit, notes')
+      .order('name').range(from, to)),
+  ]);
+  return {
+    // status, basis and amount_unit are constrained by CHECKs in migration 048.
+    data: {
+      declarations: (declarations.data ?? []) as unknown as PfasDeclaration[],
+      substances: (substances.data ?? []) as unknown as SubstanceRow[],
+    },
+    error: [declarations, substances].find((r) => r.error)?.error?.message ?? null,
   };
 }

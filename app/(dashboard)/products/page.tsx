@@ -2,7 +2,7 @@ import { createServerClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/fetch-all';
 import { ProductsClient } from './ProductsClient';
 import { surveyFieldKeys } from '@/lib/compliance-core';
-import { loadCbam, loadEudr, loadOrg, loadProfile } from './load';
+import { loadCbam, loadEudr, loadOrg, loadPfas, loadPpwr, loadProfile } from './load';
 
 /**
  * Products and Parts: the list every product regulation hangs off (CBAM, EUDR,
@@ -16,7 +16,7 @@ export default async function ProductsPage() {
   const profile = await loadProfile(supabase);
   if (!profile) return null;
 
-  const [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions, org, eudr, cbam] = await Promise.all([
+  const [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions, org, eudr, cbam, ppwr, pfas] = await Promise.all([
     fetchAll((from, to) => supabase
       .from('products')
       .select('id, part_number, description, hs_code, cn_code, hts_code, supplier_id, country_of_origin, business_unit_id, site_id, owner_user_id, notes, is_active')
@@ -40,10 +40,12 @@ export default async function ProductsPage() {
     loadOrg(supabase, profile.orgId),
     loadEudr(supabase),
     loadCbam(supabase),
+    loadPpwr(supabase),
+    loadPfas(supabase),
   ]);
 
   const loadError = [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions].find((r) => r.error)?.error?.message
-    ?? org.error ?? eudr.error ?? cbam.error ?? null;
+    ?? org.error ?? eudr.error ?? cbam.error ?? ppwr.error ?? pfas.error ?? null;
 
   return (
     <ProductsClient
@@ -61,6 +63,8 @@ export default async function ProductsPage() {
       org={org.data}
       eudr={eudr.data}
       cbam={cbam.data}
+      ppwr={ppwr.data}
+      pfas={pfas.data}
       role={profile.role}
       loadError={loadError}
     />

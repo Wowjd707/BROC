@@ -21,6 +21,8 @@ function facts(o: Partial<ReadinessFacts> = {}): ReadinessFacts {
     goalsByMetric: {},
     eudr: { plots: 0, shipments: 0, filed: 0, assessments: 0 },
     cbam: { year: 2026, imports: 0, incomplete: 0, tonnes: 0, threshold: 50 },
+    ppwr: { components: 0, gaps: 0, placements: 0, unregistered: 0 },
+    pfas: { parts: 0, declared: 0, containing: 0 },
     ...o,
   };
 }
@@ -198,6 +200,21 @@ describe('summariseRegime', () => {
     expect(evaluateProbe('cbam_declaration', null, c({ imports: 3, incomplete: 1, tonnes: 12.34 })).detail)
       .toBe('1 of 3 imports in 2026 without embedded emissions; 12.3 t of the 50 t threshold.');
     expect(evaluateProbe('cbam_declaration', null, c({ imports: 3, tonnes: 60 })).status).toBe('ready');
+  });
+
+  it('reads PPWR from packaging, its evidence, quantities and registrations', () => {
+    const pp = (o: Partial<ReadinessFacts['ppwr']>) => facts({ ppwr: { components: 0, gaps: 0, placements: 0, unregistered: 0, ...o } });
+    expect(evaluateProbe('ppwr_packaging', null, pp({})).status).toBe('absent');
+    expect(evaluateProbe('ppwr_packaging', null, pp({ components: 4, gaps: 1, placements: 2, unregistered: 1 })).detail)
+      .toBe('4 packaging pieces, 1 missing evidence; 1 EU country without a registration.');
+    expect(evaluateProbe('ppwr_packaging', null, pp({ components: 4, placements: 2 })).status).toBe('ready');
+  });
+
+  it('reads PFAS from the share of parts with a declaration', () => {
+    const pf = (o: Partial<ReadinessFacts['pfas']>) => facts({ pfas: { parts: 0, declared: 0, containing: 0, ...o } });
+    expect(evaluateProbe('pfas_declarations', null, pf({ parts: 10 })).status).toBe('absent');
+    expect(evaluateProbe('pfas_declarations', null, pf({ parts: 10, declared: 4, containing: 1 })).detail).toBe('4 of 10 parts declared; 1 with intentionally added PFAS.');
+    expect(evaluateProbe('pfas_declarations', null, pf({ parts: 10, declared: 10 })).status).toBe('ready');
   });
 
   it('never offers not_built or no_action as the next action', () => {

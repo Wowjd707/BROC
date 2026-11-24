@@ -15,7 +15,7 @@ Sustainability teams that:
 
 - report **Scope 1, 2 and 3** and have outgrown spreadsheets, but don't want
   an enterprise platform contract to get out of them;
-- face **CSRD / ESRS, IFRS S2, TCFD, GRI, CBAM, EUDR or California SB 253/261**
+- face **CSRD / ESRS, IFRS S2, TCFD, GRI, CBAM, EUDR, PPWR, PFAS or California SB 253/261**
   and need one set of data to answer all of them;
 - need every reported number to **trace back to its source, factor and
   calculation**, because an assurance provider is going to ask;
@@ -208,7 +208,7 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **Products and Parts** — the part list every product regulation hangs off,
   imported from an ERP or broker export, with HS, CN and HTS codes. Your own
   cited scope rules on those codes say
-  which of CBAM, EUDR and PPWR apply; supplier answers, imports and manual
+  which of CBAM and EUDR apply; supplier answers, imports and manual
   entries fill each regulation's fields, with source, history and expiry.
 
 - **EUDR due diligence** — plots of land with their geolocation (pasted, or
@@ -220,8 +220,21 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - **CBAM imports and annual declaration** — each import of a CBAM good with its
   embedded emissions and their source, the 50-tonne threshold for the year,
   and the declaration pack per CN code with the certificates to surrender.
-  Both EUDR and CBAM are worked from inside each part, with a dashboard per
-  regulation for the filings that span parts.
+
+- **PPWR packaging and EPR** — each part's packaging by material and function,
+  with the evidence for the substance limits, and the units placed per country
+  (or US state). Produces packaging tonnes by material per country and year,
+  tracks registrations, flags what blocks a report, and downloads the report
+  pack; a submitted country-year is locked.
+
+- **PFAS declarations** — on every part, whether it contains intentionally
+  added PFAS, on what evidence, and which substances; the Minnesota, Maine and
+  US TSCA rules it touches given where it is sold, each with its sources and
+  the date it was verified; and a substance inventory. Unknown is never shown
+  as PFAS-free.
+
+  EUDR, CBAM, PPWR and PFAS are all worked from inside each part, with a dashboard per regulation
+  for the work that spans parts.
 
 **Optional AI layer**
 
@@ -286,7 +299,7 @@ cp .env.example .env.local
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–046**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–048**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -431,7 +444,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–046, numbered SQL (source of truth for schema)
+  migrations/            001–048, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight

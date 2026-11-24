@@ -592,8 +592,8 @@ authenticated user. The token is the only capability a supplier needs.
 
 ### Products and compliance data *(migration 043)*
 
-The shared foundation for product regulations (CBAM, EUDR, PPWR, and EPR to
-come): what you buy or place on the market, which regulations cover it, and
+The shared foundation for product regulations (CBAM, EUDR, PPWR and
+packaging EPR, PFAS): what you buy or place on the market, which regulations cover it, and
 what has been collected about it.
 
 - `products` — the part / SKU / packaging list: `part_number` (unique per
@@ -690,6 +690,57 @@ The 50-tonne threshold (Annex VII point 1) is kept per year in
 `lib/cbam-core.ts` with its citation; the year's totals, the declaration lines
 per CN code (Art. 6(2)) and the certificates are computed there, not stored.
 
+### PPWR packaging and EPR *(migration 047)*
+
+Regulation (EU) 2025/40, applying from 12 August 2026, plus the same shape for
+US state packaging EPR. A part is in PPWR because it has packaging, not
+because of its customs code.
+
+- `packaging_components` — the packaging of a part: `product_id`, `name`,
+  `material` (the seven Annex IX Part B materials: `glass`, `plastic`,
+  `paper_cardboard`, `ferrous_metal`, `aluminium`, `wood`, `other`) with
+  `material_detail`, `function` (`sales` / `grouped` / `transport`),
+  `weight_g`, `units_per_packaging` (how many parts one piece holds),
+  `reusable`, `food_contact`, `recycled_content_pct`, `supplier_id`, and the
+  evidence for each rule: `heavy_metals_evidence` (Art. 5(4)),
+  `pfas_evidence` (Art. 5(5), required in practice for food contact),
+  `conformity_reference` (Art. 39). Retired with `is_active`, not deleted.
+- `packaging_placements` — units of a part made available, per
+  `jurisdiction` (ISO 3166-1 alpha-2, or ISO 3166-2 for a US state such as
+  `US-OR`), `year` and optional `quarter`, with `source`. One row per part,
+  country and period. **Locked by trigger once that country-year's report is
+  submitted.**
+- `epr_registrations` — one per jurisdiction: the register, the
+  registration number, `fulfilment` (`own`, `pro`,
+  `authorised_representative`, Art. 45) with the scheme or representative,
+  and `registered_on`.
+- `epr_reports` — one per jurisdiction and year: `status` (`draft` /
+  `submitted`, admin only), with `submitted_on` and `reference` required on
+  submission.
+
+Tonnes by material and function, reusable against single-use, the 10-tonne
+small-producer flag and the 1 June due date (Art. 44, Annex IX) are computed
+in `lib/ppwr-core.ts` from the current component specs, not stored.
+
+### PFAS declarations *(migration 048)*
+
+The facts every PFAS regime needs about a part; which regime they trigger is
+worked out in `lib/pfas-core.ts`, where each rule carries its citation and the
+date it was last verified.
+
+- `pfas_declarations` — one per part: `status` (`unknown` / `none` /
+  `intentionally_added`), and for any answer other than unknown a required
+  `basis` (`supplier_declaration`, `test_report`, `engineering_assessment`,
+  `other`), `evidence` and `declared_on`; `supplier_id`, `markets` (where the
+  part is sold, ISO 3166 codes such as `US-MN` or `DE`), `product_category`,
+  `notes`. **Unknown is a status of its own: a part with no answer is never
+  reported as PFAS-free.** An admin deletes.
+- `pfas_substances` — for a part that contains PFAS: `name`, `cas_number`
+  (format checked; the check digit is checked in code), `function`,
+  `component`, and an amount or range (`amount_low` / `amount_high` with
+  `amount_unit`: `ppm`, `percent` or `mg_per_unit`). Removed with the
+  declaration.
+
 ### CBAM estimator (migration 005)
 - `cbam_supplier_factors` — supplier-declared emission factors that override EU
   defaults, with `factor_source` provenance.
@@ -736,6 +787,8 @@ per CN code (Art. 6(2)) and the certificates are computed there, not stored.
 | 044 | `products.hs_code` (≤ 6 digits) and `products.hts_code` (≤ 10) alongside `cn_code`; `compliance_scope_rules.code_system` (`hs` / `cn` / `hts`, existing rules CN), with uniqueness per code system |
 | 045 | EUDR due diligence: `eudr_plots`, `eudr_risk_assessments`, `eudr_shipments` (frozen once filed), `eudr_shipment_plots`; `organizations.legal_address` and `eori_number` |
 | 046 | CBAM: `cbam_imports` (locked once the year is declared), `cbam_declarations` (submission admin-only); capability map points EUDR and CBAM at `/products/eudr` and `/products/cbam` |
+| 047 | PPWR and packaging EPR: `packaging_components`, `packaging_placements` (locked once that country-year is reported), `epr_registrations`, `epr_reports` (submission admin-only); capability row for PPWR at `/products/ppwr` |
+| 048 | PFAS: `pfas_declarations` (one per part; any answer but unknown needs basis, evidence and date), `pfas_substances`; capability rows for US and EU PFAS at `/products/pfas` |
 
 ## Applying migrations
 
