@@ -11,13 +11,13 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DrawerContent } from '@/components/ui/dialog';
 import { Plus, Ship } from 'lucide-react';
-import { isReady, countryName } from '@/lib/eudr-core';
+import { isReady, countryName, needsPolygon } from '@/lib/eudr-core';
 import { regulationsForProduct } from '@/lib/compliance-core';
 import { ShipmentView, ShipmentForm, issuesFor } from './ShipmentDrawer';
 import { PlotsTab } from './PlotsTab';
 import { RiskTab } from './RiskTab';
-import { WorkspaceNav } from '../products/WorkspaceNav';
-import type { Assessment, Link, Named, Org, Plot, ProductRow, RuleRow, Shipment, ValueRow } from './types';
+import { Breadcrumb } from '../Breadcrumb';
+import { today, type Assessment, type Link, type Named, type Org, type Plot, type ProductRow, type RuleRow, type Shipment, type ValueRow } from './types';
 
 interface Props {
   org: Org | null;
@@ -55,6 +55,23 @@ export function EudrClient(props: Props) {
   const open = drawer?.id ? shipments.find((s) => s.id === drawer.id) ?? null : null;
   const drafts = shipments.filter((s) => s.status === 'draft');
   const readyCount = drafts.filter((s) => isReady(issuesFor(s, common).issues)).length;
+  const now = today();
+  const inScopeProducts = products.filter((p) => p.is_active && regulationsForProduct(p, rules).includes('eudr'));
+  const withShipment = new Set(shipments.map((s) => s.product_id));
+  const activePlots = plots.filter((p) => p.is_active);
+  const needPolygon = activePlots.filter((p) => needsPolygon(p)).length;
+  const reviewDue = assessments.filter((a) => a.review_by && a.review_by < now).length;
+  const notNegligible = assessments.filter((a) => a.conclusion === 'not_negligible').length;
+  const kpis: { label: string; value: string | number; sub: string; tone?: 'warn' }[] = [
+    { label: 'Parts in scope', value: inScopeCount, sub: `${inScopeProducts.filter((p) => withShipment.has(p.id)).length} with a shipment` },
+    { label: 'Ready to file', value: readyCount, sub: `of ${drafts.length} draft${drafts.length === 1 ? '' : 's'}` },
+    { label: 'Filed', value: shipments.filter((s) => s.status === 'filed').length, sub: 'statements with a TRACES reference' },
+    { label: 'Drafts to resolve', value: drafts.length - readyCount, sub: 'something blocks filing', tone: drafts.length - readyCount ? 'warn' : undefined },
+    { label: 'Plots', value: activePlots.length, sub: needPolygon ? `${needPolygon} need a polygon (over 4 ha)` : 'all shapes acceptable', tone: needPolygon ? 'warn' : undefined },
+    { label: 'Risk assessments', value: assessments.length, sub: notNegligible ? `${notNegligible} not negligible` : 'all negligible', tone: notNegligible ? 'warn' : undefined },
+    { label: 'Reviews overdue', value: reviewDue, sub: 'past their review date', tone: reviewDue ? 'warn' : undefined },
+    { label: 'Operator details', value: org?.eori_number && org?.legal_address ? 'Complete' : 'Missing', sub: 'address and EORI', tone: org?.eori_number && org?.legal_address ? undefined : 'warn' },
+  ];
 
   if (loadError) {
     return (
@@ -69,11 +86,11 @@ export function EudrClient(props: Props) {
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products and Parts</h1>
-      <WorkspaceNav current="eudr" />
+      <Breadcrumb current="EUDR" />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm text-gray-500 max-w-2xl">
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">EUDR due diligence</h1>
+          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
             Each shipment you place on the EU market or export, the plots of land it came from, and the risk assessment it
             relies on. When nothing is missing, download the filing pack, file the statement in TRACES, and record the
             reference it returns.
@@ -84,16 +101,12 @@ export function EudrClient(props: Props) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          ['Products in scope', inScopeCount],
-          ['Draft shipments', drafts.length],
-          ['Ready to file', readyCount],
-          ['Filed', shipments.filter((s) => s.status === 'filed').length],
-        ].map(([label, n]) => (
-          <Card key={label as string}><CardContent className="py-3">
-            <p className="text-xs text-gray-500">{label}</p>
-            <p className="text-2xl font-semibold text-gray-900">{n}</p>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {kpis.map((k) => (
+          <Card key={k.label}><CardContent className="py-3">
+            <p className="text-xs text-gray-500">{k.label}</p>
+            <p className={`text-2xl font-semibold ${k.tone === 'warn' ? 'text-amber-700' : 'text-gray-900'}`}>{k.value}</p>
+            <p className="text-xs text-gray-500">{k.sub}</p>
           </CardContent></Card>
         ))}
       </div>

@@ -224,8 +224,10 @@ type Draft = {
   upstream: { reference: string; verification: string }[]; plotIds: string[]; notes: string;
 };
 
-export function ShipmentForm({ shipment, onCancel, onSaved, ...c }: Common & {
+export function ShipmentForm({ shipment, productId, onCancel, onSaved, ...c }: Common & {
   shipment: Shipment | null; onCancel: () => void; onSaved: (id: string) => void;
+  /** A new shipment started from a part: that part, with what BROC knows about it filled in. */
+  productId?: string;
 }) {
   const supabase = createClient();
   const eudrProducts = useMemo(
@@ -234,7 +236,7 @@ export function ShipmentForm({ shipment, onCancel, onSaved, ...c }: Common & {
     [c.products, c.rules, shipment?.product_id],
   );
   const linked = shipment ? c.links.filter((l) => l.shipment_id === shipment.id).map((l) => l.plot_id) : [];
-  const [d, setD] = useState<Draft>(shipment ? {
+  const [d, setD] = useState<Draft>(() => shipment ? {
     product_id: shipment.product_id, supplier_id: shipment.supplier_id ?? '', reference: shipment.reference,
     activity: shipment.activity, hs_code: shipment.hs_code ?? '', description: shipment.description ?? '',
     net_mass_kg: shipment.net_mass_kg?.toString() ?? '', supplementary_quantity: shipment.supplementary_quantity?.toString() ?? '',
@@ -242,32 +244,33 @@ export function ShipmentForm({ shipment, onCancel, onSaved, ...c }: Common & {
     production_from: shipment.production_from ?? '', production_to: shipment.production_to ?? '',
     upstream: (shipment.upstream_references ?? []).map((u) => ({ reference: u.reference, verification: u.verification ?? '' })),
     plotIds: linked, notes: shipment.notes ?? '',
-  } : {
+  } : withProduct({
     product_id: '', supplier_id: '', reference: '', activity: 'import', hs_code: '', description: '', net_mass_kg: '',
     supplementary_quantity: '', supplementary_unit: '', countries: [], production_from: '', production_to: '',
     upstream: [], plotIds: [], notes: '',
-  });
+  }, productId));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));
 
   /** Choosing a product fills what BROC already knows about it. */
-  function chooseProduct(id: string) {
-    const p = c.products.find((x) => x.id === id);
+  function withProduct(x: Draft, id: string | undefined): Draft {
+    if (!id) return x;
+    const p = c.products.find((y) => y.id === id);
     const latest = (key: string) => c.values
       .filter((v) => v.product_id === id && v.field_key === key)
       .sort((a, b) => b.recorded_at.localeCompare(a.recorded_at))[0]?.value;
     const country = toCountryCode(latest('eudr.country_of_production'));
-    setD((x) => ({
+    return {
       ...x,
       product_id: id,
       supplier_id: x.supplier_id || p?.supplier_id || '',
       hs_code: x.hs_code || hsFor(p) || '',
       description: x.description || p?.description || '',
       countries: x.countries.length ? x.countries : country ? [country] : [],
-      production_from: x.production_from,
-    }));
+    };
   }
+  const chooseProduct = (id: string) => setD((x) => withProduct(x, id));
 
   const candidatePlots = c.plots.filter((p) => p.is_active && (!d.supplier_id || p.supplier_id === d.supplier_id || d.plotIds.includes(p.id)));
 

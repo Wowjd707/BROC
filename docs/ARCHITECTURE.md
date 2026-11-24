@@ -309,13 +309,28 @@ What each regulation then produces from this (CBAM threshold tracking and the
 annual declaration, the EUDR filing pack, PPWR technical documentation, EPR
 tonnage by country) builds on these tables. EUDR is built; see the next section.
 
+## Regulations inside Products and Parts
+
+Product regulations are worked **part first**. Open a part and its panel has an
+Overview tab plus one tab per regulation that covers it; each tab holds that
+regulation's work for the part (EUDR shipments, plots and risk; CBAM imports)
+above the supplier data it needs. A shipment, assessment or import opened from
+a tab replaces the panel's content with a link back to the part, so the user
+never leaves the part to do the work.
+
+Work that spans parts lives on a dashboard per regulation, reached from the
+figure cards at the top of Products and Parts and from each tab:
+`/products/eudr` (statements to file, all plots and assessments) and
+`/products/cbam` (the threshold, imports across parts, the annual
+declaration). `/eudr` redirects to `/products/eudr`. Both pages and the parts
+list read the same records through `app/(dashboard)/products/load.ts`. A
+regulation without a dashboard (PPWR today) gets a card that filters the list.
+None of this is a sidebar entry.
+
 ## EUDR due diligence
 
-`/eudr` builds on the product foundation for Regulation (EU) 2023/1115. It is a
-section of Products and Parts, reached from the section nav at the top of that
-page (`app/(dashboard)/products/WorkspaceNav.tsx`), not a sidebar entry; CBAM
-and PPWR workspaces are meant to be added to the same nav. Three
-records, one page:
+`/products/eudr` builds on the product foundation for Regulation (EU) 2023/1115.
+Three records:
 
 - **Plots** (`eudr_plots`) — pasted as GeoJSON or "latitude, longitude" lines,
   or imported from suppliers' `eudr.geolocation` answers. `lib/eudr-core.ts`
@@ -336,6 +351,29 @@ records, one page:
 
 BROC does not submit to TRACES and does not decide that a risk is negligible.
 Both stay with the operator, deliberately.
+
+## CBAM imports and declaration
+
+`/products/cbam` covers the definitive regime (Regulation (EU) 2023/956 as
+amended by Regulation (EU) 2025/2083). Each import (`cbam_imports`) is recorded
+from a part's CBAM tab, starting from the part's codes and the supplier's
+latest `cbam.*` answers, which the user confirms with a source.
+`lib/cbam-core.ts` then works out, per calendar year:
+
+- the net mass counting towards the 50-tonne threshold (Art. 2a, Annex VII;
+  electricity and hydrogen are outside it and always carry obligations);
+- each import's embedded emissions, direct only for iron and steel,
+  aluminium and hydrogen (Annex II), and unknown rather than zero when a
+  needed figure is missing;
+- the declaration lines per CN code (Art. 6(2)(a)–(b)), the certificates after
+  the deductions the declarant records (c), the verification reports (d), and
+  a cost estimate priced per quarter for 2026 (Implementing Regulation (EU)
+  2025/2548). The declaration is due 30 September of the following year.
+
+BROC supplies no emission value and computes neither deduction; the
+declaration is submitted in the CBAM registry, and recording its reference
+locks the year's imports. The older `/suppliers/cbam` page stays as a what-if
+estimator.
 
 ## Supplier surveys (public, unauthenticated flow)
 

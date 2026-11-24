@@ -2,20 +2,21 @@ import { createServerClient } from '@/lib/supabase/server';
 import { fetchAll } from '@/lib/fetch-all';
 import { ProductsClient } from './ProductsClient';
 import { surveyFieldKeys } from '@/lib/compliance-core';
+import { loadCbam, loadEudr, loadOrg, loadProfile } from './load';
 
 /**
  * Products and Parts: the list every product regulation hangs off (CBAM, EUDR,
  * PPWR). Which regulations apply comes from the organization's cited scope
- * rules; what has been collected comes from product_compliance_values.
+ * rules; what has been collected comes from product_compliance_values. Each
+ * part's panel carries a tab per regulation with that regulation's work (EUDR
+ * shipments, CBAM imports), so the EUDR and CBAM records load here too.
  */
 export default async function ProductsPage() {
   const supabase = await createServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const profile = await loadProfile(supabase);
+  if (!profile) return null;
 
-  const { data: profile } = await supabase.from('users').select('role').eq('id', user.id).single();
-
-  const [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions] = await Promise.all([
+  const [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions, org, eudr, cbam] = await Promise.all([
     fetchAll((from, to) => supabase
       .from('products')
       .select('id, part_number, description, hs_code, cn_code, hts_code, supplier_id, country_of_origin, business_unit_id, site_id, owner_user_id, notes, is_active')
@@ -36,9 +37,13 @@ export default async function ProductsPage() {
     supabase.from('supplier_surveys').select('id, title, regulation_type, status').eq('status', 'active').order('created_at', { ascending: false }),
     // Which product fields each survey fills, for the Ask supplier dialog.
     supabase.from('supplier_survey_questions').select('survey_id, maps_to'),
+    loadOrg(supabase, profile.orgId),
+    loadEudr(supabase),
+    loadCbam(supabase),
   ]);
 
-  const loadError = [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions].find((r) => r.error)?.error?.message ?? null;
+  const loadError = [products, suppliers, businessUnits, sites, users, rules, values, surveys, surveyQuestions].find((r) => r.error)?.error?.message
+    ?? org.error ?? eudr.error ?? cbam.error ?? null;
 
   return (
     <ProductsClient
@@ -53,7 +58,10 @@ export default async function ProductsPage() {
         id: s.id, title: s.title, regulation_type: s.regulation_type,
         fieldKeys: surveyFieldKeys(s, surveyQuestions.data ?? []),
       }))}
-      role={profile?.role ?? 'viewer'}
+      org={org.data}
+      eudr={eudr.data}
+      cbam={cbam.data}
+      role={profile.role}
       loadError={loadError}
     />
   );

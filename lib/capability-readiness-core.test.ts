@@ -20,6 +20,7 @@ function facts(o: Partial<ReadinessFacts> = {}): ReadinessFacts {
     evidence: { withEvidence: 0, total: 0 },
     goalsByMetric: {},
     eudr: { plots: 0, shipments: 0, filed: 0, assessments: 0 },
+    cbam: { year: 2026, imports: 0, incomplete: 0, tonnes: 0, threshold: 50 },
     ...o,
   };
 }
@@ -189,6 +190,14 @@ describe('summariseRegime', () => {
     expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3 })).detail).toBe('3 plots, 0 risk assessments; no shipments yet.');
     expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3, assessments: 1, shipments: 2, filed: 1 })).status).toBe('partial');
     expect(evaluateProbe('eudr_due_diligence', null, e({ plots: 3, assessments: 1, shipments: 2, filed: 2 })).status).toBe('ready');
+  });
+
+  it('reads CBAM from the year\'s imports and their emissions', () => {
+    const c = (o: Partial<ReadinessFacts['cbam']>) => facts({ cbam: { year: 2026, imports: 0, incomplete: 0, tonnes: 0, threshold: 50, ...o } });
+    expect(evaluateProbe('cbam_declaration', null, c({})).status).toBe('absent');
+    expect(evaluateProbe('cbam_declaration', null, c({ imports: 3, incomplete: 1, tonnes: 12.34 })).detail)
+      .toBe('1 of 3 imports in 2026 without embedded emissions; 12.3 t of the 50 t threshold.');
+    expect(evaluateProbe('cbam_declaration', null, c({ imports: 3, tonnes: 60 })).status).toBe('ready');
   });
 
   it('never offers not_built or no_action as the next action', () => {

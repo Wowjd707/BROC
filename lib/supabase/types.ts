@@ -226,6 +226,150 @@ export type Database = {
           },
         ]
       }
+      cbam_declarations: {
+        Row: {
+          authorised_declarant_number: string | null
+          carbon_price_deduction: number | null
+          carbon_price_deduction_source: string | null
+          created_at: string
+          free_allocation_adjustment: number | null
+          free_allocation_source: string | null
+          id: string
+          notes: string | null
+          organization_id: string
+          price_q1_eur: number | null
+          price_q2_eur: number | null
+          price_q3_eur: number | null
+          price_q4_eur: number | null
+          price_source: string | null
+          registry_reference: string | null
+          status: string
+          submitted_on: string | null
+          updated_at: string
+          year: number
+        }
+        Insert: {
+          authorised_declarant_number?: string | null
+          carbon_price_deduction?: number | null
+          carbon_price_deduction_source?: string | null
+          created_at?: string
+          free_allocation_adjustment?: number | null
+          free_allocation_source?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          price_q1_eur?: number | null
+          price_q2_eur?: number | null
+          price_q3_eur?: number | null
+          price_q4_eur?: number | null
+          price_source?: string | null
+          registry_reference?: string | null
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          year: number
+        }
+        Update: {
+          authorised_declarant_number?: string | null
+          carbon_price_deduction?: number | null
+          carbon_price_deduction_source?: string | null
+          created_at?: string
+          free_allocation_adjustment?: number | null
+          free_allocation_source?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          price_q1_eur?: number | null
+          price_q2_eur?: number | null
+          price_q3_eur?: number | null
+          price_q4_eur?: number | null
+          price_source?: string | null
+          registry_reference?: string | null
+          status?: string
+          submitted_on?: string | null
+          updated_at?: string
+          year?: number
+        }
+        Relationships: []
+      }
+      cbam_imports: {
+        Row: {
+          carbon_price_evidence: string | null
+          carbon_price_paid_eur: number | null
+          cn_code: string
+          country_of_origin: string
+          created_at: string
+          created_by: string | null
+          customs_reference: string | null
+          direct_emissions: number | null
+          emissions_basis: string | null
+          emissions_source: string | null
+          id: string
+          import_date: string
+          indirect_emissions: number | null
+          installation_id: string | null
+          installation_name: string | null
+          notes: string | null
+          organization_id: string
+          product_id: string
+          quantity: number
+          supplier_id: string | null
+          unit: string
+          updated_at: string
+          verification_report: string | null
+        }
+        Insert: {
+          carbon_price_evidence?: string | null
+          carbon_price_paid_eur?: number | null
+          cn_code: string
+          country_of_origin: string
+          created_at?: string
+          created_by?: string | null
+          customs_reference?: string | null
+          direct_emissions?: number | null
+          emissions_basis?: string | null
+          emissions_source?: string | null
+          id?: string
+          import_date: string
+          indirect_emissions?: number | null
+          installation_id?: string | null
+          installation_name?: string | null
+          notes?: string | null
+          organization_id?: string
+          product_id: string
+          quantity: number
+          supplier_id?: string | null
+          unit?: string
+          updated_at?: string
+          verification_report?: string | null
+        }
+        Update: {
+          carbon_price_evidence?: string | null
+          carbon_price_paid_eur?: number | null
+          cn_code?: string
+          country_of_origin?: string
+          created_at?: string
+          created_by?: string | null
+          customs_reference?: string | null
+          direct_emissions?: number | null
+          emissions_basis?: string | null
+          emissions_source?: string | null
+          id?: string
+          import_date?: string
+          indirect_emissions?: number | null
+          installation_id?: string | null
+          installation_name?: string | null
+          notes?: string | null
+          organization_id?: string
+          product_id?: string
+          quantity?: number
+          supplier_id?: string | null
+          unit?: string
+          updated_at?: string
+          verification_report?: string | null
+        }
+        Relationships: []
+      }
       cbam_calculations: {
         Row: {
           certificate_price_eur: number

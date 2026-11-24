@@ -6,6 +6,7 @@ import { getInventoryForYear } from './disclosure-metrics';
 import { resolveMetric } from './disclosure-metrics-core';
 import { isSocialGovernanceFamily } from './social-metrics-core';
 import type { ReadinessFacts } from './capability-readiness-core';
+import { summariseYear, type ImportRow } from './cbam-core';
 
 /**
  * Gather every fact the capability probes need, in one pass.
@@ -24,6 +25,8 @@ export async function getReadinessFacts(
 ): Promise<ReadinessFacts> {
   const supabase = await createServerClient();
   const { startDate, endDate } = reportingYearRange(year, fyStart);
+  // CBAM counts by calendar year, so the selected year is read as one.
+  const cbamYear = year;
 
   const [
     { data: sites },
@@ -43,6 +46,7 @@ export async function getReadinessFacts(
     { count: eudrPlots },
     { count: eudrAssessments },
     { data: eudrShipments },
+    { data: cbamImports },
   ] = await Promise.all([
     supabase.from('sites').select('id').eq('is_active', true),
     // List queries are paged (lib/fetch-all.ts): coverage measured on the first
@@ -78,7 +82,13 @@ export async function getReadinessFacts(
     supabase.from('eudr_risk_assessments').select('id', { count: 'exact', head: true }),
     fetchAll((from, to) => supabase.from('eudr_shipments').select('status').neq('status', 'withdrawn')
       .order('id').range(from, to)),
+    // The CBAM year is the calendar year, whatever the reporting year (Art. 2a, Art. 6).
+    fetchAll((from, to) => supabase.from('cbam_imports')
+      .select('id, product_id, supplier_id, import_date, customs_reference, cn_code, quantity, unit, country_of_origin, installation_name, installation_id, direct_emissions, indirect_emissions, emissions_basis, emissions_source, verification_report, carbon_price_paid_eur, carbon_price_evidence, notes')
+      .gte('import_date', `${cbamYear}-01-01`).lte('import_date', `${cbamYear}-12-31`)
+      .order('id').range(from, to)),
   ]);
+  const cbam = summariseYear((cbamImports ?? []) as unknown as ImportRow[], cbamYear);
 
   // ── Site coverage ──────────────────────────────────────────────────────────
   const sitesWithData = new Set((emissionSites ?? []).map((e) => e.site_id));
@@ -165,5 +175,6 @@ export async function getReadinessFacts(
       shipments: (eudrShipments ?? []).length,
       filed: (eudrShipments ?? []).filter((s) => s.status === 'filed').length,
     },
+    cbam: { year: cbamYear, imports: cbam.imports, incomplete: cbam.incomplete, tonnes: cbam.thresholdMass, threshold: cbam.threshold.tonnes },
   };
 }

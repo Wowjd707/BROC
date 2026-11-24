@@ -664,13 +664,40 @@ file; the statement itself is submitted, and its declaration made, in TRACES.
 Readiness — what a statement still lacks — is computed, not stored:
 `shipmentIssues` in `lib/eudr-core.ts`.
 
-### CBAM
+### CBAM imports and declarations *(migration 046)*
+
+Regulation (EU) 2023/956 as amended by Regulation (EU) 2025/2083. BROC
+prepares the declaration; it is submitted in the CBAM registry.
+
+- `cbam_imports` — one per import of a CBAM good: `product_id`,
+  `supplier_id`, `import_date` (release for free circulation; its calendar
+  year decides the declaration and the threshold), `customs_reference`,
+  `cn_code`, `quantity` and `unit` (net tonnes, or MWh for electricity),
+  `country_of_origin`, `installation_name` / `_id`, `direct_emissions` and
+  `indirect_emissions` (tCO₂e per unit; empty means unknown, never zero),
+  `emissions_basis` (`actual` / `default`) with a required `emissions_source`
+  whenever figures are given, `verification_report`,
+  `carbon_price_paid_eur` with its evidence. Audited. **Locked by trigger once
+  that year's declaration is submitted.**
+- `cbam_declarations` — one per organization and year: the authorised
+  declarant number, the two certificate deductions (carbon price paid,
+  Art. 9; free allocation adjustment, Implementing Regulation (EU) 2025/2620),
+  each refused without its source, quarterly certificate prices for the cost
+  estimate, and `status` (`draft` / `submitted`, admin only) with
+  `submitted_on` and `registry_reference`.
+
+The 50-tonne threshold (Annex VII point 1) is kept per year in
+`lib/cbam-core.ts` with its citation; the year's totals, the declaration lines
+per CN code (Art. 6(2)) and the certificates are computed there, not stored.
+
+### CBAM estimator (migration 005)
 - `cbam_supplier_factors` — supplier-declared emission factors that override EU
   defaults, with `factor_source` provenance.
 - `cbam_calculations` — saved CBAM cost estimates (commodity, CN code, quantity,
   factor + `factor_type` eu_default/supplier_provided, total tCO₂e, certificate
   price, estimated cost). EU default factors themselves live in `cbam-data.ts`
-  (Reg. (EU) 2023/1773 Annex III).
+  (Reg. (EU) 2023/1773 Annex III). This is the what-if estimator at
+  `/suppliers/cbam`; actual imports are `cbam_imports` above.
 
 ## Migration history
 
@@ -708,6 +735,7 @@ Readiness — what a statement still lacks — is computed, not stored:
 | 043 | `products`, `compliance_scope_rules` (cited CN-code scope per regulation), `product_compliance_values` (append-only, with validity and source), `supplier_survey_invitation_products`, and `supplier_survey_questions.maps_to` — the foundation for CBAM, EUDR and PPWR data collection |
 | 044 | `products.hs_code` (≤ 6 digits) and `products.hts_code` (≤ 10) alongside `cn_code`; `compliance_scope_rules.code_system` (`hs` / `cn` / `hts`, existing rules CN), with uniqueness per code system |
 | 045 | EUDR due diligence: `eudr_plots`, `eudr_risk_assessments`, `eudr_shipments` (frozen once filed), `eudr_shipment_plots`; `organizations.legal_address` and `eori_number` |
+| 046 | CBAM: `cbam_imports` (locked once the year is declared), `cbam_declarations` (submission admin-only); capability map points EUDR and CBAM at `/products/eudr` and `/products/cbam` |
 
 ## Applying migrations
 

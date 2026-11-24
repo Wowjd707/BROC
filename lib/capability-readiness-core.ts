@@ -82,6 +82,8 @@ export interface ReadinessFacts {
   goalsByMetric: Record<string, number>;
   /** EUDR due diligence records (migration 045). Withdrawn shipments are not counted. */
   eudr: { plots: number; shipments: number; filed: number; assessments: number };
+  /** CBAM imports in the current calendar year (migration 046). */
+  cbam: { year: number; imports: number; incomplete: number; tonnes: number; threshold: number };
 }
 
 export interface ProbeResult {
@@ -144,6 +146,15 @@ export function evaluateProbe(
         status: n === 0 ? 'absent' : 'ready',
         detail: n === 0 ? 'No calculations saved.' : `${plural(n, 'calculation', 'calculations')} saved.`,
       };
+    }
+
+    case 'cbam_declaration': {
+      const { year, imports, incomplete, tonnes, threshold } = facts.cbam;
+      if (imports === 0) return { status: 'absent', detail: `No CBAM imports recorded for ${year}.` };
+      const mass = `${Math.round(tonnes * 10) / 10} t of the ${threshold} t threshold`;
+      return incomplete > 0
+        ? { status: 'partial', detail: `${incomplete} of ${plural(imports, 'import', 'imports')} in ${year} without embedded emissions; ${mass}.` }
+        : { status: 'ready', detail: `${plural(imports, 'import', 'imports')} in ${year}, embedded emissions complete; ${mass}.` };
     }
 
     case 'eudr_due_diligence': {

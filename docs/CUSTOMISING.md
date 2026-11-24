@@ -53,6 +53,8 @@ If you can do it as data, do it as data.
 | **Product compliance fields** (what CBAM, EUDR, PPWR collect per product, and how long an answer stays valid) | `lib/compliance-catalog.ts` | Code |
 | EUDR country risk and its basis | Each risk assessment records the classification and the act it comes from; nothing is preloaded | Data |
 | **EUDR readiness rules and the GeoJSON format** (what blocks a statement, what TRACES accepts) | `lib/eudr-core.ts`, with tests | Code |
+| **CBAM threshold per year, sectors by CN heading, declaration arithmetic** | `lib/cbam-core.ts` (`CBAM_THRESHOLDS`), with tests | Code |
+| CBAM emission values, deductions and certificate prices | Entered per import or per declaration, each with its source; nothing is preloaded | Data |
 
 ---
 

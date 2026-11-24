@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DrawerContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { BulkImportDialog } from '@/components/forms/BulkImportDialog';
-import { Package, Plus, Upload, Send, Search, ExternalLink, Trash2, History, ArrowRight } from 'lucide-react';
+import { Package, Plus, Upload, Send, Search, ExternalLink, Trash2, History, ArrowRight, ChevronLeft } from 'lucide-react';
 import {
   REGULATIONS, REGULATION_KEYS, fieldsFor, FIELD_BY_KEY, displayFieldValue, normalizeFieldValue,
   type RegulationKey, type ComplianceField,
@@ -26,7 +26,16 @@ import {
 } from '@/lib/compliance-core';
 import { PRODUCT_IMPORT_HEADERS } from '@/lib/product-import-core';
 import { DrawerShell } from '@/components/ui/drawer-shell';
-import { WorkspaceNav } from './WorkspaceNav';
+import { RegulationCards, DASHBOARDS } from './RegulationCards';
+import { EudrPartPanel } from './eudr/PartPanel';
+import { CbamPartPanel } from './cbam/PartPanel';
+import { ShipmentView, ShipmentForm, issuesFor } from './eudr/ShipmentDrawer';
+import { AssessmentForm, type AssessmentPreset } from './eudr/RiskTab';
+import { ImportForm } from './cbam/ImportForm';
+import { isReady } from '@/lib/eudr-core';
+import { importIssues, yearOf } from '@/lib/cbam-core';
+import type { EudrData, CbamData } from './load';
+import type { Org } from './eudr/types';
 
 interface Product {
   id: string;
@@ -66,9 +75,22 @@ interface Props {
   rules: Rule[];
   values: Value[];
   surveys: SurveyOption[];
+  org: Org | null;
+  eudr: EudrData;
+  cbam: CbamData;
   role: string;
   loadError: string | null;
 }
+
+/**
+ * The drawer shows one thing at a time: a part, or something opened from one
+ * of its regulation tabs. Closing a child returns to the part, on that tab.
+ */
+type DrawerState =
+  | { kind: 'product'; id: string | null; mode: 'view' | 'edit'; tab?: string }
+  | { kind: 'shipment'; id: string | null; mode: 'view' | 'edit'; productId: string }
+  | { kind: 'assessment'; id: string | null; preset?: AssessmentPreset; productId: string }
+  | { kind: 'import'; id: string | null; productId: string };
 
 const STATUS_BADGE: Record<FieldStatus, { label: string; variant: 'default' | 'warning' | 'destructive' | 'secondary' }> = {
   current: { label: 'Current', variant: 'default' },
@@ -103,7 +125,7 @@ function draftOf(p: Product): Draft {
 const today = () => new Date().toISOString().slice(0, 10);
 
 export function ProductsClient({
-  products, suppliers, businessUnits, sites, users, rules, values, surveys, role, loadError,
+  products, suppliers, businessUnits, sites, users, rules, values, surveys, org, eudr, cbam, role, loadError,
 }: Props) {
   const router = useRouter();
   const canEdit = role === 'admin' || role === 'editor';
@@ -116,8 +138,7 @@ export function ProductsClient({
   const [supplierFilter, setSupplierFilter] = useState('all');
   const [showInactive, setShowInactive] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  // The drawer: an existing product (view or edit), or a new one (edit).
-  const [drawer, setDrawer] = useState<null | { id: string | null; mode: 'view' | 'edit' }>(null);
+  const [drawer, setDrawer] = useState<null | DrawerState>(null);
   const [showImport, setShowImport] = useState(false);
   const [asking, setAsking] = useState<string[] | null>(null);
   const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
@@ -161,7 +182,39 @@ export function ProductsClient({
   const inactiveCount = products.length - activeCount;
   const inScope = products.filter((p) => p.is_active && (regsByProduct.get(p.id) ?? []).length > 0).length;
   const withCodes = products.filter((p) => p.is_active && (p.hs_code || p.cn_code || p.hts_code)).length;
-  const drawerProduct = drawer?.id ? products.find((p) => p.id === drawer.id) ?? null : null;
+  const drawerProductId = drawer ? (drawer.kind === 'product' ? drawer.id : drawer.productId) : null;
+  const drawerProduct = drawerProductId ? products.find((p) => p.id === drawerProductId) ?? null : null;
+  const backTo = (tab: string) => (drawerProduct ? setDrawer({ kind: 'product', id: drawerProduct.id, mode: 'view', tab }) : setDrawer(null));
+
+  // Regulation workspaces, worked out once for the cards, the list and the part panel.
+  const eudrCommon = { org, products, rules, plots: eudr.plots, assessments: eudr.assessments, links: eudr.links };
+  const eudrReady = useMemo(() => new Map(eudr.shipments.filter((sh) => sh.status === 'draft')
+    .map((sh) => [sh.id, isReady(issuesFor(sh, eudrCommon).issues)])),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [eudr, products, rules, org]);
+  const thisYear = new Date().getFullYear();
+  const regsWithRules = REGULATION_KEYS.filter((k) => rules.some((r) => r.regulation === k));
+  const partsInScope = useMemo(() => Object.fromEntries(REGULATION_KEYS.map((k) => [k,
+    products.filter((p) => p.is_active && (regsByProduct.get(p.id) ?? []).includes(k)).map((p) => p.id)])) as Record<RegulationKey, string[]>,
+  [products, regsByProduct]);
+
+  /** One line per part about its regulation work, for the list. */
+  function workLine(productId: string, regs: RegulationKey[]): string[] {
+    const out: string[] = [];
+    if (regs.includes('eudr')) {
+      const mine = eudr.shipments.filter((sh) => sh.product_id === productId && sh.status === 'draft');
+      const ready = mine.filter((sh) => eudrReady.get(sh.id)).length;
+      if (ready) out.push(`EUDR: ${ready} ready to file`);
+      else if (mine.length) out.push(`EUDR: ${mine.length} draft${mine.length === 1 ? '' : 's'} to resolve`);
+    }
+    if (regs.includes('cbam')) {
+      const mine = cbam.imports.filter((i) => i.product_id === productId && yearOf(i) === thisYear);
+      const missing = mine.filter((i) => importIssues(i).some((x) => x.level === 'block')).length;
+      if (missing) out.push(`CBAM: emissions missing on ${missing} import${missing === 1 ? '' : 's'}`);
+      else if (mine.length) out.push(`CBAM: ${mine.length} import${mine.length === 1 ? '' : 's'} in ${thisYear}`);
+    }
+    return out;
+  }
   const allShownSelected = rows.length > 0 && rows.every((r) => selected.has(r.id));
 
   function toggle(id: string) {
@@ -184,20 +237,18 @@ export function ProductsClient({
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
-      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products and Parts</h1>
-      <WorkspaceNav current="products" />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-sm text-gray-500 max-w-2xl">
-            The parts you buy, import or place on the market, with the data each regulation needs. Which regulations
-            apply comes from your scope rules on HS, CN or HTS codes; the values come from supplier surveys, imports or
-            entries by hand, and each one carries its source and how long it stays valid.
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products and Parts</h1>
+          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+            The parts you buy, import or place on the market. Open a part to work on each regulation that covers it;
+            each regulation&rsquo;s dashboard shows the work that spans all parts, such as filings and declarations.
           </p>
         </div>
         {canEdit && (
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowImport(true)}><Upload size={14} className="mr-1.5" />Import</Button>
-            <Button size="sm" onClick={() => setDrawer({ id: null, mode: 'edit' })}><Plus size={14} className="mr-1.5" />Add product</Button>
+            <Button size="sm" onClick={() => setDrawer({ kind: 'product', id: null, mode: 'edit' })}><Plus size={14} className="mr-1.5" />Add product</Button>
           </div>
         )}
       </div>
@@ -208,6 +259,20 @@ export function ProductsClient({
           <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setNotice(null)}>Dismiss</button>
         </div>
       )}
+
+      <RegulationCards
+        regulations={regsWithRules}
+        partsInScope={partsInScope}
+        current={current}
+        now={now}
+        eudr={{
+          ready: [...eudrReady.values()].filter(Boolean).length,
+          drafts: eudrReady.size,
+          filed: eudr.shipments.filter((sh) => sh.status === 'filed').length,
+        }}
+        cbamImports={cbam.imports}
+        onFilter={(reg) => { setTab('products'); setRegFilter(reg); }}
+      />
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList>
@@ -299,7 +364,7 @@ export function ProductsClient({
                     const codes = CODE_SYSTEM_KEYS.filter((s) => p[`${s}_code`]);
                     return (
                       <tr key={p.id} className={`hover:bg-gray-50 cursor-pointer ${p.is_active ? '' : 'opacity-50'}`}
-                        onClick={() => setDrawer({ id: p.id, mode: 'view' })}>
+                        onClick={() => setDrawer({ kind: 'product', id: p.id, mode: 'view' })}>
                         {canEdit && (
                           <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
                             <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggle(p.id)} aria-label={`Select ${p.part_number}`} />
@@ -321,16 +386,20 @@ export function ProductsClient({
                         <td className="hidden md:table-cell px-3 py-2 text-gray-700">{p.country_of_origin ?? <span className="text-gray-400">—</span>}</td>
                         <td className="px-3 py-2">
                           {prog.length === 0 ? <span className="text-xs text-gray-400">Not in scope</span> : (
-                            <div className="flex flex-wrap gap-1.5">
-                              {prog.map((r) => {
-                                const gaps = r.missing + r.expired;
-                                return (
-                                  <Badge key={r.regulation} variant={gaps > 0 ? 'secondary' : r.expiring > 0 ? 'warning' : 'default'}>
-                                    {REGULATIONS[r.regulation].label} {r.current + r.expiring}/{r.total}
-                                  </Badge>
-                                );
-                              })}
-                            </div>
+                            <>
+                              <div className="flex flex-wrap gap-1.5">
+                                {prog.map((r) => {
+                                  const gaps = r.missing + r.expired;
+                                  return (
+                                    <Badge key={r.regulation} variant={gaps > 0 ? 'secondary' : r.expiring > 0 ? 'warning' : 'default'}
+                                      title={`${r.current + r.expiring} of ${r.total} supplier data fields current`}>
+                                      {REGULATIONS[r.regulation].label} {r.current + r.expiring}/{r.total}
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                              {workLine(p.id, regsByProduct.get(p.id) ?? []).map((w) => <p key={w} className="text-xs text-gray-500 mt-1">{w}</p>)}
+                            </>
                           )}
                         </td>
                       </tr>
@@ -347,11 +416,17 @@ export function ProductsClient({
         </TabsContent>
       </Tabs>
 
-      {/* Product drawer: view, edit, or add. */}
+      {/* One drawer: a part (view, edit or add), or something opened from one of its regulation tabs. */}
       <Dialog open={!!drawer} onOpenChange={(o) => { if (!o) setDrawer(null); }}>
         {drawer && (
           <DrawerContent className="max-w-2xl">
-            {drawer.mode === 'edit' ? (
+            {drawer.kind !== 'product' && drawerProduct && (
+              <button className="flex items-center gap-1 px-4 sm:px-6 pt-3 -mb-2 text-xs text-gray-500 hover:text-gray-900 self-start"
+                onClick={() => backTo(drawer.kind === 'import' ? 'cbam' : 'eudr')}>
+                <ChevronLeft size={14} />{drawerProduct.part_number}
+              </button>
+            )}
+            {drawer.kind === 'product' && drawer.mode === 'edit' ? (
               <ProductForm
                 product={drawerProduct}
                 rules={rules}
@@ -359,10 +434,10 @@ export function ProductsClient({
                 businessUnits={businessUnits}
                 sites={sites}
                 users={users}
-                onCancel={() => (drawerProduct ? setDrawer({ id: drawerProduct.id, mode: 'view' }) : setDrawer(null))}
-                onSaved={(id) => { setDrawer({ id, mode: 'view' }); router.refresh(); }}
+                onCancel={() => (drawerProduct ? setDrawer({ kind: 'product', id: drawerProduct.id, mode: 'view' }) : setDrawer(null))}
+                onSaved={(id) => { setDrawer({ kind: 'product', id, mode: 'view' }); router.refresh(); }}
               />
-            ) : drawerProduct ? (
+            ) : drawer.kind === 'product' && drawerProduct ? (
               <ProductDetail
                 product={drawerProduct}
                 regulations={regsByProduct.get(drawerProduct.id) ?? []}
@@ -375,11 +450,47 @@ export function ProductsClient({
                 bu={businessUnits.find((b) => b.id === drawerProduct.business_unit_id)?.name ?? null}
                 site={sites.find((s) => s.id === drawerProduct.site_id)?.name ?? null}
                 canEdit={canEdit}
-                onEdit={() => setDrawer({ id: drawerProduct.id, mode: 'edit' })}
+                tab={drawer.tab ?? 'overview'}
+                onTab={(t) => setDrawer({ ...drawer, tab: t })}
+                workLines={workLine(drawerProduct.id, regsByProduct.get(drawerProduct.id) ?? [])}
+                renderPanel={(reg) => reg === 'eudr' ? (
+                  <EudrPartPanel product={drawerProduct} org={org} products={products} rules={rules} suppliers={suppliers}
+                    plots={eudr.plots} assessments={eudr.assessments} shipments={eudr.shipments} links={eudr.links} values={values}
+                    canEdit={canEdit} onChanged={() => router.refresh()}
+                    onOpenShipment={(id) => setDrawer({ kind: 'shipment', id, mode: id ? 'view' : 'edit', productId: drawerProduct.id })}
+                    onOpenAssessment={(id, preset) => setDrawer({ kind: 'assessment', id, preset, productId: drawerProduct.id })} />
+                ) : reg === 'cbam' ? (
+                  <CbamPartPanel productId={drawerProduct.id} imports={cbam.imports} canEdit={canEdit}
+                    onOpenImport={(id) => setDrawer({ kind: 'import', id, productId: drawerProduct.id })} />
+                ) : null}
+                onEdit={() => setDrawer({ kind: 'product', id: drawerProduct.id, mode: 'edit' })}
                 onAsk={() => setAsking([drawerProduct.id])}
                 onGoToScope={() => { setDrawer(null); setTab('scope'); }}
                 onChanged={() => router.refresh()}
               />
+            ) : drawer.kind === 'shipment' && drawerProduct ? (
+              drawer.mode === 'edit' ? (
+                <ShipmentForm {...eudrCommon} suppliers={suppliers} values={values} canEdit={canEdit} onChanged={() => router.refresh()}
+                  shipment={drawer.id ? eudr.shipments.find((sh) => sh.id === drawer.id) ?? null : null}
+                  productId={drawer.id ? undefined : drawerProduct.id}
+                  onCancel={() => (drawer.id ? setDrawer({ ...drawer, mode: 'view' }) : backTo('eudr'))}
+                  onSaved={(id) => { setDrawer({ ...drawer, id, mode: 'view' }); router.refresh(); }} />
+              ) : (() => {
+                const sh = eudr.shipments.find((x) => x.id === drawer.id);
+                return sh ? (
+                  <ShipmentView {...eudrCommon} suppliers={suppliers} values={values} canEdit={canEdit} onChanged={() => router.refresh()}
+                    shipment={sh} onEdit={() => setDrawer({ ...drawer, mode: 'edit' })} />
+                ) : null;
+              })()
+            ) : drawer.kind === 'assessment' && drawerProduct ? (
+              <AssessmentForm assessment={drawer.id ? eudr.assessments.find((a) => a.id === drawer.id) ?? null : null}
+                preset={drawer.preset} suppliers={suppliers} canEdit={canEdit}
+                onClose={() => backTo('eudr')} onSaved={() => { backTo('eudr'); router.refresh(); }} />
+            ) : drawer.kind === 'import' && drawerProduct ? (
+              <ImportForm imp={drawer.id ? cbam.imports.find((i) => i.id === drawer.id) ?? null : null}
+                productId={drawerProduct.id} products={products} rules={rules} suppliers={suppliers} values={values}
+                declarations={cbam.declarations} canEdit={canEdit} isAdmin={isAdmin}
+                onCancel={() => backTo('cbam')} onSaved={() => { backTo('cbam'); router.refresh(); }} />
             ) : null}
           </DrawerContent>
         )}
@@ -551,7 +662,8 @@ function ProductForm({
 // ─── Product detail ──────────────────────────────────────────────────────────
 
 function ProductDetail({
-  product, regulations, matched, hasRules, values, current, supplierName, owner, bu, site, canEdit, onEdit, onAsk, onGoToScope, onChanged,
+  product, regulations, matched, hasRules, values, current, supplierName, owner, bu, site, canEdit,
+  tab, onTab, workLines, renderPanel, onEdit, onAsk, onGoToScope, onChanged,
 }: {
   product: Product;
   regulations: RegulationKey[];
@@ -564,6 +676,12 @@ function ProductDetail({
   bu: string | null;
   site: string | null;
   canEdit: boolean;
+  /** 'overview', or a regulation key. */
+  tab: string;
+  onTab: (tab: string) => void;
+  workLines: string[];
+  /** The regulation's own work for this part (EUDR shipments, CBAM imports), where it has any. */
+  renderPanel: (reg: RegulationKey) => React.ReactNode;
   onEdit: () => void;
   onAsk: () => void;
   onGoToScope: () => void;
@@ -596,102 +714,149 @@ function ProductDetail({
         {regulations.length > 0 && product.is_active && <Button onClick={onAsk}><Send size={13} className="mr-1.5" />Ask supplier</Button>}
       </> : undefined}
     >
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-        <div className="col-span-2">
-          <dt className="text-xs text-gray-500">Customs codes</dt>
-          <dd className="text-gray-900">
-            {codes.length === 0 ? <span className="text-gray-400">None</span> : (
-              <span className="flex flex-wrap gap-x-5">{codes.map((s) => (
-                <span key={s}><span className="text-gray-400">{CODE_SYSTEMS[s].label}</span> <span className="font-mono">{product[`${s}_code`]}</span></span>
-              ))}</span>
-            )}
-          </dd>
-        </div>
-        {([
-          ['Supplier', supplierName], ['Country of origin', product.country_of_origin],
-          ['Data owner', owner], ['Business unit', bu], ['Site', site],
-        ] as const).map(([k, v]) => (
-          <div key={k}>
-            <dt className="text-xs text-gray-500">{k}</dt>
-            <dd className="text-gray-900">{v || <span className="text-gray-400">—</span>}</dd>
-          </div>
-        ))}
-        {product.notes && (
-          <div className="col-span-2">
-            <dt className="text-xs text-gray-500">Notes</dt>
-            <dd className="text-gray-900 whitespace-pre-wrap">{product.notes}</dd>
-          </div>
+      <Tabs value={regulations.includes(tab as RegulationKey) ? tab : 'overview'} onValueChange={onTab}>
+        {regulations.length > 0 && (
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            {regulations.map((reg) => <TabsTrigger key={reg} value={reg}>{REGULATIONS[reg].label}</TabsTrigger>)}
+          </TabsList>
         )}
-      </dl>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+        <TabsContent value="overview" className={regulations.length > 0 ? 'mt-4 space-y-5' : 'space-y-5'}>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+            <div className="col-span-2">
+              <dt className="text-xs text-gray-500">Customs codes</dt>
+              <dd className="text-gray-900">
+                {codes.length === 0 ? <span className="text-gray-400">None</span> : (
+                  <span className="flex flex-wrap gap-x-5">{codes.map((s) => (
+                    <span key={s}><span className="text-gray-400">{CODE_SYSTEMS[s].label}</span> <span className="font-mono">{product[`${s}_code`]}</span></span>
+                  ))}</span>
+                )}
+              </dd>
+            </div>
+            {([
+              ['Supplier', supplierName], ['Country of origin', product.country_of_origin],
+              ['Data owner', owner], ['Business unit', bu], ['Site', site],
+            ] as const).map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs text-gray-500">{k}</dt>
+                <dd className="text-gray-900">{v || <span className="text-gray-400">—</span>}</dd>
+              </div>
+            ))}
+            {product.notes && (
+              <div className="col-span-2">
+                <dt className="text-xs text-gray-500">Notes</dt>
+                <dd className="text-gray-900 whitespace-pre-wrap">{product.notes}</dd>
+              </div>
+            )}
+          </dl>
 
-      {regulations.length === 0 && (
-        <div className="text-sm text-gray-600 rounded-md bg-gray-50 border border-gray-100 px-3 py-3 space-y-2">
-          <p>
-            {!hasRules
-              ? 'No scope rules exist yet, so no regulation applies to any product. List the codes each regulation covers, with their citation, and products are matched automatically.'
-              : codes.length === 0
-                ? 'Add an HS, CN or HTS code to see which regulations apply.'
-                : 'None of your scope rules covers these codes, so no regulation applies to it here.'}
-          </p>
-          {(!hasRules || codes.length > 0) && (
-            <Button size="sm" variant="outline" onClick={onGoToScope}>Review scope rules <ArrowRight size={13} className="ml-1" /></Button>
+
+          {error && <p className="text-sm text-red-600">{error}</p>}
+
+          {regulations.length === 0 && (
+            <div className="text-sm text-gray-600 rounded-md bg-gray-50 border border-gray-100 px-3 py-3 space-y-2">
+              <p>
+                {!hasRules
+                  ? 'No scope rules exist yet, so no regulation applies to any product. List the codes each regulation covers, with their citation, and products are matched automatically.'
+                  : codes.length === 0
+                    ? 'Add an HS, CN or HTS code to see which regulations apply.'
+                    : 'None of your scope rules covers these codes, so no regulation applies to it here.'}
+              </p>
+              {(!hasRules || codes.length > 0) && (
+                <Button size="sm" variant="outline" onClick={onGoToScope}>Review scope rules <ArrowRight size={13} className="ml-1" /></Button>
+              )}
+            </div>
           )}
-        </div>
-      )}
 
-      {regulations.map((reg) => (
-        <div key={reg}>
-          <p className="text-sm font-semibold text-gray-900">{REGULATIONS[reg].label} <span className="font-normal text-gray-500">· {REGULATIONS[reg].name}</span></p>
-          <p className="text-xs text-gray-500 mb-2">
-            In scope by {matched.filter((r) => r.regulation === reg).map((r) =>
-              `${CODE_SYSTEMS[r.code_system as CodeSystem]?.label ?? 'CN'} ${r.cn_prefix} (${r.source_citation})`).join('; ')}
-          </p>
-          <div className="divide-y divide-gray-50 border border-gray-100 rounded-lg">
-            {fieldsFor(reg).map((f) => {
-              const v = current.get(`${product.id}|${f.key}`);
-              const status = fieldStatus(v, now);
-              const history = values.filter((x) => x.field_key === f.key).sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
-              return (
-                <div key={f.key} className="px-3 py-2.5">
-                  <div className="flex items-start gap-3">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-500">{f.label}</p>
-                      <p className="text-sm text-gray-900 break-words">
-                        {v ? displayFieldValue(f, v.value, v.unit) : <span className="text-gray-400">Not collected</span>}
-                      </p>
-                      {v && (
-                        <p className="text-[11px] text-gray-400 mt-0.5">
-                          {SOURCE_LABEL[v.source] ?? v.source} · {v.recorded_at.slice(0, 10)}
-                          {v.valid_to ? ` · valid to ${v.valid_to}` : ' · does not expire'}
-                        </p>
+
+          {regulations.length > 0 && (
+            <div>
+              <p className="text-sm font-semibold text-gray-900 mb-2">Regulations</p>
+              <ul className="divide-y divide-gray-50 border border-gray-100 rounded-lg">
+                {regulations.map((reg) => {
+                  const prog = regulationProgress(product.id, [reg], current, now)[0];
+                  const lines = workLines.filter((w) => w.startsWith(`${REGULATIONS[reg].label}:`));
+                  return (
+                    <li key={reg}>
+                      <button className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50" onClick={() => onTab(reg)}>
+                        <span className="flex-1 min-w-0">
+                          <span className="block text-sm text-gray-900">{REGULATIONS[reg].label} <span className="text-gray-500">· {REGULATIONS[reg].name}</span></span>
+                          <span className="block text-xs text-gray-500">
+                            {[`${prog.current + prog.expiring} of ${prog.total} supplier data fields current`, ...lines.map((w) => w.split(': ')[1])].join(' · ')}
+                          </span>
+                        </span>
+                        <ArrowRight size={14} className="text-gray-300" />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </TabsContent>
+
+        {regulations.map((reg) => (
+          <TabsContent key={reg} value={reg} className="mt-4 space-y-6">
+            {DASHBOARDS[reg] && (
+              <p className="text-xs text-gray-500 -mt-2">
+                Work across all parts, such as {reg === 'cbam' ? 'the threshold and the annual declaration' : 'statements waiting to be filed'}, is on the{' '}
+                <Link href={DASHBOARDS[reg]!} className="text-emerald-700 hover:underline">{REGULATIONS[reg].label} dashboard</Link>.
+              </p>
+            )}
+            {renderPanel(reg)}
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Supplier data</p>
+              <p className="text-xs text-gray-500 mb-2">
+                In scope by {matched.filter((r) => r.regulation === reg).map((r) =>
+                  `${CODE_SYSTEMS[r.code_system as CodeSystem]?.label ?? 'CN'} ${r.cn_prefix} (${r.source_citation})`).join('; ')}
+              </p>
+              <div className="divide-y divide-gray-50 border border-gray-100 rounded-lg">
+                {fieldsFor(reg).map((f) => {
+                  const v = current.get(`${product.id}|${f.key}`);
+                  const status = fieldStatus(v, now);
+                  const history = values.filter((x) => x.field_key === f.key).sort((a, b) => b.recorded_at.localeCompare(a.recorded_at));
+                  return (
+                    <div key={f.key} className="px-3 py-2.5">
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-gray-500">{f.label}</p>
+                          <p className="text-sm text-gray-900 break-words">
+                            {v ? displayFieldValue(f, v.value, v.unit) : <span className="text-gray-400">Not collected</span>}
+                          </p>
+                          {v && (
+                            <p className="text-[11px] text-gray-400 mt-0.5">
+                              {SOURCE_LABEL[v.source] ?? v.source} · {v.recorded_at.slice(0, 10)}
+                              {v.valid_to ? ` · valid to ${v.valid_to}` : ' · does not expire'}
+                            </p>
+                          )}
+                        </div>
+                        <Badge variant={STATUS_BADGE[status].variant}>{STATUS_BADGE[status].label}</Badge>
+                        {history.length > 1 && (
+                          <button className="text-gray-400 hover:text-gray-700 mt-0.5" onClick={() => setHistoryFor(historyFor === f.key ? null : f.key)}
+                            aria-label={`History of ${f.label}`} title={`${history.length} values recorded`}>
+                            <History size={14} />
+                          </button>
+                        )}
+                        {canEdit && (
+                          <button className="text-xs text-emerald-700 hover:underline whitespace-nowrap mt-0.5" onClick={() => setRecording(f)}>Record</button>
+                        )}
+                      </div>
+                      {historyFor === f.key && (
+                        <ul className="mt-2 space-y-1 text-xs text-gray-500 border-l-2 border-gray-100 pl-3">
+                          {history.map((h) => (
+                            <li key={h.id}>{h.recorded_at.slice(0, 10)}: {displayFieldValue(f, h.value, h.unit)} ({SOURCE_LABEL[h.source] ?? h.source}){h.note ? ` — ${h.note}` : ''}</li>
+                          ))}
+                        </ul>
                       )}
                     </div>
-                    <Badge variant={STATUS_BADGE[status].variant}>{STATUS_BADGE[status].label}</Badge>
-                    {history.length > 1 && (
-                      <button className="text-gray-400 hover:text-gray-700 mt-0.5" onClick={() => setHistoryFor(historyFor === f.key ? null : f.key)}
-                        aria-label={`History of ${f.label}`} title={`${history.length} values recorded`}>
-                        <History size={14} />
-                      </button>
-                    )}
-                    {canEdit && (
-                      <button className="text-xs text-emerald-700 hover:underline whitespace-nowrap mt-0.5" onClick={() => setRecording(f)}>Record</button>
-                    )}
-                  </div>
-                  {historyFor === f.key && (
-                    <ul className="mt-2 space-y-1 text-xs text-gray-500 border-l-2 border-gray-100 pl-3">
-                      {history.map((h) => (
-                        <li key={h.id}>{h.recorded_at.slice(0, 10)}: {displayFieldValue(f, h.value, h.unit)} ({SOURCE_LABEL[h.source] ?? h.source}){h.note ? ` — ${h.note}` : ''}</li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+                  );
+                })}
+              </div>
+            </div>
+          </TabsContent>
+        ))}
+      </Tabs>
 
       <RecordValueDialog field={recording} productId={product.id} onClose={() => setRecording(null)} onSaved={() => { setRecording(null); onChanged(); }} />
       <ConfirmDialog

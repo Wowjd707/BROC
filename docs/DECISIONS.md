@@ -9,14 +9,14 @@ hole.
 
 ## Migration status
 
-Migrations **001–045** are in `supabase/migrations/` (there is no 034). Apply in
+Migrations **001–046** are in `supabase/migrations/` (there is no 034). Apply in
 order. `docs/INSTALL.md` is the step-by-step; `supabase/verify_install.sql`
 proves the result.
 
 | Range | Re-runnable? |
 | --- | --- |
 | 001–007 | **No** — apply once on a fresh database. 006 renames and drops columns. |
-| 008–045 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–045 are verified in PGlite only (RLS, append-only behaviour, re-apply, and for 045 the freeze on filed statements); checks 36–39 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
+| 008–046 | **Yes**, except 024 once 033 is applied (033 re-categorised the tracker; see INSTALL.md). Verified on PostgreSQL 17.5: 001–037 apply clean and 008–037 re-apply with only that exception failing. Verified on PostgreSQL 16.15: 001–040 apply clean, 038–040 re-apply, and all 33 checks in `verify_install.sql` pass. 041 is verified in PGlite only (applies, re-applies, trigger behaviour); check 34 covers it. Check 35 (added after a live database was found without 036) covers 036. 042–046 are verified in PGlite only (RLS, append-only behaviour, re-apply, for 045 the freeze on filed statements and for 046 the lock on a declared year); checks 36–40 cover them. `tests/verify-install.test.ts` now runs every check against a clean install. |
 
 018 is the one migration that can legitimately refuse to apply: it adds a
 uniqueness guarantee, so a database already holding ambiguous duplicate factor
@@ -40,7 +40,8 @@ half-applied script must be able to finish on a second run.
 | Goals & projects | Targets across GHG, water and waste; SBTi 1.5 °C pathways (GHG only); pipeline pro-rated by in-service date and denominated per metric; gap-to-target on all three |
 | Suppliers | Registry, tokenized public surveys (CBAM/EUDR/PFAS/general), CBAM calculator |
 | Products and Parts | Part list with HS, CN and HTS codes, cited scope rules per regulation, append-only compliance values from surveys, imports and manual entry |
-| EUDR | `/eudr`, under Products and Parts: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
+| CBAM | `/products/cbam` and each part's CBAM tab: imports with sourced embedded emissions, the 50 t threshold, the annual declaration pack; a submitted year's imports locked (046) |
+| EUDR | `/products/eudr` and each part's EUDR tab: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
 | Disclosures | TCFD, IFRS S2, ESRS E1, GRI 305, CSRD (all ESRS standards), CA SB 253, CA SB 261 — with metric auto-answering and assembled HTML report export |
 | Materiality | Double materiality per ESRS 1 §3, matrix, stakeholder divergence, and topic → disclosure-requirement gating (a CSRD report demands only the topics assessed as material, and names every omission) |
 | Org structure | Business-unit hierarchy (cycle-guarded), many-to-many site groups, URL-driven scope filtering across all modules |
@@ -99,6 +100,10 @@ half-applied script must be able to finish on a second run.
   OpenAI adapter sends `max_completion_tokens` for provider `openai` and
   `max_tokens` for `openai-compatible`; a mismatch with your endpoint surfaces
   the provider's own error verbatim.
+- **CBAM's quarterly holding check is not built.** From 2027 a declarant must
+  hold certificates for at least 50% of the year's embedded emissions at each
+  quarter end (Art. 22(2)); its reference basis is not the same as the
+  declared emissions, so BROC does not estimate it yet.
 - **EUDR filing is manual, by design for now.** BROC prepares the GeoJSON file
   and the statement fields; someone enters them in TRACES and records the
   reference it returns. There is no TRACES API integration.
@@ -282,6 +287,14 @@ changed, change it knowingly and update this list.
   `releaseEvidence()` (`components/evidence/release-evidence.ts`) after the
   delete succeeds, as Projects, Suppliers and Emission Factors do; otherwise the
   documents stay in storage, unlinked, and `verify_install.sql` check 30 fails.
+- **Product regulations are worked from the part.** Each regulation that
+  covers a part is a tab in its panel; only cross-part work (filings,
+  thresholds, declarations) is on a regulation dashboard. Do not give a
+  regulation its own sidebar entry.
+- **CBAM figures always carry a source, and BROC never fills one in.** No
+  default emission value, benchmark or deduction is computed or shipped; an
+  import without emissions is reported as missing, never as zero, and a
+  submitted year's imports are locked until an admin reopens it.
 - **A filed EUDR statement is frozen.** Once a shipment has a TRACES
   reference, a trigger refuses changes to what it declared and to its plots,
   and refuses deleting it; only withdrawal and notes remain. The record of what

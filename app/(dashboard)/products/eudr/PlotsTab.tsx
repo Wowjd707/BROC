@@ -18,7 +18,7 @@ import {
 import { CountryPicker } from './CountryPicker';
 import { download, type Plot, type Named, type ProductRow, type ValueRow, type Link } from './types';
 
-function fmtArea(ha: number | null) {
+export function fmtArea(ha: number | null) {
   return ha == null ? '—' : `${ha < 10 ? ha.toFixed(2) : Math.round(ha).toLocaleString()} ha`;
 }
 
@@ -135,12 +135,17 @@ function rowsFrom(parsed: ParsedPlot[], d: PlotDefaults) {
   });
 }
 
-function AddPlotsDialog({ open, suppliers, onClose, onSaved }: {
+export function AddPlotsDialog({ open, suppliers, preset, onClose, onSaved }: {
   open: boolean; suppliers: Named[]; onClose: () => void; onSaved: () => void;
+  /** Filled in when adding from a part: its supplier, country and commodity. */
+  preset?: { supplier_id?: string | null; country?: string | null; commodity?: string | null };
 }) {
   const supabase = createClient();
   const [text, setText] = useState('');
-  const [d, setD] = useState<PlotDefaults>({ supplier_id: '', country: [], commodity: '', producer: '', name: '' });
+  const [d, setD] = useState<PlotDefaults>({
+    supplier_id: preset?.supplier_id ?? '', country: preset?.country ? [preset.country] : [],
+    commodity: preset?.commodity ?? '', producer: '', name: '',
+  });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const parsed = useMemo(() => (text.trim() ? parseGeolocation(text) : { plots: [], errors: [] }), [text]);

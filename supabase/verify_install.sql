@@ -1,7 +1,7 @@
 -- ============================================================
 -- Install verification
 -- ============================================================
--- Run this in the Supabase SQL editor after applying every migration (001–045). It answers one
+-- Run this in the Supabase SQL editor after applying every migration (001–046). It answers one
 -- question: did the install actually produce a working database?
 --
 -- Reads only. Safe to run at any time, on any environment, as often as you like.
@@ -415,6 +415,16 @@ checks(sort_key, check_name, status, detail) AS (
                       WHERE item_code = 'EUDR' AND capability_key = 'eudr_geolocation' AND probe = 'not_built')
       THEN 'PASS' ELSE 'FAIL' END,
     'The EUDR page reads these, and a filed statement relies on the freeze. Re-apply 045 if this fails.'
+
+  UNION ALL SELECT 40, 'CBAM — imports and annual declarations, with a submitted year locked',
+    CASE WHEN (SELECT count(*) FROM information_schema.tables WHERE table_schema='public'
+               AND table_name IN ('cbam_imports','cbam_declarations')) = 2
+      AND EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_cbam_imports_lock_declared')
+      AND EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'cbam_declarations' AND policyname = 'cbam_declarations_status_admin')
+      AND EXISTS (SELECT 1 FROM regulatory_capabilities
+                  WHERE item_code = 'CBAM' AND capability_key = 'cbam_calculator' AND route = '/products/cbam')
+      THEN 'PASS' ELSE 'FAIL' END,
+    'The CBAM dashboard and each part''s CBAM tab read these. Re-apply 046 if this fails.'
 )
 
 SELECT

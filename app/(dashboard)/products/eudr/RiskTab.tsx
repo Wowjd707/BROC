@@ -31,14 +31,17 @@ type Draft = {
   mitigation: string; assessed_at: string; review_by: string; notes: string;
 };
 
-function draftOf(a: Assessment | null): Draft {
+export interface AssessmentPreset { supplier_id?: string | null; country?: string | null; commodity?: string | null }
+
+function draftOf(a: Assessment | null, preset?: AssessmentPreset): Draft {
   const t = today();
   return a ? {
     supplier_id: a.supplier_id ?? '', country: [a.country_code], commodity: a.commodity, country_risk: a.country_risk,
     country_risk_basis: a.country_risk_basis, criteria: a.criteria ?? {}, conclusion: a.conclusion,
     mitigation: a.mitigation ?? '', assessed_at: a.assessed_at, review_by: a.review_by ?? '', notes: a.notes ?? '',
   } : {
-    supplier_id: '', country: [], commodity: '', country_risk: 'standard',
+    supplier_id: preset?.supplier_id ?? '', country: preset?.country ? [preset.country] : [], commodity: preset?.commodity ?? '',
+    country_risk: 'standard',
     // Where the Commission's classification is published; the assessor confirms the country's entry.
     country_risk_basis: 'Commission Implementing Regulation (EU) 2025/1093, Annex',
     criteria: {}, conclusion: 'negligible', mitigation: '', assessed_at: t, review_by: addMonths(t, 12), notes: '',
@@ -116,11 +119,14 @@ export function RiskTab({
   );
 }
 
-function AssessmentForm({
-  assessment, suppliers, canEdit, onClose, onSaved,
-}: { assessment: Assessment | null; suppliers: Named[]; canEdit: boolean; onClose: () => void; onSaved: () => void }) {
+export function AssessmentForm({
+  assessment, preset, suppliers, canEdit, onClose, onSaved,
+}: {
+  assessment: Assessment | null; preset?: AssessmentPreset; suppliers: Named[]; canEdit: boolean;
+  onClose: () => void; onSaved: () => void;
+}) {
   const supabase = createClient();
-  const [d, setD] = useState<Draft>(draftOf(assessment));
+  const [d, setD] = useState<Draft>(draftOf(assessment, preset));
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setD((x) => ({ ...x, [k]: v }));

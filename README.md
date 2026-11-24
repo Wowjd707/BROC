@@ -217,6 +217,12 @@ see [`CONTRIBUTING.md`](CONTRIBUTING.md).
   lacks. When nothing is missing it produces the TRACES-ready GeoJSON file and
   statement; once the TRACES reference is recorded, the shipment is locked.
 
+- **CBAM imports and annual declaration** — each import of a CBAM good with its
+  embedded emissions and their source, the 50-tonne threshold for the year,
+  and the declaration pack per CN code with the certificates to surrender.
+  Both EUDR and CBAM are worked from inside each part, with a dashboard per
+  regulation for the filings that span parts.
+
 **Optional AI layer**
 
 - Off by default and provider-agnostic — Claude, OpenAI, or any OpenAI-shaped
@@ -280,7 +286,7 @@ cp .env.example .env.local
 
 ### 3. Apply the database schema
 
-Run the numbered migrations in `supabase/migrations/` (**001–045**) in order.
+Run the numbered migrations in `supabase/migrations/` (**001–046**) in order.
 Either with the Supabase CLI:
 
 ```bash
@@ -425,7 +431,7 @@ lib/                     business logic + Supabase clients (~53 modules)
   supabase/              client/server/service clients + generated types
   *-core.ts              pure, I/O-free logic with paired *-core.test.ts
 supabase/
-  migrations/            001–045, numbered SQL (source of truth for schema)
+  migrations/            001–046, numbered SQL (source of truth for schema)
   seed.sql               standalone demo org
   seed_demo.sql          demo data for your existing org (recommended)
 deploy/                  Dockerfile, compose, migration runner, preflight
