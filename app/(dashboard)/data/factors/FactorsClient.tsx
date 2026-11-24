@@ -210,7 +210,7 @@ export function FactorsClient({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Link
@@ -219,7 +219,7 @@ export function FactorsClient({
           >
             <ChevronLeft size={13} />Environmental Data Entry
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">Emission Factors</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Emission Factors</h1>
           <p className="text-sm text-gray-500 mt-0.5 max-w-2xl">
             Override the built-in reference factors (EPA, eGRID, IPCC) with your organization&apos;s own
             measured or supplier-specific values. Factors are versioned by effective date, so historical

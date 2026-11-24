@@ -16,6 +16,7 @@ import { regulationsForProduct } from '@/lib/compliance-core';
 import { ShipmentView, ShipmentForm, issuesFor } from './ShipmentDrawer';
 import { PlotsTab } from './PlotsTab';
 import { RiskTab } from './RiskTab';
+import { WorkspaceNav } from '../products/WorkspaceNav';
 import type { Assessment, Link, Named, Org, Plot, ProductRow, RuleRow, Shipment, ValueRow } from './types';
 
 interface Props {
@@ -57,7 +58,7 @@ export function EudrClient(props: Props) {
 
   if (loadError) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <Card><CardContent className="py-10 text-center text-sm text-red-700">
           EUDR data could not be loaded: {loadError}. This usually means a database migration has not been applied;
           run <code className="mx-1">supabase/verify_install.sql</code> to see which.
@@ -67,11 +68,12 @@ export function EudrClient(props: Props) {
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-5">
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products and Parts</h1>
+      <WorkspaceNav current="eudr" />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">EUDR due diligence</h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+          <p className="text-sm text-gray-500 max-w-2xl">
             Each shipment you place on the EU market or export, the plots of land it came from, and the risk assessment it
             relies on. When nothing is missing, download the filing pack, file the statement in TRACES, and record the
             reference it returns.
@@ -102,11 +104,11 @@ export function EudrClient(props: Props) {
         <TabsList>
           <TabsTrigger value="shipments">Shipments ({shipments.length})</TabsTrigger>
           <TabsTrigger value="plots">Plots ({plots.length})</TabsTrigger>
-          <TabsTrigger value="risk">Risk assessments ({assessments.length})</TabsTrigger>
+          <TabsTrigger value="risk"><span className="sm:hidden">Risk</span><span className="hidden sm:inline">Risk assessments</span>&nbsp;({assessments.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="shipments" className="space-y-3 mt-4">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {(['open', 'filed', 'all'] as const).map((f) => (
               <Button key={f} size="sm" variant={statusFilter === f ? 'default' : 'outline'} onClick={() => setStatusFilter(f)}>
                 {f === 'open' ? 'Drafts' : f === 'filed' ? 'Filed or withdrawn' : 'All'}
@@ -126,20 +128,27 @@ export function EudrClient(props: Props) {
             <div className="border border-gray-100 rounded-lg bg-white overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 text-left">
-                  <tr><th className="px-3 py-2">Reference</th><th className="px-3 py-2">Product</th><th className="px-3 py-2">Countries</th>
-                    <th className="px-3 py-2">Net mass</th><th className="px-3 py-2">Plots</th><th className="px-3 py-2">Status</th></tr>
+                  <tr><th className="px-3 py-2">Reference</th><th className="hidden md:table-cell px-3 py-2">Product</th><th className="hidden md:table-cell px-3 py-2">Countries</th>
+                    <th className="hidden md:table-cell px-3 py-2">Net mass</th><th className="hidden md:table-cell px-3 py-2">Plots</th><th className="px-3 py-2">Status</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {rows.map(({ s, plots: ps, issues }) => {
                     const blocks = issues.filter((i) => i.level === 'block').length;
                     return (
                       <tr key={s.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setDrawer({ id: s.id, mode: 'view' })}>
-                        <td className="px-3 py-2 font-medium text-gray-900">{s.reference}</td>
-                        <td className="px-3 py-2 text-gray-700">{product.get(s.product_id)?.part_number ?? '—'}</td>
-                        <td className="px-3 py-2 text-gray-700">{s.countries_of_production.map(countryName).join(', ') || <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-700">{s.net_mass_kg != null ? `${Number(s.net_mass_kg).toLocaleString()} kg` : '—'}</td>
-                        <td className="px-3 py-2 text-gray-700">{ps.length}</td>
                         <td className="px-3 py-2">
+                          <p className="font-medium text-gray-900">{s.reference}</p>
+                          <p className="md:hidden text-xs text-gray-500">
+                            {[product.get(s.product_id)?.part_number, s.countries_of_production.map(countryName).join(', '),
+                              s.net_mass_kg != null ? `${Number(s.net_mass_kg).toLocaleString()} kg` : null,
+                              `${ps.length} plot${ps.length === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+                          </p>
+                        </td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{product.get(s.product_id)?.part_number ?? '—'}</td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{s.countries_of_production.map(countryName).join(', ') || <span className="text-gray-400">—</span>}</td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{s.net_mass_kg != null ? `${Number(s.net_mass_kg).toLocaleString()} kg` : '—'}</td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{ps.length}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">
                           {s.status === 'filed' ? <Badge variant="default">Filed · {s.dds_reference}</Badge>
                             : s.status === 'withdrawn' ? <Badge variant="secondary">Withdrawn</Badge>
                               : blocks === 0 ? <Badge variant="default">Ready to file</Badge>
@@ -202,11 +211,11 @@ function OperatorDetails({ org, canEdit, onChanged }: { org: Org | null; canEdit
   return (
     <Card><CardContent className="py-3">
       {editing ? (
-        <div className="grid grid-cols-[1fr_14rem_auto] gap-3 items-end">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_14rem_auto] gap-3 items-end">
           <div><Label>Registered address</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
           <div><Label>EORI number</Label><Input value={eori} onChange={(e) => setEori(e.target.value)} className="font-mono" placeholder="NL123456789" /></div>
           <div className="flex gap-2"><Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button><Button size="sm" onClick={save}>Save</Button></div>
-          {error && <p className="col-span-3 text-sm text-red-600">{error}</p>}
+          {error && <p className="sm:col-span-3 text-sm text-red-600">{error}</p>}
         </div>
       ) : (
         <div className="flex items-center justify-between gap-4 text-sm">

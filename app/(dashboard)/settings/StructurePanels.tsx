@@ -191,8 +191,8 @@ export function BusinessUnitsPanel({ canEdit, isAdmin, sites, businessUnits }: P
         <DialogContent>
           <DialogHeader><DialogTitle>{editing ? 'Edit business unit' : 'Add business unit'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-3 gap-3">
-              <div className="col-span-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="sm:col-span-2">
                 <Label required>Name</Label>
                 <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>

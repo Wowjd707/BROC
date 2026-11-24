@@ -216,7 +216,7 @@ export function MaterialityClient({
 
   if (loadError) {
     return (
-      <div className="p-6 lg:p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="rounded-xl bg-red-50 border border-red-200 p-4">
           <p className="text-sm font-medium text-red-800 mb-1">Could not load materiality assessments</p>
           <p className="text-sm text-red-700 font-mono">{loadError}</p>
@@ -226,10 +226,10 @@ export function MaterialityClient({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Materiality</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Materiality</h1>
           <p className="text-sm text-gray-500 mt-0.5 max-w-2xl">
             Double materiality per CSRD: each topic is assessed both for your impact on people and
             environment, and for the financial effect on the business. A topic is material if
@@ -421,7 +421,7 @@ export function MaterialityClient({
                         </button>
 
                         {open && canEdit && (
-                          <div className="px-4 pb-4 pl-8 grid grid-cols-2 gap-6">
+                          <div className="px-4 pb-4 sm:pl-8 grid grid-cols-1 sm:grid-cols-2 gap-6">
                             <div className="space-y-2">
                               <p className="text-xs font-semibold text-gray-700">Impact materiality</p>
                               {([
@@ -542,7 +542,7 @@ export function MaterialityClient({
                         </p>
                       </div>
                     ) : (
-                      <table className="w-full text-sm">
+                      <div className="overflow-x-auto"><table className="w-full text-sm">
                         <thead>
                           <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                             <th className="px-4 py-3 font-medium">Topic</th>
@@ -563,7 +563,7 @@ export function MaterialityClient({
                             </tr>
                           ))}
                         </tbody>
-                      </table>
+                      </table></div>
                     )}
                   </CardContent>
                 </Card>

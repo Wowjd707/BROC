@@ -123,12 +123,12 @@ export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) { resetForm(); onClose(); } }}>
       <DrawerContent>
-        <DialogHeader className="px-6 py-5 border-b border-gray-100">
+        <DialogHeader className="px-4 sm:px-6 py-5 border-b border-gray-100">
           <DialogTitle>Log Waste Entry</DialogTitle>
           <p className="text-sm text-gray-500">Enter the quantity in whichever unit the waste manifest uses.</p>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-5">
           <div>
             <Label required>Site</Label>
             <Select value={siteId} onValueChange={setSiteId}>
@@ -218,7 +218,7 @@ export function WasteDrawer({ open, onClose, sites, onSaved }: Props) {
           )}
         </div>
 
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
+        <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex flex-wrap justify-end gap-2 sm:gap-3">
           <Button variant="outline" onClick={() => { resetForm(); onClose(); }}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save entry'}</Button>
         </div>

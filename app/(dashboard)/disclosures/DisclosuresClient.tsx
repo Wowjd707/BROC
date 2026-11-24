@@ -394,10 +394,10 @@ export function DisclosuresClient({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Disclosures</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Disclosures</h1>
           <p className="text-sm text-gray-500 mt-0.5 max-w-2xl">
             The same inventory, mapped to each framework&apos;s requirements. Metrics are answered
             automatically from platform data; narrative disclosures are authored here. FY {currentYear} · {orgName}

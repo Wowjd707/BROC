@@ -54,7 +54,7 @@ export function RiskTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <p className="text-sm text-gray-600 max-w-3xl">
           One assessment per supplier, country and commodity, against the criteria of Art. 10(2), with any mitigation under
           Art. 11. Where the country is classified low risk, Art. 13 lets you skip the criteria unless something points to a
@@ -71,8 +71,8 @@ export function RiskTab({
         <div className="border border-gray-100 rounded-lg bg-white overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 text-left">
-              <tr><th className="px-3 py-2">Supplier</th><th className="px-3 py-2">Country</th><th className="px-3 py-2">Commodity</th>
-                <th className="px-3 py-2">Country risk</th><th className="px-3 py-2">Conclusion</th><th className="px-3 py-2">Assessed</th><th className="px-3 py-2">Review by</th></tr>
+              <tr><th className="px-3 py-2">Country</th><th className="hidden md:table-cell px-3 py-2">Supplier</th><th className="hidden md:table-cell px-3 py-2">Commodity</th>
+                <th className="hidden md:table-cell px-3 py-2">Country risk</th><th className="px-3 py-2">Conclusion</th><th className="hidden md:table-cell px-3 py-2">Assessed</th><th className="hidden md:table-cell px-3 py-2">Review by</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {assessments.map((a) => {
@@ -80,16 +80,22 @@ export function RiskTab({
                 const overdue = a.review_by != null && a.review_by < now;
                 return (
                   <tr key={a.id} className="hover:bg-gray-50 cursor-pointer" onClick={() => setOpen({ a })}>
-                    <td className="px-3 py-2">{a.supplier_id ? supplierName.get(a.supplier_id) ?? '—' : <span className="text-gray-400">Any</span>}</td>
-                    <td className="px-3 py-2">{countryName(a.country_code)}</td>
-                    <td className="px-3 py-2">{a.commodity}</td>
-                    <td className="px-3 py-2"><Badge variant={a.country_risk === 'high' ? 'destructive' : a.country_risk === 'standard' ? 'warning' : 'secondary'}>{RISK_LABEL[a.country_risk]}</Badge></td>
+                    <td className="px-3 py-2">
+                      <p className="text-gray-900">{countryName(a.country_code)}</p>
+                      <p className="md:hidden text-xs text-gray-500">
+                        {[a.commodity, a.supplier_id ? supplierName.get(a.supplier_id) : 'any supplier', `${RISK_LABEL[a.country_risk].toLowerCase()} risk`, a.review_by ? `review by ${a.review_by}` : null].filter(Boolean).join(' · ')}
+                        {overdue ? <span className="text-red-600"> (overdue)</span> : null}
+                      </p>
+                    </td>
+                    <td className="hidden md:table-cell px-3 py-2">{a.supplier_id ? supplierName.get(a.supplier_id) ?? '—' : <span className="text-gray-400">Any</span>}</td>
+                    <td className="hidden md:table-cell px-3 py-2">{a.commodity}</td>
+                    <td className="hidden md:table-cell px-3 py-2"><Badge variant={a.country_risk === 'high' ? 'destructive' : a.country_risk === 'standard' ? 'warning' : 'secondary'}>{RISK_LABEL[a.country_risk]}</Badge></td>
                     <td className="px-3 py-2">
                       {a.conclusion === 'negligible' ? <Badge variant="default">Negligible</Badge> : <Badge variant="destructive">Not negligible</Badge>}
                       {gaps.length > 0 && <span className="ml-2 text-xs text-amber-700">{gaps.length} gap{gaps.length === 1 ? '' : 's'}</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{a.assessed_at}</td>
-                    <td className={`px-3 py-2 text-xs ${overdue ? 'text-red-600' : 'text-gray-600'}`}>{a.review_by ?? '—'}{overdue ? ' (overdue)' : ''}</td>
+                    <td className="hidden md:table-cell px-3 py-2 text-xs text-gray-600">{a.assessed_at}</td>
+                    <td className={`hidden md:table-cell px-3 py-2 text-xs ${overdue ? 'text-red-600' : 'text-gray-600'}`}>{a.review_by ?? '—'}{overdue ? ' (overdue)' : ''}</td>
                   </tr>
                 );
               })}
@@ -153,7 +159,7 @@ function AssessmentForm({
       </> : <Button variant="outline" onClick={onClose}>Close</Button>}
     >
       <fieldset disabled={!canEdit} className="space-y-5">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label>Supplier</Label>
             <Select value={d.supplier_id || 'none'} onValueChange={(v) => set('supplier_id', v === 'none' ? '' : v)}>
@@ -174,7 +180,7 @@ function AssessmentForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label required>Country risk (Art. 29)</Label>
             <Select value={d.country_risk} onValueChange={(v) => set('country_risk', v as Draft['country_risk'])}>
@@ -186,7 +192,7 @@ function AssessmentForm({
               </SelectContent>
             </Select>
           </div>
-          <div className="col-span-2">
+          <div className="sm:col-span-2">
             <Label required>Basis for the classification</Label>
             <Input value={d.country_risk_basis} onChange={(e) => set('country_risk_basis', e.target.value)} />
             <p className="text-xs text-gray-400 mt-1">Check the country against the classification in force on the assessment date.</p>
@@ -220,7 +226,7 @@ function AssessmentForm({
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <Label required>Conclusion</Label>
             <Select value={d.conclusion} onValueChange={(v) => set('conclusion', v as Draft['conclusion'])}>

@@ -46,7 +46,7 @@ export function PlotsTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <p className="text-sm text-gray-600 max-w-3xl">
           Every plot of land a shipment came from, as TRACES will receive it: WGS 84, longitude first, six decimals. A plot
           over 4 hectares (other than for cattle) needs a polygon, not a point (Art. 2(28)).
@@ -66,7 +66,7 @@ export function PlotsTab({
 
       {plots.length > 0 && (
         <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-          <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-full sm:w-56"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All suppliers</SelectItem>
             {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -83,8 +83,8 @@ export function PlotsTab({
         <div className="border border-gray-100 rounded-lg bg-white overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500 text-left">
-              <tr><th className="px-3 py-2">Plot</th><th className="px-3 py-2">Country</th><th className="px-3 py-2">Shape</th>
-                <th className="px-3 py-2">Area</th><th className="px-3 py-2">Supplier</th><th className="px-3 py-2">Shipments</th></tr>
+              <tr><th className="px-3 py-2">Plot</th><th className="hidden md:table-cell px-3 py-2">Country</th><th className="px-3 py-2">Shape</th>
+                <th className="hidden md:table-cell px-3 py-2">Area</th><th className="hidden md:table-cell px-3 py-2">Supplier</th><th className="hidden md:table-cell px-3 py-2">Shipments</th></tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {shown.map((p) => (
@@ -92,15 +92,16 @@ export function PlotsTab({
                   <td className="px-3 py-2">
                     <p className="text-gray-900">{p.name}</p>
                     {(p.producer_name || p.commodity) && <p className="text-xs text-gray-500">{[p.producer_name, p.commodity].filter(Boolean).join(' · ')}</p>}
+                    <p className="md:hidden text-xs text-gray-500">{[countryName(p.country_code), fmtArea(p.area_ha), p.supplier_id ? supplierName.get(p.supplier_id) : null].filter(Boolean).join(' · ')}</p>
                   </td>
-                  <td className="px-3 py-2">{countryName(p.country_code)}</td>
+                  <td className="hidden md:table-cell px-3 py-2">{countryName(p.country_code)}</td>
                   <td className="px-3 py-2 text-xs">
                     {p.geometry.type}
                     {needsPolygon(p) && <Badge variant="warning" className="ml-2">Needs polygon</Badge>}
                   </td>
-                  <td className="px-3 py-2 text-xs text-gray-700">{fmtArea(p.area_ha)}</td>
-                  <td className="px-3 py-2 text-gray-700">{p.supplier_id ? supplierName.get(p.supplier_id) ?? '—' : '—'}</td>
-                  <td className="px-3 py-2 text-xs text-gray-600">{uses.get(p.id) ?? 0}</td>
+                  <td className="hidden md:table-cell px-3 py-2 text-xs text-gray-700">{fmtArea(p.area_ha)}</td>
+                  <td className="hidden md:table-cell px-3 py-2 text-gray-700">{p.supplier_id ? supplierName.get(p.supplier_id) ?? '—' : '—'}</td>
+                  <td className="hidden md:table-cell px-3 py-2 text-xs text-gray-600">{uses.get(p.id) ?? 0}</td>
                 </tr>
               ))}
             </tbody>

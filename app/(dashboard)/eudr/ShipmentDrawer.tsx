@@ -152,7 +152,7 @@ export function ShipmentView({ shipment, onEdit, ...c }: Common & { shipment: Sh
             Upload the GeoJSON and enter the statement in TRACES, then record the numbers TRACES returns. Once recorded, the
             declared facts are locked.
           </p>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div><Label required>Reference number</Label><Input value={filed.ref} onChange={(e) => setFiled({ ...filed, ref: e.target.value })} className="font-mono" /></div>
             <div><Label>Verification number</Label><Input value={filed.ver} onChange={(e) => setFiled({ ...filed, ver: e.target.value })} className="font-mono" /></div>
             <div><Label required>Filed on</Label><Input type="date" value={filed.date} onChange={(e) => setFiled({ ...filed, date: e.target.value })} /></div>
@@ -169,10 +169,10 @@ export function ShipmentView({ shipment, onEdit, ...c }: Common & { shipment: Sh
         <p className="text-sm font-medium text-gray-900 mb-2">Due diligence statement</p>
         <dl className="divide-y divide-gray-50 border border-gray-100 rounded-lg text-sm">
           {fields.map((f) => (
-            <div key={`${f.point}-${f.label}`} className="grid grid-cols-[3rem_11rem_1fr] gap-2 px-3 py-1.5">
-              <dt className="text-xs text-gray-400">{f.point ? `(${f.point})` : ''}</dt>
+            <div key={`${f.point}-${f.label}`} className="grid grid-cols-[2.25rem_1fr] sm:grid-cols-[3rem_11rem_1fr] gap-x-2 gap-y-0.5 px-3 py-1.5">
+              <dt className="text-xs text-gray-400 sm:row-span-1 row-span-2">{f.point ? `(${f.point})` : ''}</dt>
               <dt className="text-xs text-gray-500">{f.label}</dt>
-              <dd className={`text-gray-900 ${f.value === 'Missing' ? 'text-red-600' : ''}`}>{f.value || <span className="text-gray-400">—</span>}</dd>
+              <dd className={`text-gray-900 break-words min-w-0 ${f.value === 'Missing' ? 'text-red-600' : ''}`}>{f.value || <span className="text-gray-400">—</span>}</dd>
             </div>
           ))}
         </dl>
@@ -318,8 +318,8 @@ export function ShipmentForm({ shipment, onCancel, onSaved, ...c }: Common & {
         <Button onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
       </>}
     >
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="sm:col-span-2">
           <Label required>Product</Label>
           <Select value={d.product_id || undefined} onValueChange={chooseProduct}>
             <SelectTrigger><SelectValue placeholder="Choose a product in scope of EUDR…" /></SelectTrigger>
@@ -348,13 +348,13 @@ export function ShipmentForm({ shipment, onCancel, onSaved, ...c }: Common & {
           </Select>
         </div>
         <div><Label>HS code</Label><Input value={d.hs_code} onChange={(e) => set('hs_code', e.target.value)} className="font-mono" placeholder="401110" /></div>
-        <div className="col-span-2"><Label>Description</Label><Input value={d.description} onChange={(e) => set('description', e.target.value)} placeholder="Trade name, and scientific name where relevant" /></div>
+        <div className="sm:col-span-2"><Label>Description</Label><Input value={d.description} onChange={(e) => set('description', e.target.value)} placeholder="Trade name, and scientific name where relevant" /></div>
         <div><Label>Net mass (kg)</Label><Input value={d.net_mass_kg} onChange={(e) => set('net_mass_kg', e.target.value)} inputMode="decimal" /></div>
         <div className="grid grid-cols-2 gap-2">
           <div><Label>Supplementary qty</Label><Input value={d.supplementary_quantity} onChange={(e) => set('supplementary_quantity', e.target.value)} inputMode="decimal" /></div>
           <div><Label>Unit</Label><Input value={d.supplementary_unit} onChange={(e) => set('supplementary_unit', e.target.value)} placeholder="p/st, m³" /></div>
         </div>
-        <div className="col-span-2">
+        <div className="sm:col-span-2">
           <Label>Countries of production</Label>
           <CountryPicker value={d.countries} onChange={(v) => set('countries', v)} />
         </div>

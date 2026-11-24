@@ -173,12 +173,12 @@ export function RegulationsClient({
   );
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Regulatory tracker</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Regulatory tracker</h1>
           <p className="text-sm text-gray-500 mt-0.5 max-w-2xl">
             Where each ESG regime actually stands, what happens next, and how far each
             answer can be trusted. Every entry carries its sources and the date a human

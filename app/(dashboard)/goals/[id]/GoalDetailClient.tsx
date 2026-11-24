@@ -183,7 +183,7 @@ export function GoalDetailClient({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Back + header */}
       <div>
         <Link href="/goals" className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1 mb-4">
@@ -195,7 +195,7 @@ export function GoalDetailClient({
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="flex items-center gap-3 flex-wrap mb-1">
-              <h1 className="text-2xl font-semibold text-gray-900">{goal.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{goal.name}</h1>
               <Badge variant="secondary">{GOAL_METRIC_LABELS[metric]}</Badge>
               <Badge variant={STATUS_BADGE[goal.status] ?? 'secondary'}>{goal.status}</Badge>
             </div>

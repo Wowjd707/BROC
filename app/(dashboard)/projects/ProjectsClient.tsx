@@ -342,11 +342,11 @@ export function ProjectsClient({
   const formDialog = showCreate || editProject !== null;
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Projects</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Projects</h1>
           <p className="text-sm text-gray-500 mt-0.5">Track emission reduction initiatives · {scopeLabel}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -720,7 +720,7 @@ export function ProjectsClient({
               <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
                 Estimated annual savings
               </p>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <Label>CO₂e ({perYear('carbon')})</Label>
                   <Input
@@ -761,7 +761,7 @@ export function ProjectsClient({
                 <p className="text-xs font-semibold text-gray-700 uppercase tracking-wide mb-2">
                   Measured annual savings
                 </p>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   {([
                     ['actual_co2e_reduction_kg_per_year', 'CO₂e', 'carbon'],
                     ['actual_water_reduction_gal_per_year', 'Water', 'water'],

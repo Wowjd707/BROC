@@ -13,7 +13,7 @@ import {
   LayoutDashboard, FileText, BarChart3, Target,
   Wrench, Handshake, ClipboardList, Settings,
   ChevronDown, LogOut, Menu, Network, BookCheck, Grid2x2,
-  Users, Scale, Gauge, UserPen, Package, Trees,
+  Users, Scale, Gauge, UserPen, Package,
 } from 'lucide-react';
 
 // ─── Nav items ───────────────────────────────────────────────────────────────
@@ -36,7 +36,8 @@ import {
  */
 const NAV_SECTIONS: {
   heading: string | null;
-  items: { href: string; label: string; icon: typeof LayoutDashboard }[];
+  /** `also`: other routes that belong under this entry and keep it highlighted. */
+  items: { href: string; label: string; icon: typeof LayoutDashboard; also?: string[] }[];
 }[] = [
   {
     heading: null,
@@ -52,8 +53,9 @@ const NAV_SECTIONS: {
       { href: '/social',    label: 'Social & Governance',  icon: Users },
       { href: '/metrics',   label: 'Business Metrics',     icon: Gauge },
       { href: '/suppliers', label: 'Suppliers',            icon: Handshake },
-      { href: '/products',  label: 'Products and Parts',   icon: Package },
-      { href: '/eudr',      label: 'EUDR',                 icon: Trees },
+      // Regulation workspaces (EUDR now, CBAM and PPWR next) live inside
+      // Products and Parts rather than each taking a sidebar entry.
+      { href: '/products',  label: 'Products and Parts',   icon: Package, also: ['/eudr'] },
     ],
   },
   {
@@ -175,8 +177,8 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
               </p>
             )}
             <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon: Icon }) => {
-                const isActive = pathname === href || pathname.startsWith(href + '/');
+              {section.items.map(({ href, label, icon: Icon, also = [] }) => {
+                const isActive = [href, ...also].some((h) => pathname === h || pathname.startsWith(h + '/'));
                 return (
                   <Link
                     key={href}
@@ -257,7 +259,7 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
   );
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-dvh bg-gray-50 overflow-hidden">
         {/* Desktop sidebar */}
         {/* w-64 (not w-60) so the longest label, "Environmental Data Entry",
             stays on one line — and matches the mobile drawer's width. */}
@@ -284,11 +286,12 @@ export function SidebarLayout({ children, userProfile, sites, businessUnits, sit
           <header className="md:hidden flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
             <button
               onClick={() => setMobileOpen(true)}
+              aria-label="Open menu"
               className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <Menu size={20} className="text-gray-600" />
             </button>
-            <span className="font-semibold text-gray-900">{orgName}</span>
+            <span className="font-semibold text-gray-900 truncate">{orgName}</span>
           </header>
 
           {/* Page content */}

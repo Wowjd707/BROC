@@ -41,7 +41,7 @@ export function DataQualityPicker({
   return (
     <div>
       <Label>How was this figure obtained?</Label>
-      <div className="grid grid-cols-3 gap-2 mt-1">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
         {options.map((o) => {
           const active = value === o.v;
           return (

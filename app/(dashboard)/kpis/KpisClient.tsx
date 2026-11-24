@@ -420,11 +420,11 @@ export function KpisClient({
   const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">KPI Tracker</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">KPI Tracker</h1>
           <p className="text-sm text-gray-500 mt-0.5">{scopeLabel} · Reporting year {currentYear}</p>
         </div>
         <UnitToggle families={['carbon', 'water', 'waste', 'energy']} />

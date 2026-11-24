@@ -115,13 +115,13 @@ export function ResponsesDashboardClient({ surveys, suppliers, invitations, answ
   }));
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <Link href="/suppliers" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-1">
             <ArrowLeft className="w-3.5 h-3.5" /> Suppliers
           </Link>
-          <h1 className="text-2xl font-semibold text-gray-900">Survey responses</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Survey responses</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             How suppliers are responding across your campaigns, by topic, and what they told you.
           </p>

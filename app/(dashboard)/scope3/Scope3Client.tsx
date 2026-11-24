@@ -89,10 +89,10 @@ export function Scope3Client({
   }
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Scope 3</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Scope 3</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Value-chain emissions across the 15 GHG Protocol categories · {scopeLabel} · FY {currentYear}
           </p>
@@ -209,7 +209,7 @@ export function Scope3Client({
                   No Scope 3 entries for FY {currentYear} yet.
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                       <th className="px-4 py-3 font-medium">Date</th>
@@ -261,7 +261,7 @@ export function Scope3Client({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </CardContent>
           </Card>
@@ -290,7 +290,7 @@ export function Scope3Client({
                       </p>
                     </div>
                   ) : (
-                    <table className="w-full text-sm">
+                    <div className="overflow-x-auto"><table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                           <th className="px-4 py-3 font-medium">Supplier</th>
@@ -330,7 +330,7 @@ export function Scope3Client({
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></div>
                   )}
                 </CardContent>
               </Card>
@@ -410,7 +410,7 @@ export function Scope3Client({
                   </p>
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto"><table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
                       <th className="px-4 py-3 font-medium">Cat.</th>
@@ -442,7 +442,7 @@ export function Scope3Client({
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               )}
             </CardContent>
           </Card>

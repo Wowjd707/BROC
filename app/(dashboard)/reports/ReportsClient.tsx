@@ -431,10 +431,10 @@ export function ReportsClient({
   ];
 
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-8">
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Reports</h1>
           <p className="text-sm text-gray-500 mt-0.5">Export data for GHG disclosures, audits, and supplier management · {scopeLabel}</p>
         </div>
         <div className="flex items-center gap-2">

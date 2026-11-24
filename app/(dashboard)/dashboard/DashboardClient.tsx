@@ -563,11 +563,11 @@ export function DashboardClient({
   const CHART_COLORS = ['#059669','#6366f1','#f59e0b','#ec4899','#06b6d4'];
 
   return (
-    <div className="p-6 lg:p-8">
+    <div className="p-4 sm:p-6 lg:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">{orgName} · {scopeLabel} · Reporting year {currentYear}</p>
         </div>
         <div className="flex items-center gap-4 flex-wrap">
@@ -630,7 +630,7 @@ export function DashboardClient({
       )}
 
       {/* ── KPI cards ──────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KpiCard
           title="Total Scope 1 + 2"
           value={formatCarbon(kpis.totalCur, units)}
@@ -738,7 +738,7 @@ export function DashboardClient({
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
         <KpiCard
           title="Water Withdrawal"
           value={formatWater(kpis.waterCur, units)}

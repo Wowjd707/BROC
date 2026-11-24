@@ -13,7 +13,9 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'inline-flex items-center gap-1 rounded-lg bg-gray-100 p-1',
+      // Scrolls sideways when the tabs are wider than the screen, instead of
+      // pushing the whole page wider.
+      'inline-flex max-w-full items-center gap-1 overflow-x-auto rounded-lg bg-gray-100 p-1 [scrollbar-width:none]',
       className,
     )}
     {...props}
@@ -28,7 +30,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition-all',
+      'inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md px-3 sm:px-4 py-1.5 text-sm font-medium text-gray-600 transition-all',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500',
       'disabled:pointer-events-none disabled:opacity-50',
       'data-[state=active]:bg-white data-[state=active]:text-gray-900 data-[state=active]:shadow-sm',

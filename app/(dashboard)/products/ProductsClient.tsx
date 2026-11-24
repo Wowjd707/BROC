@@ -26,6 +26,7 @@ import {
 } from '@/lib/compliance-core';
 import { PRODUCT_IMPORT_HEADERS } from '@/lib/product-import-core';
 import { DrawerShell } from '@/components/ui/drawer-shell';
+import { WorkspaceNav } from './WorkspaceNav';
 
 interface Product {
   id: string;
@@ -172,7 +173,7 @@ export function ProductsClient({
 
   if (loadError) {
     return (
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <Card><CardContent className="py-10 text-center text-sm text-red-700">
           Products could not be loaded: {loadError}. This usually means a database migration has not been applied;
           run <code className="mx-1">supabase/verify_install.sql</code> to see which.
@@ -182,11 +183,12 @@ export function ProductsClient({
   }
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-5">
+      <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Products and Parts</h1>
+      <WorkspaceNav current="products" />
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Products and Parts</h1>
-          <p className="text-sm text-gray-500 mt-1 max-w-2xl">
+          <p className="text-sm text-gray-500 max-w-2xl">
             The parts you buy, import or place on the market, with the data each regulation needs. Which regulations
             apply comes from your scope rules on HS, CN or HTS codes; the values come from supplier surveys, imports or
             entries by hand, and each one carries its source and how long it stays valid.
@@ -225,12 +227,12 @@ export function ProductsClient({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Search size={14} className="absolute left-2.5 top-2.5 text-gray-400" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search parts or codes" className="pl-8 w-60" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search parts or codes" className="pl-8 w-full sm:w-60" />
             </div>
             <Select value={regFilter} onValueChange={(v) => setRegFilter(v as typeof regFilter)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="flex-1 min-w-[9.5rem] sm:flex-none sm:w-44"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All regulations</SelectItem>
                 {REGULATION_KEYS.map((r) => <SelectItem key={r} value={r}>{REGULATIONS[r].label}</SelectItem>)}
@@ -238,7 +240,7 @@ export function ProductsClient({
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="flex-1 min-w-[9.5rem] sm:flex-none sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Any data status</SelectItem>
                 <SelectItem value="gaps">Missing or expired data</SelectItem>
@@ -247,7 +249,7 @@ export function ProductsClient({
               </SelectContent>
             </Select>
             <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="flex-1 min-w-[9.5rem] sm:flex-none sm:w-48"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All suppliers</SelectItem>
                 {suppliers.map((s) => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
@@ -259,7 +261,7 @@ export function ProductsClient({
                 Show {inactiveCount} inactive
               </label>
             )}
-            <span className="text-xs text-gray-500 ml-auto">{rows.length} shown · {inScope} in scope of a regulation</span>
+            <span className="text-xs text-gray-500 sm:ml-auto">{rows.length} shown · {inScope} in scope of a regulation</span>
             {canEdit && selected.size > 0 && (
               <Button size="sm" variant="outline" onClick={() => setAsking([...selected])}>
                 <Send size={13} className="mr-1.5" />Ask supplier ({selected.size})
@@ -285,9 +287,9 @@ export function ProductsClient({
                       </th>
                     )}
                     <th className="px-3 py-2">Part</th>
-                    <th className="px-3 py-2">Codes</th>
-                    <th className="px-3 py-2">Supplier</th>
-                    <th className="px-3 py-2">Origin</th>
+                    <th className="hidden md:table-cell px-3 py-2">Codes</th>
+                    <th className="hidden md:table-cell px-3 py-2">Supplier</th>
+                    <th className="hidden md:table-cell px-3 py-2">Origin</th>
                     <th className="px-3 py-2">Data by regulation</th>
                   </tr>
                 </thead>
@@ -306,14 +308,17 @@ export function ProductsClient({
                         <td className="px-3 py-2">
                           <p className="font-medium text-gray-900">{p.part_number}{!p.is_active && <span className="ml-2 text-xs font-normal text-gray-500">inactive</span>}</p>
                           {p.description && <p className="text-xs text-gray-500">{p.description}</p>}
+                          <p className="md:hidden text-xs text-gray-500">
+                            {[...codes.map((s) => `${CODE_SYSTEMS[s].label} ${p[`${s}_code`]}`), p.supplier_id ? supplierName.get(p.supplier_id) : null].filter(Boolean).join(' · ')}
+                          </p>
                         </td>
-                        <td className="px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
+                        <td className="hidden md:table-cell px-3 py-2 text-xs text-gray-700 whitespace-nowrap">
                           {codes.length === 0 ? <span className="text-gray-400">—</span> : codes.map((s) => (
                             <p key={s}><span className="text-gray-400 inline-block w-8">{CODE_SYSTEMS[s].label}</span><span className="font-mono">{p[`${s}_code`]}</span></p>
                           ))}
                         </td>
-                        <td className="px-3 py-2 text-gray-700">{p.supplier_id ? supplierName.get(p.supplier_id) : <span className="text-gray-400">—</span>}</td>
-                        <td className="px-3 py-2 text-gray-700">{p.country_of_origin ?? <span className="text-gray-400">—</span>}</td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{p.supplier_id ? supplierName.get(p.supplier_id) : <span className="text-gray-400">—</span>}</td>
+                        <td className="hidden md:table-cell px-3 py-2 text-gray-700">{p.country_of_origin ?? <span className="text-gray-400">—</span>}</td>
                         <td className="px-3 py-2">
                           {prog.length === 0 ? <span className="text-xs text-gray-400">Not in scope</span> : (
                             <div className="flex flex-wrap gap-1.5">
@@ -510,7 +515,7 @@ function ProductForm({
 
       <div>
         <p className="text-sm font-medium text-gray-900 mb-2">Customs codes</p>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {CODE_SYSTEM_KEYS.map((s) => (
             <div key={s}>
               <Label>{CODE_SYSTEMS[s].label} <span className="font-normal text-gray-400">· {s === 'hs' ? 'up to 6' : 'up to 10'} digits</span></Label>
@@ -999,7 +1004,7 @@ function ScopeRules({ rules, isAdmin, onChanged }: { rules: Rule[]; isAdmin: boo
 
       {isAdmin && (
         <Card><CardContent className="py-4 space-y-3">
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div>
               <Label required>Regulation</Label>
               <Select value={draft.regulation} onValueChange={(v) => setDraft({ ...draft, regulation: v as RegulationKey })}>
@@ -1024,7 +1029,7 @@ function ScopeRules({ rules, isAdmin, onChanged }: { rules: Rule[]; isAdmin: boo
             <Textarea rows={3} value={draft.codes} onChange={(e) => setDraft({ ...draft, codes: e.target.value })}
               placeholder={'One per line, or separated by commas. Paste a whole annex column if you like.\n7208\n7209 15'} className="font-mono" />
           </div>
-          <div className="grid grid-cols-4 gap-3 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
             <div className="col-span-2">
               <Label required>Citation</Label>
               <Input value={draft.source_citation} onChange={(e) => setDraft({ ...draft, source_citation: e.target.value })} placeholder="Regulation (EU) 2023/956, Annex I" />

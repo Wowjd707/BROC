@@ -97,11 +97,11 @@ export function MetricsClient({
   const years = Array.from({ length: 5 }, (_, i) => year - 2 + i);
 
   return (
-    <div className="p-6 lg:p-8 space-y-6">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6">
 
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Business metrics</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Business metrics</h1>
           <p className="text-sm text-gray-500 mt-0.5 max-w-2xl">
             What your organization measures itself by — revenue, headcount, output. These are the
             denominators intensity is reported against, so a board can be answered in the units it

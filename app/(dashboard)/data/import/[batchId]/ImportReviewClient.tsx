@@ -150,10 +150,10 @@ export function ImportReviewClient({ batch, columns, rows, adjustments, sites, c
   }
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="flex items-start justify-between mb-6">
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Review import</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Review import</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {batch.filename ?? 'Uploaded file'} · {batch.rowCount} rows · {batch.family}
           </p>

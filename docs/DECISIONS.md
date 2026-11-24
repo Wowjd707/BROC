@@ -40,7 +40,7 @@ half-applied script must be able to finish on a second run.
 | Goals & projects | Targets across GHG, water and waste; SBTi 1.5 °C pathways (GHG only); pipeline pro-rated by in-service date and denominated per metric; gap-to-target on all three |
 | Suppliers | Registry, tokenized public surveys (CBAM/EUDR/PFAS/general), CBAM calculator |
 | Products and Parts | Part list with HS, CN and HTS codes, cited scope rules per regulation, append-only compliance values from surveys, imports and manual entry |
-| EUDR | `/eudr`: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
+| EUDR | `/eudr`, under Products and Parts: plots with validated geolocation, Art. 10/11 risk assessments, shipments with a readiness check, TRACES-ready GeoJSON and statement, filed statements frozen (045) |
 | Disclosures | TCFD, IFRS S2, ESRS E1, GRI 305, CSRD (all ESRS standards), CA SB 253, CA SB 261 — with metric auto-answering and assembled HTML report export |
 | Materiality | Double materiality per ESRS 1 §3, matrix, stakeholder divergence, and topic → disclosure-requirement gating (a CSRD report demands only the topics assessed as material, and names every omission) |
 | Org structure | Business-unit hierarchy (cycle-guarded), many-to-many site groups, URL-driven scope filtering across all modules |

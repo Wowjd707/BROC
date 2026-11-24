@@ -311,7 +311,10 @@ tonnage by country) builds on these tables. EUDR is built; see the next section.
 
 ## EUDR due diligence
 
-`/eudr` builds on the product foundation for Regulation (EU) 2023/1115. Three
+`/eudr` builds on the product foundation for Regulation (EU) 2023/1115. It is a
+section of Products and Parts, reached from the section nav at the top of that
+page (`app/(dashboard)/products/WorkspaceNav.tsx`), not a sidebar entry; CBAM
+and PPWR workspaces are meant to be added to the same nav. Three
 records, one page:
 
 - **Plots** (`eudr_plots`) — pasted as GeoJSON or "latitude, longitude" lines,
@@ -429,3 +432,13 @@ for the AI interface constraints.
 - **Strict typing**, no `any` escapes without justification.
 - **Documentation is part of the code** — update these docs and per-module notes
   as modules are added or changed.
+- **Every screen works at phone width (390 px).** The shared pieces already do:
+  dialogs keep a margin and scroll, drawers use the visible screen height and
+  wrap their footer buttons, and tab lists scroll sideways. On a page:
+  - pad the page `p-4 sm:p-6 lg:p-8`, and let a header row wrap or stack;
+  - stack a form of three or more columns below `sm`
+    (`grid-cols-1 sm:grid-cols-3`) and move its `col-span-*` to `sm:col-span-*`,
+    or a spanning cell creates a phantom column on a phone;
+  - in a list table, keep the one or two columns people scan by, give the rest
+    `hidden md:table-cell`, and repeat them as one `md:hidden` line under the
+    name; any table wider than that sits in an `overflow-x-auto` box.

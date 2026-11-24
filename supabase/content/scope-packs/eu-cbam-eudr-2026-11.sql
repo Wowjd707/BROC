@@ -41,7 +41,7 @@
 DO $$
 DECLARE
   -- ▼▼▼ Set your workspace name here (case and extra spaces don't matter) ▼▼▼
-  v_name  TEXT := 'Building Corp';
+  v_name  TEXT := 'YOUR WORKSPACE NAME';
   -- ▲▲▲
   v_org   UUID;
   v_count INT;
